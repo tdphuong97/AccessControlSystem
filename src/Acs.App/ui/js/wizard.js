@@ -7,9 +7,10 @@
   const NAMES = ['Thông tin', 'Khuôn mặt', 'Vân tay', 'Hoàn tất'];
 
   // active: 0..3 (4 = everything done). subs: { index: text } overrides the small caption under a step.
-  function stepper(active, subs) {
+  function stepper(active, subs, names) {
     subs = subs || {};
-    return '<ol class="steps" aria-label="Các bước">' + NAMES.map((n, i) => {
+    const NAMES_ = names || NAMES;
+    return '<ol class="steps" aria-label="Các bước">' + NAMES_.map((n, i) => {
       if (i < active) {
         return '<li class="step step-done"><span class="step-n step-n-done">' + icon('check', 16, 2.4) + '</span><span><span class="step-t">' + n +
           '</span><span class="step-s">' + esc(subs[i] || 'Xong') + '</span></span></li>';

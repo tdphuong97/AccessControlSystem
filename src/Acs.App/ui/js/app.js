@@ -84,6 +84,8 @@
     listeners.slice().forEach((fn) => fn(st));
   }
 
+  ACS.refreshState = async function () { setState(await ACS.bridge.call('app.state')); };
+
   async function boot() {
     shell();
     try {

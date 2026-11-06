@@ -1,6 +1,6 @@
 // Mock host used when the page is opened outside WebView2 (design checks, screenshots). Answers every C3
 // command with believable sample data. All people and devices are invented.
-// Query flags: ?err (one failed sync), ?locked (a stale locked person), ?noupdate, ?authpause, ?firstrun, ?empty
+// Query flags: ?err (one failed sync), ?locked (a stale locked person), ?noupdate, ?authpause, ?firstrun (no devices yet), ?empty, ?nobackup (no backup password), ?plansame (reconcile finds nothing)
 (function () {
   const ACS = (window.ACS = window.ACS || {});
   const F = () => ACS.fmt;
@@ -35,7 +35,8 @@
     people.push({ employeeNo: '1090', fullName: 'Bùi Văn Khánh', initials: 'BK', groupName: 'Kho', hasFace: true, fingers: [[7, 80]], wait: [], created: 400,
       validFrom: day(400), validTo: null, locked: true });
   }
-  if (/empty/.test(q)) people.length = 0;
+  if (/empty|firstrun/.test(q)) people.length = 0;
+  if (/firstrun/.test(q)) devices.length = 0;
 
   const syncOf = (p) => (p.error ? 'error' : (p.wait.length ? 'pending' : 'ok'));
   const row = (p) => ({ employeeNo: p.employeeNo, fullName: p.fullName, initials: p.initials || F().initials(p.fullName), groupName: p.groupName,
@@ -78,6 +79,10 @@
 
   let settings = { autoCheckUpdates: true, startWithWindows: false };
   let extra = null;
+  const bak = { hasPassword: !/nobackup|firstrun/.test(q), lastAt: ago(6 * 3600000), files: [
+    { name: 'acs-2026-11-06.acsbak', at: ago(6 * 3600000), size: 1843200 }, { name: 'acs-2026-11-05.acsbak', at: ago(30 * 3600000), size: 1802240 },
+    { name: 'acs-truoc-cap-nhat-0.9.0.acsbak', at: ago(80 * 3600000), size: 1790000 }] };
+  if (/nobackup|firstrun/.test(q)) { bak.lastAt = null; bak.files = []; }
   const update = /noupdate/.test(q) ? null : {
     version: '1.1.0', notes: 'Sửa lỗi báo xong khi máy chưa nhận vân tay. Cập nhật mất khoảng 30 giây, dữ liệu giữ nguyên.', sizeMb: 48.2 };
 
@@ -88,7 +93,7 @@
   const norm = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').toLowerCase();
 
   const handlers = {
-    'app.state': () => ({ version: '0.9.0', firstRun: /firstrun/.test(q), devices, update, pendingJobs: devices.reduce((n, d) => n + d.pending, 0),
+    'app.state': () => ({ version: '0.9.0', firstRun: devices.length === 0, devices, update, pendingJobs: devices.reduce((n, d) => n + d.pending, 0),
       failedJobs: people.filter((p) => p.error).length, staleLocked: people.filter((p) => p.locked && p.created > 180).length }),
     'people.list': (a) => people.filter(filters[a.filter || 'all'] || filters.all)
       .filter((p) => !a.query || norm(p.fullName + ' ' + p.employeeNo).includes(norm(a.query))).map(row),
@@ -150,36 +155,112 @@
     },
     'devices.list': () => devices,
     'devices.save': (a) => {
-      const d = devices.find((x) => x.id === a.id);
-      if (d) { Object.assign(d, a); delete d.password; return d; }
-      return Object.assign({}, a, { id: devices.length + 1, online: false, authPaused: false, pending: 0, failed: 0, message: null });
+      if (!a.name || !a.host) throw new Error('Hãy nhập tên và địa chỉ của máy.');
+      let d = devices.find((x) => x.id === a.id);
+      if (d) {
+        Object.assign(d, { name: a.name, host: a.host, username: a.username, doorNo: a.doorNo, isCaptureDefault: a.isCaptureDefault, isFingerReader: a.isFingerReader });
+        if (d.authPaused && a.password) { d.authPaused = false; d.message = null; }   // an empty password keeps the stored one
+      } else {
+        d = { id: Math.max(0, ...devices.map((x) => x.id)) + 1, name: a.name, host: a.host, username: a.username, doorNo: a.doorNo,
+          isCaptureDefault: a.isCaptureDefault, isFingerReader: a.isFingerReader, model: null, online: a.host !== '192.168.1.202', authPaused: false,
+          lastSeen: null, pending: 0, failed: 0, message: null };
+        devices.push(d);
+      }
+      ACS.bridge.emit('devices.changed', JSON.parse(JSON.stringify(devices)));
+      return d;
     },
-    'devices.test': (a) => {
+    'devices.test': async (a) => {
+      await wait(700);
       const d = devices.find((x) => x.id === a.id);
-      return d && d.online
-        ? { ok: true, model: d.model, firmware: 'V4.30.012', users: people.length, canCaptureFace: true, canCaptureFinger: true, message: 'Kết nối tốt.' }
+      if (!d) throw new Error('Không tìm thấy máy này. Hãy tải lại trang Thiết lập.');
+      if (d.authPaused) return { ok: false, model: null, firmware: null, users: 0, canCaptureFace: false, canCaptureFinger: false,
+        message: 'Máy báo sai mật khẩu. Bấm "Sửa mật khẩu", nhập lại rồi kiểm tra lại. Nếu máy đã tự khoá địa chỉ này thì chờ khoảng 30 phút.' };
+      return d.online
+        ? { ok: true, model: 'DS-K1T341AM', firmware: 'V4.30.012', users: people.length || 136, canCaptureFace: true, canCaptureFinger: true, message: 'Kết nối tốt.' }
         : { ok: false, model: null, firmware: null, users: 0, canCaptureFace: false, canCaptureFinger: false,
-          message: 'Không kết nối được tới máy. Kiểm tra dây mạng và nguồn của máy.' };
+          message: 'Không kết nối được tới ' + d.host + '. Kiểm tra dây mạng và nguồn của máy, rồi bấm kiểm tra lại.' };
     },
-    'devices.delete': () => null,
-    'reconcile.plan': () => ({ devices: [{ deviceId: 2, deviceName: 'Máy tầng 1',
-      strangers: [{ deviceId: 2, employeeNo: '2001', name: 'Mai Thị Lan', faceCount: 1, fingerCount: 1 }],
-      items: [{ employeeNo: '1136', fullName: 'Trần Thị Bình', kind: 'MissingFingers', fingers: [7, 2] }] }] }),
-    'reconcile.apply': () => null,
-    'import.start': () => ({ people: people.length, withFace: people.filter((p) => p.hasFace).length, facesMissing: people.filter((p) => !p.hasFace).length, fingers: 12 }),
-    'backup.status': () => ({ hasPassword: true, lastAt: ago(6 * 3600000), files: [{ name: 'acs-2026-11-06.acsbak', at: ago(6 * 3600000), size: 1843200 }], extraFolder: extra }),
-    'backup.setPassword': () => null,
-    'backup.now': () => null,
-    'backup.setExtraFolder': (a) => { extra = a.folder || null; return null; },
-    'backup.restore': () => null,
-    'update.check': () => update,
-    'update.install': () => null,
+    'devices.delete': (a) => {
+      const i = devices.findIndex((x) => x.id === a.id);
+      if (i >= 0) devices.splice(i, 1);
+      ACS.bridge.emit('devices.changed', JSON.parse(JSON.stringify(devices)));
+      return null;
+    },
+    'reconcile.plan': async () => {
+      ACS.bridge.emit('reconcile.progress', { message: 'Đang đọc Máy tầng trệt…' });
+      await wait(900);
+      ACS.bridge.emit('reconcile.progress', { message: 'Đang đọc Máy tầng 1…' });
+      await wait(900);
+      if (/plansame/.test(q)) return { devices: devices.map((d) => ({ deviceId: d.id, deviceName: d.name, items: [], strangers: [] })) };
+      const d1 = devices[0] || { id: 1, name: 'Máy tầng trệt' }, d2 = devices[1] || { id: 2, name: 'Máy tầng 1' };
+      return { devices: [
+        { deviceId: d1.id, deviceName: d1.name, items: [], strangers: [{ deviceId: d1.id, employeeNo: '2001', name: 'Mai Thị Lan', faceCount: 1, fingerCount: 1 }] },
+        { deviceId: d2.id, deviceName: d2.name,
+          items: [
+            { employeeNo: '1137', fullName: 'Nguyễn Văn An', kind: 'MissingPerson', fingers: [] },
+            { employeeNo: '1136', fullName: 'Trần Thị Bình', kind: 'InfoMismatch', fingers: [] },
+            { employeeNo: '1135', fullName: 'Lê Hoàng Cường', kind: 'MissingFace', fingers: [] },
+            { employeeNo: '1134', fullName: 'Phạm Minh Đức', kind: 'MissingFingers', fingers: [7, 2] },
+            { employeeNo: '1133', fullName: 'Hoàng Thị Em', kind: 'ExtraFingers', fingers: [3] },
+            { employeeNo: '1090', fullName: 'Bùi Văn Khánh', kind: 'LockedButEnabled', fingers: [] }],
+          strangers: [{ deviceId: d2.id, employeeNo: '2002', name: 'Đỗ Quang Hưng', faceCount: 1, fingerCount: 0 },
+            { deviceId: d2.id, employeeNo: '2003', name: 'Vũ Thị Hoa', faceCount: 0, fingerCount: 2 }] }] };
+    },
+    'reconcile.apply': async () => {
+      ACS.bridge.emit('reconcile.progress', { message: 'Đang tạo việc gửi cho Máy tầng 1…' });
+      await wait(1200);
+      return null;
+    },
+    'import.start': async () => {
+      const names = ['Nguyễn Văn An', 'Trần Thị Bình', 'Lê Hoàng Cường', 'Phạm Minh Đức', 'Hoàng Thị Em'];
+      const total = 24;
+      for (let i = 1; i <= total; i += 4) {
+        ACS.bridge.emit('import.progress', { done: i, total, currentName: names[(i >> 2) % names.length] });
+        await wait(350);
+      }
+      ACS.bridge.emit('import.progress', { done: total, total, currentName: '' });
+      return { people: total, withFace: 21, facesMissing: 3, fingers: 38 };
+    },
+    'backup.status': () => ({ hasPassword: bak.hasPassword, lastAt: bak.lastAt, files: bak.files, extraFolder: extra }),
+    'backup.setPassword': (a) => {
+      if (!a.password || a.password.length < 8) throw new Error('Mật khẩu sao lưu cần ít nhất 8 ký tự.');
+      bak.hasPassword = true; return null;
+    },
+    'backup.now': async () => {
+      await wait(900);
+      if (!bak.hasPassword) throw new Error('Hãy đặt mật khẩu sao lưu trước.');
+      bak.lastAt = ago(0);
+      bak.files.unshift({ name: 'acs-' + day(0) + '-' + String(bak.files.length + 1) + '.acsbak', at: ago(0), size: 1900000 });
+      return null;
+    },
+    'backup.setExtraFolder': (a) => {
+      if (a.folder && !/^[A-Za-z]:[\\/]|^\\\\/.test(a.folder)) throw new Error('Không dùng được thư mục này. Hãy nhập đường dẫn đầy đủ, ví dụ E:\\SaoLuuACS.');
+      extra = a.folder || null; return null;
+    },
+    'backup.restore': async (a) => {
+      await wait(900);
+      if (a.password === 'sai') throw new Error('Mật khẩu sao lưu chưa đúng. Hãy nhập lại; nếu đã quên mật khẩu thì không mở được bản sao lưu này.');
+      return null;
+    },
+    'update.check': async () => { await wait(600); return update; },
+    'update.install': async () => {
+      for (let i = 1; i <= 10; i++) setTimeout(() => ACS.bridge.emit('update.progress', { fraction: i / 10 }), i * 500);
+      return null;
+    },
     'settings.get': () => settings,
     'settings.set': (a) => (settings = Object.assign({}, settings, a)),
-    'log.list': () => [
-      { at: ago(300000), deviceName: 'Máy tầng 1', employeeNo: '1136', action: 'Gửi vân tay Trỏ trái', ok: false, message: 'Không kết nối được tới máy. Kiểm tra dây mạng và nguồn của máy.' },
-      { at: ago(3600000), deviceName: 'Máy tầng trệt', employeeNo: '1137', action: 'Gửi khuôn mặt', ok: true, message: '' },
-    ],
+    'log.list': (a) => {
+      const rows = [
+        { at: ago(300000), deviceId: 2, deviceName: 'Máy tầng 1', employeeNo: '1136', action: 'Gửi vân tay Trỏ trái', ok: false, message: 'Không kết nối được tới máy. Kiểm tra dây mạng và nguồn của máy.' },
+        { at: ago(310000), deviceId: 2, deviceName: 'Máy tầng 1', employeeNo: '1136', action: 'Gửi khuôn mặt', ok: false, message: 'Máy từ chối ảnh mặt: ảnh quá mờ. Hãy chụp lại mặt ở nơi đủ sáng.' },
+        { at: ago(3600000), deviceId: 1, deviceName: 'Máy tầng trệt', employeeNo: '1137', action: 'Gửi khuôn mặt', ok: true, message: '' },
+        { at: ago(3610000), deviceId: 1, deviceName: 'Máy tầng trệt', employeeNo: '1137', action: 'Gửi thông tin người', ok: true, message: '' },
+        { at: ago(7200000), deviceId: 2, deviceName: 'Máy tầng 1', employeeNo: '1135', action: 'Đọc lại để kiểm tra vân tay Giữa phải', ok: true, message: 'Máy đã lưu đúng.' },
+        { at: ago(26 * 3600000), deviceId: 0, deviceName: '', employeeNo: '', action: 'Sao lưu tự động', ok: true, message: 'acs-2026-11-05.acsbak' },
+        { at: ago(50 * 3600000), deviceId: 2, deviceName: 'Máy tầng 1', employeeNo: '', action: 'Đăng nhập máy', ok: false, message: 'Sai mật khẩu. Vào "Máy chấm công & cập nhật" để nhập lại mật khẩu.' },
+      ];
+      return rows.filter((r) => !a.deviceId || r.deviceId === a.deviceId).filter((r) => !a.employeeNo || r.employeeNo === a.employeeNo);
+    },
   };
 
   ACS.mock = {
