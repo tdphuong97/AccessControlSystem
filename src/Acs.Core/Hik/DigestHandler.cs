@@ -10,6 +10,9 @@ namespace Acs.Core.Hik;
 /// RFC 2617 Digest (MD5, qop=auth). The nonce from the first challenge is cached and reused with an increasing nc;
 /// a 401 on a request that used the cached nonce (stale) is answered once with the fresh challenge. A 401 on the
 /// answered request is returned to the caller as-is (HikClient turns it into HikAuthException), so there is never a loop.
+/// After that final 401 the cached nonce is dropped: the next call then starts without credentials (a plain
+/// challenge, not a failed login) and costs at most one failed login instead of two, so a wrong password does not
+/// walk the device towards its IP lock-out twice as fast.
 /// </summary>
 public sealed class DigestHandler : DelegatingHandler
 {
@@ -34,7 +37,7 @@ public sealed class DigestHandler : DelegatingHandler
         if (resp.StatusCode != HttpStatusCode.Unauthorized) return resp;
 
         var challenge = resp.Headers.WwwAuthenticate.FirstOrDefault(h => h.Scheme.Equals("Digest", StringComparison.OrdinalIgnoreCase));
-        if (challenge?.Parameter is null) return resp;
+        if (challenge?.Parameter is null) { Forget(); return resp; }
         lock (_lock)
         {
             _realm = Field(challenge.Parameter, "realm") ?? "";
@@ -43,7 +46,14 @@ public sealed class DigestHandler : DelegatingHandler
             _nc = 0;
         }
         resp.Dispose();
-        return await base.SendAsync(Clone(request, body, Authorize(request)), ct);
+        var answered = await base.SendAsync(Clone(request, body, Authorize(request)), ct);
+        if (answered.StatusCode == HttpStatusCode.Unauthorized) Forget();
+        return answered;
+    }
+
+    private void Forget()
+    {
+        lock (_lock) { _realm = null; _nonce = null; _opaque = null; _nc = 0; }
     }
 
     private string? Authorize(HttpRequestMessage req)

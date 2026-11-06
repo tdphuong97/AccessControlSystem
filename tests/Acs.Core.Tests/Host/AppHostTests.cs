@@ -420,6 +420,29 @@ public sealed class AppHostTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task devices_test_is_refused_while_paused_until_the_login_changes()
+    {
+        var h = NewHost();
+        var id = await AddDevice(h);
+        var fake = _factory.For(id);
+        fake.WrongPassword = true;
+        var bad = Out(await h.HandleAsync("devices.test", J($$"""{"id":{{id}}}""")));
+        Assert.False(bad.GetProperty("ok").GetBoolean());
+        Assert.True(h.Db.Devices.Get(id)!.AuthPaused);   // paused at once, like the worker does
+        var calls = fake.Calls.Count;
+
+        var again = Out(await h.HandleAsync("devices.test", J($$"""{"id":{{id}}}""")));
+        Assert.False(again.GetProperty("ok").GetBoolean());
+        Assert.Equal(Acs.Core.Sync.JobRules.AuthMessage, again.GetProperty("message").GetString());
+        Assert.Equal(calls, fake.Calls.Count);   // refused locally: no failed login
+
+        fake.WrongPassword = false;
+        await h.HandleAsync("devices.save", J($$"""{"id":{{id}},"name":"Máy tầng trệt","host":"192.168.1.201","username":"admin","password":"mat-khau-moi","doorNo":1,"isCaptureDefault":true,"isFingerReader":false}"""));
+        Assert.False(h.Db.Devices.Get(id)!.AuthPaused);   // a changed password clears the pause and is tested
+        Assert.True(Out(await h.HandleAsync("devices.test", J($$"""{"id":{{id}}}"""))).GetProperty("ok").GetBoolean());
+    }
+
+    [Fact]
     public async Task backup_restore_wrong_password_keeps_running_then_right_password_requests_restart()
     {
         var h = NewHost();

@@ -47,6 +47,33 @@ public class HikClientBaseTests
     }
 
     [Fact]
+    public async Task Wrong_password_costs_one_failed_login_per_call_not_two()
+    {
+        var h = new FakeIsapiHandler { RequireDigest = true, Password = "other" };
+        h.On(HttpMethod.Get, "/ISAPI/System/deviceInfo", "{}");
+        var c = Make(h);
+        for (var i = 0; i < 3; i++) await Assert.ThrowsAsync<HikAuthException>(() => c.GetDeviceInfoAsync(default));
+        // Every call: a plain request (challenge only, no credentials sent) then exactly one digest attempt.
+        Assert.Equal(6, h.Requests.Count);
+        Assert.Equal(3, h.Requests.Count(r => r.Authorization is not null));
+        Assert.All(new[] { 0, 2, 4 }, i => Assert.Null(h.Requests[i].Authorization));
+    }
+
+    [Fact]
+    public async Task A_good_login_still_reuses_the_nonce_after_an_earlier_failure()
+    {
+        var h = new FakeIsapiHandler { RequireDigest = true, Password = "other" };
+        h.On(HttpMethod.Get, "/ISAPI/System/deviceInfo", "{\"DeviceInfo\":{}}");
+        var c = new HikClient("192.168.1.201", "admin", "secret", h);
+        await Assert.ThrowsAsync<HikAuthException>(() => c.GetDeviceInfoAsync(default));
+        h.Password = "secret";   // e.g. the lock-out ended / the device password was put back
+        await c.GetDeviceInfoAsync(default);
+        await c.GetDeviceInfoAsync(default);
+        Assert.Equal(5, h.Requests.Count);   // 2 failed + challenge, answer, then the cached nonce straight away
+        Assert.NotNull(h.Requests[4].Authorization);
+    }
+
+    [Fact]
     public async Task Http200_with_statusCode6_is_rejected_json()
     {
         var h = new FakeIsapiHandler();

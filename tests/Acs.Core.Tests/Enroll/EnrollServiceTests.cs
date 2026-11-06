@@ -1,6 +1,7 @@
 using Acs.Core.Enroll;
 using Acs.Core.Hik;
 using Acs.Core.Model;
+using Acs.Core.Sync;
 using Acs.Core.Tests.Fakes;
 using Acs.Core.Tests.Sync;
 
@@ -266,6 +267,29 @@ public sealed class EnrollServiceTests : IAsyncDisposable
             Assert.DoesNotContain(Jobs(d), j => j.Kind == JobKind.UpsertUser);
             Assert.Contains(Jobs(d), j => j.Kind == JobKind.DeleteUser);
         }
+    }
+
+    [Fact]
+    public async Task Captures_are_refused_locally_while_the_device_is_paused_for_a_wrong_password()
+    {
+        _svc.CreatePerson(new NewPerson("An", "2001", null, null));
+        _h.Db.Devices.SetAuthPaused(_d1, true);
+        var e1 = await Assert.ThrowsAsync<HikAuthException>(() => _svc.CaptureFaceAsync("2001", _d1, CancellationToken.None));
+        Assert.Equal(JobRules.AuthMessage, e1.Message);
+        await Assert.ThrowsAsync<HikAuthException>(() => _svc.CaptureFingerAsync("2001", _d1, 1, CancellationToken.None));
+        Assert.Empty(_h.Factory.For(_d1).Calls);   // not a single login attempt
+    }
+
+    [Fact]
+    public async Task A_wrong_password_during_a_capture_pauses_the_device()
+    {
+        _svc.CreatePerson(new NewPerson("An", "2001", null, null));
+        _h.Factory.For(_d1).WrongPassword = true;
+        await Assert.ThrowsAsync<HikAuthException>(() => _svc.CaptureFaceAsync("2001", _d1, CancellationToken.None));
+        Assert.True(_h.Db.Devices.Get(_d1)!.AuthPaused);
+        await Assert.ThrowsAsync<HikAuthException>(() => _svc.CaptureFaceAsync("2001", _d1, CancellationToken.None));
+        Assert.Single(_h.Factory.For(_d1).Calls);   // the second click never reached the device
+        Assert.False(_h.Db.Devices.Get(_d2)!.AuthPaused);
     }
 
     [Fact]

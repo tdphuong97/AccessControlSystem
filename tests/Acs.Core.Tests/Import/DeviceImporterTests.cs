@@ -109,6 +109,24 @@ public sealed class DeviceImporterTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Paused_device_is_not_imported_and_a_wrong_password_pauses_it()
+    {
+        await Seed("1001", "An");
+        _h.Db.Devices.SetAuthPaused(_d1, true);
+        var calls = _dev.Calls.Count;
+        var e = await Assert.ThrowsAsync<HikAuthException>(() => _imp.ImportAllAsync(_d1, null, Ct));
+        Assert.Equal(JobRules.AuthMessage, e.Message);
+        await Assert.ThrowsAsync<HikAuthException>(() => _imp.ImportPersonAsync(_d1, "1001", Ct));
+        Assert.Equal(calls, _dev.Calls.Count);
+
+        _h.Db.Devices.SetAuthPaused(_d1, false);
+        _dev.WrongPassword = true;
+        await Assert.ThrowsAsync<HikAuthException>(() => _imp.ImportAllAsync(_d1, null, Ct));
+        Assert.True(_h.Db.Devices.Get(_d1)!.AuthPaused);
+        Assert.Null(_h.Db.People.Get("1001"));
+    }
+
+    [Fact]
     public async Task Unreadable_fingers_are_recorded_as_unknown_not_as_none()
     {
         await Seed("1001", "An", true, true, 1, 2);

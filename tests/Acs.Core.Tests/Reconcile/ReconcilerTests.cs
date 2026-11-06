@@ -179,6 +179,21 @@ public sealed class ReconcilerTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Paused_device_is_not_read_and_a_wrong_password_pauses_it()
+    {
+        _h.Db.Devices.SetAuthPaused(_d1, true);
+        var e = await Assert.ThrowsAsync<HikAuthException>(() => _rec.BuildAsync(null, Ct));
+        Assert.Equal("Không đọc được Máy tầng trệt: " + JobRules.AuthMessage, e.Message);
+        Assert.Empty(_dev1.Calls);
+
+        _h.Db.Devices.SetAuthPaused(_d1, false);   // "Thử lại"
+        _dev1.WrongPassword = true;
+        await Assert.ThrowsAsync<HikAuthException>(() => _rec.BuildAsync(null, Ct));
+        Assert.True(_h.Db.Devices.Get(_d1)!.AuthPaused);
+        Assert.Single(_dev1.Calls);
+    }
+
+    [Fact]
     public async Task Name_whitespace_is_not_a_mismatch()
     {
         _h.AddPerson("1001", "An");

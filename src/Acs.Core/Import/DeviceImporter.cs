@@ -29,6 +29,13 @@ public sealed class DeviceImporter(Database db, IHikDeviceFactory factory, TimeP
     public async Task<ImportSummary> ImportAllAsync(int deviceId, IProgress<ImportProgress>? progress, CancellationToken ct)
     {
         var dev = db.Devices.Get(deviceId) ?? throw new InvalidOperationException("Không tìm thấy thiết bị.");
+        AuthGuard.Require(dev);
+        try { return await ImportAllCoreAsync(dev, progress, ct); }
+        catch (HikAuthException) { AuthGuard.Pause(db, dev.Id, null); throw; }   // the host wakes the worker afterwards
+    }
+
+    private async Task<ImportSummary> ImportAllCoreAsync(DeviceRecord dev, IProgress<ImportProgress>? progress, CancellationToken ct)
+    {
         var hik = factory.Create(dev);
         var users = new List<HikUser>();
         await foreach (var u in hik.ListUsersAsync(ct)) users.Add(u);
@@ -68,9 +75,14 @@ public sealed class DeviceImporter(Database db, IHikDeviceFactory factory, TimeP
     public async Task ImportPersonAsync(int deviceId, string employeeNo, CancellationToken ct)
     {
         var dev = db.Devices.Get(deviceId) ?? throw new InvalidOperationException("Không tìm thấy thiết bị.");
+        AuthGuard.Require(dev);
         var hik = factory.Create(dev);
-        if (await hik.FindUserAsync(employeeNo, ct) is not { } u) return;
-        await ImportOneAsync(dev, hik, u, new Run(), ct);
+        try
+        {
+            if (await hik.FindUserAsync(employeeNo, ct) is not { } u) return;
+            await ImportOneAsync(dev, hik, u, new Run(), ct);
+        }
+        catch (HikAuthException) { AuthGuard.Pause(db, dev.Id, null); throw; }
     }
 
     private readonly record struct One(bool NewPerson, bool FaceStored, bool FaceMissing, int Fingers, bool FingersRead);

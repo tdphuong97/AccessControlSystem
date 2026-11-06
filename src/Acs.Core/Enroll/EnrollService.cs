@@ -88,9 +88,11 @@ public sealed partial class EnrollService(Database db, IHikDeviceFactory factory
 
     private async Task<T> Exclusive<T>(DeviceRecord dev, Func<IHikDevice, Task<T>> body)
     {
+        AuthGuard.Require(dev);   // paused for a wrong password: never log in again from here
         var gate = _busy.GetOrAdd(dev.Id, _ => new SemaphoreSlim(1));
         if (!await gate.WaitAsync(0)) throw new EnrollException("Máy đang chụp/quét, đợi xong rồi bấm lại.");
         try { return await body(factory.Create(dev)); }
+        catch (HikAuthException) { AuthGuard.Pause(db, dev.Id, sync); throw; }
         finally { gate.Release(); }
     }
 

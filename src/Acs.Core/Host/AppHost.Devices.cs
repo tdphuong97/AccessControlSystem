@@ -106,6 +106,9 @@ public sealed partial class AppHost
     private async Task<DeviceTestResult> DevicesTest(JsonElement a)
     {
         var dev = Db.Devices.Get(Int(a, "id")) ?? throw new HostException("Không tìm thấy máy chấm công.");
+        // Paused for a wrong password and the login was not changed since (devices.save clears the pause when it is):
+        // testing again would only be one more failed login towards the IP lock-out.
+        if (dev.AuthPaused) return new DeviceTestResult(false, dev.Model, dev.Firmware, 0, false, false, JobRules.AuthMessage);
         try
         {
             var hik = _factory.Create(dev);
@@ -116,6 +119,12 @@ public sealed partial class AppHost
             Db.Devices.SetSeen(dev.Id, info, Now);
             return new DeviceTestResult(true, info.Model, info.Firmware, users, caps.CaptureFace != false,
                 caps.CaptureFingerprint != false, $"Kết nối tốt: {info.Model}, {users} người trên máy.");
+        }
+        catch (HikAuthException ex)
+        {
+            AuthGuard.Pause(Db, dev.Id, Sync);
+            Emit("devices.changed", DeviceViews());
+            return new DeviceTestResult(false, dev.Model, dev.Firmware, 0, false, false, ex.Message);
         }
         catch (HikException ex)
         {

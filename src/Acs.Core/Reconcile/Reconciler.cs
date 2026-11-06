@@ -31,8 +31,14 @@ public sealed class Reconciler(Database db, IHikDeviceFactory factory, SyncEngin
         foreach (var dev in db.Devices.List())
         {
             ct.ThrowIfCancellationRequested();
+            if (dev.AuthPaused) throw new HikAuthException($"Không đọc được {dev.Name}: {JobRules.AuthMessage}");
             try { diffs.Add(await BuildDeviceAsync(dev, people, progress, ct)); }
             catch (OperationCanceledException) { throw; }
+            catch (HikAuthException)
+            {
+                AuthGuard.Pause(db, dev.Id, sync);
+                throw new HikAuthException($"Không đọc được {dev.Name}: {JobRules.AuthMessage}");
+            }
             catch (HikException ex)
             {
                 throw new HikException($"Không đọc được {dev.Name}: {ex.Message.TrimEnd('.', ' ')}. Kiểm tra máy có điện/mạng rồi so khớp lại.", ex.Detail);
