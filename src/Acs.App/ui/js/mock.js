@@ -1,0 +1,166 @@
+// Mock host used when the page is opened outside WebView2 (design checks, screenshots). Answers every C3
+// command with believable sample data. All people and devices are invented.
+// Query flags: ?err (one failed sync), ?locked (a stale locked person), ?noupdate, ?authpause, ?firstrun, ?empty
+(function () {
+  const ACS = (window.ACS = window.ACS || {});
+  const F = () => ACS.fmt;
+  const q = location.search;
+  const DAY = 86400000;
+  const ago = (ms) => new Date(Date.now() - ms).toISOString();
+  const day = (n) => new Date(Date.now() - n * DAY).toISOString().slice(0, 10);
+
+  const devices = [
+    { id: 1, name: 'Máy tầng trệt', host: '192.168.1.201', username: 'admin', doorNo: 1, isCaptureDefault: true, isFingerReader: true,
+      model: 'DS-K1T341AM', online: true, authPaused: false, lastSeen: ago(20000), pending: 0, failed: 0, message: null },
+    { id: 2, name: 'Máy tầng 1', host: '192.168.1.202', username: 'admin', doorNo: 1, isCaptureDefault: false, isFingerReader: true,
+      model: 'DS-K1T341AM', online: false, authPaused: false, lastSeen: ago(5 * 60000 + 20000), pending: 1, failed: 0,
+      message: 'Không kết nối được tới máy. Kiểm tra dây mạng và nguồn của máy.' },
+  ];
+  if (/authpause/.test(q)) {
+    Object.assign(devices[1], { authPaused: true, online: true, message: 'Sai mật khẩu. Vào "Máy chấm công & cập nhật" để nhập lại mật khẩu.' });
+  }
+
+  // fingers: [fingerId, quality]; wait: device names still waiting; created: days ago
+  const people = [
+    { employeeNo: '1137', fullName: 'Nguyễn Văn An', initials: 'AN', groupName: 'Kỹ thuật', hasFace: true, fingers: [[7, 86], [2, 79]], wait: [], created: 1 },
+    { employeeNo: '1136', fullName: 'Trần Thị Bình', initials: 'TB', groupName: 'Kế toán', hasFace: true, fingers: [[7, 91], [2, 74]], wait: ['Máy tầng 1'], created: 3 },
+    { employeeNo: '1135', fullName: 'Lê Hoàng Cường', initials: 'LC', groupName: 'Kinh doanh', hasFace: true, fingers: [[3, 68]], wait: [], created: 40 },
+    { employeeNo: '1134', fullName: 'Phạm Thu Dung', initials: 'PD', groupName: 'Kế toán', hasFace: false, fingers: [[6, 83], [1, 88]], wait: [], created: 52 },
+    { employeeNo: '1133', fullName: 'Hoàng Minh Đức', initials: 'HĐ', groupName: 'Kho', hasFace: true, fingers: [], wait: [], created: 90 },
+    { employeeNo: '1132', fullName: 'Võ Thị Hà', initials: 'VH', groupName: 'Nhân sự', hasFace: true, fingers: [[7, 77], [8, 72]], wait: [], created: 120, error: /err/.test(q) },
+    { employeeNo: '1131', fullName: 'Đặng Quốc Huy', initials: 'ĐH', groupName: 'Kho', hasFace: true, fingers: [[2, 81], [7, 85]], wait: [], created: 150 },
+  ];
+  people.forEach((p) => { p.validFrom = day(p.created); p.validTo = null; p.locked = false; });
+  if (/locked/.test(q)) {
+    people.push({ employeeNo: '1090', fullName: 'Bùi Văn Khánh', initials: 'BK', groupName: 'Kho', hasFace: true, fingers: [[7, 80]], wait: [], created: 400,
+      validFrom: day(400), validTo: null, locked: true });
+  }
+  if (/empty/.test(q)) people.length = 0;
+
+  const syncOf = (p) => (p.error ? 'error' : (p.wait.length ? 'pending' : 'ok'));
+  const row = (p) => ({ employeeNo: p.employeeNo, fullName: p.fullName, initials: p.initials || F().initials(p.fullName), groupName: p.groupName,
+    hasFace: p.hasFace, fingerCount: p.fingers.length, sync: syncOf(p), waitingDevices: p.wait, isNew: p.created < 7, locked: p.locked });
+
+  // Placeholder portrait (abstract silhouette), not a real photo.
+  const portrait = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="300" viewBox="0 0 240 300"><rect width="240" height="300" fill="#DCE6F7"/>' +
+    '<circle cx="120" cy="115" r="52" fill="#9DB6E3"/><path d="M28 300c0-62 40-98 92-98s92 36 92 98z" fill="#9DB6E3"/></svg>');
+
+  function deviceSync(p) {
+    return devices.map((d) => {
+      const waits = p.wait.includes(d.name);
+      const err = p.error && d.id === 2;
+      const st = err ? 'error' : (waits ? 'pending' : 'ok');
+      const msg = err ? 'Máy từ chối ảnh mặt: ảnh quá mờ. Hãy chụp lại mặt ở nơi đủ sáng.'
+        : (waits ? 'Máy đang mất kết nối. App sẽ tự gửi khi máy có mạng lại.' : null);
+      const items = [{ label: 'Thông tin', state: waits ? 'pending' : 'ok', message: null, detail: null }];
+      if (p.hasFace) {
+        items.push({ label: 'Khuôn mặt', state: err ? 'error' : (waits ? 'pending' : 'ok'), message: msg,
+          detail: err ? 'HTTP 200 {"statusCode":4,"subStatusCode":"faceQuality","statusString":"Invalid Content"}' : null });
+      }
+      p.fingers.forEach((f) => items.push({ label: 'Vân tay ' + F().fingerLabel(f[0]), state: waits ? 'pending' : 'ok', message: null, detail: null }));
+      return { deviceId: d.id, deviceName: d.name, state: st, items };
+    });
+  }
+  function detail(p) {
+    return { employeeNo: p.employeeNo, fullName: p.fullName, groupName: p.groupName, validFrom: p.validFrom, validTo: p.validTo, locked: p.locked,
+      faceDataUrl: p.hasFace ? portrait : null,
+      fingers: p.fingers.map((f) => ({ fingerId: f[0], label: F().fingerLabel(f[0]), quality: f[1] })), devices: deviceSync(p) };
+  }
+  const find = (a) => people.find((p) => p.employeeNo === String(a.employeeNo));
+  const need = (a) => {
+    const p = find(a);
+    if (!p) throw new Error('Không tìm thấy người này. Hãy quay lại danh sách và thử lại.');
+    return p;
+  };
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  let settings = { autoCheckUpdates: true, startWithWindows: false };
+  let extra = null;
+  const update = /noupdate/.test(q) ? null : {
+    version: '1.1.0', notes: 'Sửa lỗi báo xong khi máy chưa nhận vân tay. Cập nhật mất khoảng 30 giây, dữ liệu giữ nguyên.', sizeMb: 48.2 };
+
+  const filters = {
+    all: () => true, noFace: (p) => !p.hasFace && !p.locked, noFinger: (p) => !p.fingers.length && !p.locked,
+    notSynced: (p) => syncOf(p) !== 'ok' && !p.locked, locked: (p) => p.locked,
+  };
+  const norm = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').toLowerCase();
+
+  const handlers = {
+    'app.state': () => ({ version: '0.9.0', firstRun: /firstrun/.test(q), devices, update, pendingJobs: devices.reduce((n, d) => n + d.pending, 0),
+      failedJobs: people.filter((p) => p.error).length, staleLocked: people.filter((p) => p.locked && p.created > 180).length }),
+    'people.list': (a) => people.filter(filters[a.filter || 'all'] || filters.all)
+      .filter((p) => !a.query || norm(p.fullName + ' ' + p.employeeNo).includes(norm(a.query))).map(row),
+    'people.nextNo': () => String((people.length ? Math.max(...people.map((p) => +p.employeeNo)) : 1000) + 1),
+    'people.create': (a) => {
+      if (!a.fullName || !a.fullName.trim()) throw new Error('Hãy nhập họ tên rồi bấm Tiếp tục.');
+      if (people.some((p) => p.employeeNo === String(a.employeeNo))) throw new Error('Mã nhân viên này đã có. Hãy chọn mã khác.');
+      const p = { employeeNo: String(a.employeeNo), fullName: a.fullName.trim(), groupName: a.groupName || null, hasFace: false, fingers: [], wait: [],
+        created: 0, validFrom: day(0), validTo: a.validTo || null, locked: false };
+      people.unshift(p);
+      return detail(p);
+    },
+    'people.get': (a) => detail(need(a)),
+    'people.update': (a) => {
+      const p = need(a);
+      p.fullName = a.fullName; p.groupName = a.groupName || null; p.validTo = a.validTo || null; p.initials = F().initials(a.fullName);
+      return detail(p);
+    },
+    'people.lock': (a) => { const p = need(a); p.locked = true; return detail(p); },
+    'people.unlock': (a) => { const p = need(a); p.locked = false; return detail(p); },
+    'people.delete': (a) => { people.splice(people.indexOf(need(a)), 1); return null; },
+    'face.capture': async (a) => { const p = need(a); await wait(600); p.hasFace = true; return { imageDataUrl: portrait, devices: deviceSync(p) }; },
+    'face.save': (a) => { const p = need(a); p.hasFace = true; return { imageDataUrl: a.imageDataUrl, devices: deviceSync(p) }; },
+    'finger.capture': async (a) => {
+      const p = need(a);
+      await wait(800);
+      p.fingers = p.fingers.filter((f) => f[0] !== a.fingerId).concat([[a.fingerId, 82]]);
+      return { fingerId: a.fingerId, label: F().fingerLabel(a.fingerId), quality: 82, devices: deviceSync(p) };
+    },
+    'finger.delete': (a) => { const p = need(a); p.fingers = p.fingers.filter((f) => f[0] !== a.fingerId); return detail(p); },
+    'sync.person': (a) => deviceSync(need(a)),
+    'sync.retry': () => null,
+    'devices.list': () => devices,
+    'devices.save': (a) => {
+      const d = devices.find((x) => x.id === a.id);
+      if (d) { Object.assign(d, a); delete d.password; return d; }
+      return Object.assign({}, a, { id: devices.length + 1, online: false, authPaused: false, pending: 0, failed: 0, message: null });
+    },
+    'devices.test': (a) => {
+      const d = devices.find((x) => x.id === a.id);
+      return d && d.online
+        ? { ok: true, model: d.model, firmware: 'V4.30.012', users: people.length, canCaptureFace: true, canCaptureFinger: true, message: 'Kết nối tốt.' }
+        : { ok: false, model: null, firmware: null, users: 0, canCaptureFace: false, canCaptureFinger: false,
+          message: 'Không kết nối được tới máy. Kiểm tra dây mạng và nguồn của máy.' };
+    },
+    'devices.delete': () => null,
+    'reconcile.plan': () => ({ devices: [{ deviceId: 2, deviceName: 'Máy tầng 1',
+      strangers: [{ deviceId: 2, employeeNo: '2001', name: 'Mai Thị Lan', faceCount: 1, fingerCount: 1 }],
+      items: [{ employeeNo: '1136', fullName: 'Trần Thị Bình', kind: 'MissingFingers', fingers: [7, 2] }] }] }),
+    'reconcile.apply': () => null,
+    'import.start': () => ({ people: people.length, withFace: people.filter((p) => p.hasFace).length, facesMissing: people.filter((p) => !p.hasFace).length, fingers: 12 }),
+    'backup.status': () => ({ hasPassword: true, lastAt: ago(6 * 3600000), files: [{ name: 'acs-2026-11-06.acsbak', at: ago(6 * 3600000), size: 1843200 }], extraFolder: extra }),
+    'backup.setPassword': () => null,
+    'backup.now': () => null,
+    'backup.setExtraFolder': (a) => { extra = a.folder || null; return null; },
+    'backup.restore': () => null,
+    'update.check': () => update,
+    'update.install': () => null,
+    'settings.get': () => settings,
+    'settings.set': (a) => (settings = Object.assign({}, settings, a)),
+    'log.list': () => [
+      { at: ago(300000), deviceName: 'Máy tầng 1', employeeNo: '1136', action: 'Gửi vân tay Trỏ trái', ok: false, message: 'Không kết nối được tới máy. Kiểm tra dây mạng và nguồn của máy.' },
+      { at: ago(3600000), deviceName: 'Máy tầng trệt', employeeNo: '1137', action: 'Gửi khuôn mặt', ok: true, message: '' },
+    ],
+  };
+
+  ACS.mock = {
+    async call(cmd, args) {
+      await wait(30);
+      const h = handlers[cmd];
+      if (!h) throw new Error('Lệnh chưa được hỗ trợ: ' + cmd);
+      const r = await h(args);
+      return r === undefined ? null : JSON.parse(JSON.stringify(r));
+    },
+  };
+})();
