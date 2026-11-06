@@ -73,7 +73,8 @@ public sealed partial class EnrollService(Database db, IHikDeviceFactory factory
             var cur = db.People.Get(e.EmployeeNo) ?? throw new EnrollException("Không tìm thấy nhân viên.");
             var r = cur with { FullName = name, GroupId = GroupId(e.GroupName), ValidTo = e.ValidTo, UpdatedAt = Now };
             db.People.Update(r);
-            EnqueueAll(r.EmployeeNo, JobKind.UpsertUser);
+            // A locked person is not pushed: an UpsertUser would supersede the pending DeleteUser/DisableUser.
+            if (cur.Status == PersonStatus.Active) EnqueueAll(r.EmployeeNo, JobKind.UpsertUser);
             return r;
         });
         sync.Wake();
@@ -86,6 +87,11 @@ public sealed partial class EnrollService(Database db, IHikDeviceFactory factory
         if (!await gate.WaitAsync(0)) throw new EnrollException("Máy đang chụp/quét, đợi xong rồi bấm lại.");
         try { return await body(factory.Create(dev)); }
         finally { gate.Release(); }
+    }
+
+    private static void CheckFingerId(int id)
+    {
+        if (id is < 1 or > 10) throw new EnrollException("Số ngón tay không hợp lệ.");
     }
 
     private DeviceRecord Device(int id) => db.Devices.Get(id) ?? throw new EnrollException("Không tìm thấy máy chấm công.");
@@ -116,6 +122,7 @@ public sealed partial class EnrollService(Database db, IHikDeviceFactory factory
 
     public async Task<CapturedFinger> CaptureFingerAsync(string employeeNo, int deviceId, int fingerId, CancellationToken ct)
     {
+        CheckFingerId(fingerId);
         RequirePerson(employeeNo);
         var dev = Device(deviceId);
         var cap = await Exclusive(dev, hik => hik.CaptureFingerprintAsync(fingerId, ct));
@@ -137,6 +144,7 @@ public sealed partial class EnrollService(Database db, IHikDeviceFactory factory
 
     public void DeleteFinger(string employeeNo, int fingerId)
     {
+        CheckFingerId(fingerId);
         db.Tx(() =>
         {
             db.Biometrics.DeleteFinger(employeeNo, fingerId);

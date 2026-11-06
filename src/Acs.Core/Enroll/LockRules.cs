@@ -15,7 +15,8 @@ public static class LockRules
         {
             var state = db.Jobs.GetState(employeeNo, dev.Id);
             // Same rule the worker uses when it picks a template: any group's template may serve a finger.
-            var full = state is null || ((!state.FacePresent || hasFace) && state.Fingers.All(fingerIds.Contains));
+            // No state row = device unknown: never delete what the app cannot prove it can restore.
+            var full = state is not null && ((!state.FacePresent || hasFace) && state.Fingers.All(fingerIds.Contains));
             db.Jobs.Enqueue(dev.Id, employeeNo, full ? JobKind.DeleteUser : JobKind.DisableUser, 0, now);
         }
     }

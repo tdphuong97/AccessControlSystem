@@ -164,6 +164,59 @@ public sealed class EnrollServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public void Lock_disables_on_device_with_no_state_row()
+    {
+        _svc.CreatePerson(new NewPerson("An", "2001", null, null));
+        _h.AddFace("2001");
+        _h.AddFinger("2001", 1, "ModelA");
+        Settle("2001", _d1, true, 1);
+        foreach (var j in Jobs(_d2).ToList()) { _h.Db.Jobs.MarkRunning(j, _h.Now); _h.Db.Jobs.MarkDone(j.Id, _h.Now); }
+        _svc.Lock("2001");
+        Assert.Contains(Jobs(_d1), j => j.Kind == JobKind.DeleteUser);
+        Assert.Contains(Jobs(_d2), j => j.Kind == JobKind.DisableUser);
+        Assert.DoesNotContain(Jobs(_d2), j => j.Kind == JobKind.DeleteUser);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(11)]
+    public async Task Invalid_finger_id_refused_before_device_call(int id)
+    {
+        _svc.CreatePerson(new NewPerson("An", "2001", null, null));
+        var ex = await Assert.ThrowsAsync<EnrollException>(() => _svc.CaptureFingerAsync("2001", _d1, id, CancellationToken.None));
+        Assert.Equal("Số ngón tay không hợp lệ.", ex.Message);
+        Assert.DoesNotContain("CaptureFingerprintAsync", _h.Factory.For(_d1).Calls);
+        Assert.Throws<EnrollException>(() => _svc.DeleteFinger("2001", id));
+    }
+
+    [Fact]
+    public void UpdatePerson_on_locked_person_saves_without_enqueuing_upsert()
+    {
+        _svc.CreatePerson(new NewPerson("An", "2001", null, null));
+        Settle("2001", _d1, false); Settle("2001", _d2, false);
+        _svc.Lock("2001");
+        _svc.UpdatePerson(new PersonEdit("2001", "An Mới", null, null));
+        Assert.Equal("An Mới", _h.Db.People.Get("2001")!.FullName);
+        foreach (var d in new[] { _d1, _d2 })
+        {
+            Assert.DoesNotContain(Jobs(d), j => j.Kind == JobKind.UpsertUser);
+            Assert.Contains(Jobs(d), j => j.Kind == JobKind.DeleteUser);
+        }
+    }
+
+    [Fact]
+    public async Task Capture_semaphore_released_after_device_throws()
+    {
+        _svc.CreatePerson(new NewPerson("An", "2001", null, null));
+        var fake = _h.Factory.For(_d1);
+        fake.Offline = true;
+        await Assert.ThrowsAsync<HikTransientException>(() => _svc.CaptureFaceAsync("2001", _d1, CancellationToken.None));
+        fake.Offline = false;
+        await _svc.CaptureFaceAsync("2001", _d1, CancellationToken.None);
+        Assert.NotNull(_h.Db.Biometrics.GetFace("2001"));
+    }
+
+    [Fact]
     public void Delete_enqueues_deleteuser_and_removes_person()
     {
         _svc.CreatePerson(new NewPerson("An", "2001", null, null));
