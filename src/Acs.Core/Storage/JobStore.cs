@@ -94,6 +94,11 @@ public sealed class JobStore
         "UPDATE jobs SET status='failed', error_kind=$ek, error_message=$em, error_detail=$ed, updated_at=$u WHERE id=$i AND status='running'",
         ("$ek", errorKind), ("$em", message), ("$ed", detail), ("$u", Database.Ts(now)), ("$i", id));
 
+    /// <summary>Failed jobs (one device, or all when null) go back to pending, due now, with the attempt count and error cleared.</summary>
+    public int ResetFailed(int? deviceId, DateTime now) => _db.Exec(
+        "UPDATE jobs SET status='pending', attempts=0, next_at=$n, error_kind=NULL, error_message=NULL, error_detail=NULL, updated_at=$n WHERE status='failed' AND ($d IS NULL OR device_id=$d)",
+        ("$n", Database.Ts(now)), ("$d", deviceId));
+
     /// <summary>Jobs left 'running' by a crash go back to pending.</summary>
     public int ResetRunning() => _db.Exec("UPDATE jobs SET status='pending' WHERE status='running'");
 
