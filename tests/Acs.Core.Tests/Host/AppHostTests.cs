@@ -461,4 +461,15 @@ public sealed class AppHostTests : IAsyncDisposable
         await Assert.ThrowsAsync<HostException>(() => h.HandleAsync("backup.setExtraFolder", J("""{"folder":"relative-dir"}""")));
         Assert.Empty(h.Db.Devices.List());
     }
+
+    [Fact]
+    public async Task stop_called_from_inside_a_command_does_not_wait_for_that_command()
+    {
+        var h = NewHost(FeedWith("1.1.0", new byte[1000]));
+        h.RunInstaller = _ => h.StopAsync();   // what the shell does: update.install -> installer -> StopHostAsync
+        var run = h.HandleAsync("update.install", J());
+        var finished = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(10)));
+        Assert.Same(run, finished);
+        Assert.Null(await run);
+    }
 }
