@@ -227,4 +227,52 @@ public sealed class BackupServiceTests : IDisposable
         Assert.True(Directory.Exists(tmp));
         Assert.Empty(Directory.GetFiles(tmp));
     }
+
+    private (string File, string DbFile, KeyStore Keys, BackupService Svc) OldPc()
+    {
+        var src = Make("src");
+        AddPerson(src.Db, "2002", "Nguồn");
+        src.Svc.SetPassword("mat-khau-12345");
+        var file = src.Svc.Create("manual");
+        var dir = Path.Combine(_root, "oldpc");
+        var keys = new KeyStore(Path.Combine(dir, "keys"), new PassThrough());
+        var dbFile = Path.Combine(dir, "acs.db");
+        using (var old = new Database(dbFile, new DataProtector(keys.GetOrCreateDataKey()))) AddPerson(old, "1001", "Cũ");
+        return (file, dbFile, keys, new BackupService(null!, keys, Path.Combine(dir, "backups"), _time, Iter));
+    }
+
+    private static void AssertOldIntact((string File, string DbFile, KeyStore Keys, BackupService Svc) p)
+    {
+        using var db = new Database(p.DbFile, new DataProtector(p.Keys.GetOrCreateDataKey()));
+        Assert.Equal("Cũ", db.People.Get("1001")!.FullName);
+    }
+
+    [Fact]
+    public void Temp_write_failure_leaves_the_old_database_untouched()
+    {
+        var p = OldPc();
+        Directory.CreateDirectory(p.DbFile + ".restore.tmp"); // a directory in the way: the temp write fails
+        Assert.Throws<BackupException>(() => p.Svc.Restore(p.File, "mat-khau-12345", p.DbFile));
+        AssertOldIntact(p);
+    }
+
+    [Fact]
+    public void First_aside_move_failure_leaves_the_old_database_untouched()
+    {
+        var p = OldPc();
+        using (new FileStream(p.DbFile, FileMode.Open, FileAccess.Read, FileShare.None)) // locked: cannot be renamed
+            Assert.Throws<BackupException>(() => p.Svc.Restore(p.File, "mat-khau-12345", p.DbFile));
+        AssertOldIntact(p);
+        Assert.False(File.Exists(p.DbFile + ".bak-restore"));
+    }
+
+    [Fact]
+    public void Stale_aside_files_from_a_crashed_restore_are_cleaned_up()
+    {
+        var p = OldPc();
+        File.WriteAllText(p.DbFile + ".bak-restore", "stale");
+        File.WriteAllText(p.DbFile + "-wal.bak-restore", "stale");
+        p.Svc.Restore(p.File, "mat-khau-12345", p.DbFile);
+        Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(p.DbFile)!, "*.bak-restore"));
+    }
 }

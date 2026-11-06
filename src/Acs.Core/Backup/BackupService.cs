@@ -160,13 +160,19 @@ public sealed class BackupService
             var tmp = target + ".restore.tmp";
             string[] set = [target, target + "-wal", target + "-shm"];
             var moved = new List<string>();
-            byte[]? oldKey = null;
+            byte[] oldKey;
+            try { oldKey = _keys.GetOrCreateDataKey(); }
+            catch (Exception ex) { throw new BackupException("Không khôi phục được bản sao lưu. Dữ liệu cũ vẫn được giữ nguyên.", ex); }
             (byte[] Key, byte[] Salt)? oldBackup = null;
+            try { oldBackup = _keys.GetBackupKey(); } catch { }
+            var hadTarget = File.Exists(target);
+            // Leftovers of a crashed earlier restore must not be mistaken for this restore's rollback set.
+            if (hadTarget)
+                foreach (var f in set)
+                    try { File.Delete(f + ".bak-restore"); } catch { }
             var keyReplaced = false;
             try
             {
-                try { oldKey = _keys.GetOrCreateDataKey(); } catch { }
-                try { oldBackup = _keys.GetBackupKey(); } catch { }
                 File.WriteAllBytes(tmp, plain.AsSpan(DataKeySize).ToArray());
                 foreach (var f in set)
                     if (File.Exists(f)) { File.Move(f, f + ".bak-restore", overwrite: true); moved.Add(f); }
@@ -178,12 +184,16 @@ public sealed class BackupService
             catch (Exception ex)
             {
                 try { File.Delete(tmp); } catch { }
-                try { if (File.Exists(target)) File.Delete(target); } catch { }
+                // Only touch the live file when the old one really was moved aside (or there was none).
+                if (moved.Contains(target) || !hadTarget)
+                    try { if (File.Exists(target)) File.Delete(target); } catch { }
                 foreach (var f in moved)
                     try { File.Move(f + ".bak-restore", f, overwrite: true); } catch { }
-                if (keyReplaced && oldKey is not null)
+                if (keyReplaced)
                 {
                     try { _keys.ReplaceDataKey(oldKey); } catch { }
+                    // KeyStore cannot delete a backup key: if there was none before, a newly written one stays.
+                    // It only matters when the last DB move failed after SetBackupKey, and is harmless.
                     if (oldBackup is { } ob) try { _keys.SetBackupKey(ob.Key, ob.Salt); } catch { }
                 }
                 throw new BackupException("Không khôi phục được bản sao lưu. Dữ liệu cũ vẫn được giữ nguyên.", ex);
