@@ -1,0 +1,14 @@
+bin/
+obj/
+dist/
+deps/
+.vs/
+*.user
+.taste-skill/inspect*/
+.taste-skill/before/
+.taste-skill/after/
+extension/dist/
+
+*.db*
+*.acsbak
+probe-report-*
