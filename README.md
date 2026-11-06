@@ -55,6 +55,7 @@ Dùng khi nghi hai máy lệch nhau, sau khi máy bị reset hoặc thay máy m�
 - File sao lưu được mã hoá bằng **mật khẩu sao lưu** bạn đặt ở lần chạy đầu.
 - **Quan trọng: mất mật khẩu sao lưu thì không mở được bản sao lưu, không ai lấy lại được.** Hãy ghi lại ở nơi an toàn.
 - Nên chép thêm một bản ra USB hoặc ổ mạng định kỳ. Khi máy tính hỏng hoặc cài lại Windows, cài phần mềm lại, rồi **Khôi phục** từ file sao lưu cùng mật khẩu sao lưu (khoá mã hoá trong máy cũ gắn với tài khoản Windows cũ nên không dùng lại được).
+- **Máy tính mới:** chép file `.acsbak` vào thư mục bất kỳ (hoặc cắm USB có file đó), vào tab **Máy chấm công & cập nhật**, mục **Sao lưu**, bấm **Chọn từ thư mục khác**, nhập đường dẫn thư mục (ví dụ `E:\SaoLuuACS`), bấm **Xem**, chọn file rồi nhập mật khẩu sao lưu. Phần mềm tự khởi động lại; sau đó chạy **So khớp 2 máy** để kiểm tra lại hai máy.
 - Dữ liệu nằm trong `%LOCALAPPDATA%\AccessControlSystem`, tách khỏi thư mục cài, nên cập nhật hoặc gỡ cài đặt không làm mất dữ liệu.
 
 ## Cập nhật

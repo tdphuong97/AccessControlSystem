@@ -94,10 +94,13 @@ public sealed class BackupService
         return path;
     }
 
-    public IReadOnlyList<BackupFile> List()
+    public IReadOnlyList<BackupFile> List() => List(_folder);
+
+    /// <summary>Backup files (ACS-*.acsbak, newest first) in any folder, e.g. a USB stick on a new PC.</summary>
+    public IReadOnlyList<BackupFile> List(string folder)
     {
-        if (!Directory.Exists(_folder)) return [];
-        return Directory.EnumerateFiles(_folder, "ACS-*.acsbak")
+        if (!Directory.Exists(folder)) return [];
+        return Directory.EnumerateFiles(folder, "ACS-*.acsbak")
             .Select(p => new FileInfo(p))
             .Select(f => new BackupFile(f.FullName, f.Name, ParseAt(f), f.Length))
             .OrderByDescending(b => b.At).ThenByDescending(b => b.Name, StringComparer.Ordinal)

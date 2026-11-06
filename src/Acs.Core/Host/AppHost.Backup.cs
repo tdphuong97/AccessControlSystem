@@ -49,6 +49,48 @@ public sealed partial class AppHost
         return BackupStatusView();
     }
 
+    private const string FolderExample = "ví dụ E:\\SaoLuuACS hoặc \\\\may-chu\\SaoLuu";
+
+    /// <summary>
+    /// backup.listFolder {folder}: the ACS-*.acsbak files in another folder (USB, network share, a copied folder on a
+    /// new PC), same shape as backup.status.files. The page restores one with backup.restore {path, password}.
+    /// </summary>
+    private IReadOnlyList<BackupFileView> BackupListFolder(JsonElement a)
+    {
+        var folder = (OptStr(a, "folder") ?? "").Trim();
+        if (folder.Length == 0 || !Path.IsPathFullyQualified(folder))
+            throw new HostException($"Hãy nhập đường dẫn đầy đủ của thư mục có file .acsbak ({FolderExample}).");
+        try
+        {
+            if (!Directory.Exists(folder))
+                throw new HostException("Không thấy thư mục này. Kiểm tra lại đường dẫn, hoặc USB / ổ mạng đã cắm chưa, rồi bấm Xem.");
+            return Backup.List(folder).Select(f => new BackupFileView(f.Name, LocalStamp(f.At), f.Size)).ToList();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException
+                                       or System.Security.SecurityException)
+        {
+            throw new HostException("Không đọc được thư mục này. Hãy chép file .acsbak vào một thư mục trên máy tính rồi chọn lại.");
+        }
+    }
+
+    /// <summary>The file named by backup.restore: {path} (any folder, must be a full path ending .acsbak) or {name}
+    /// (one of backup.status.files).</summary>
+    private string RestoreSource(JsonElement a)
+    {
+        var path = OptStr(a, "path")?.Trim();
+        if (string.IsNullOrEmpty(path))
+        {
+            var name = Str(a, "name");
+            return (Backup.List().FirstOrDefault(b => b.Name == name)
+                ?? throw new HostException("Không tìm thấy file sao lưu. Hãy chọn lại.")).Path;
+        }
+        if (!Path.IsPathFullyQualified(path) || !path.EndsWith(".acsbak", StringComparison.OrdinalIgnoreCase))
+            throw new HostException($"Hãy chọn một file sao lưu .acsbak bằng đường dẫn đầy đủ ({FolderExample}).");
+        try { if (File.Exists(path)) return Path.GetFullPath(path); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { }
+        throw new HostException("Không tìm thấy file sao lưu ở đường dẫn này. Hãy bấm Xem rồi chọn lại.");
+    }
+
     /// <summary>On start: back up when a password is set and the newest backup is older than 24 hours (or there is none).</summary>
     private void DailyBackup()
     {
@@ -90,11 +132,9 @@ public sealed partial class AppHost
     /// </summary>
     private async Task<object?> BackupRestore(JsonElement a)
     {
-        var name = Str(a, "name");
+        var source = RestoreSource(a);
         var password = OptStr(a, "password") ?? "";
-        var file = Backup.List().FirstOrDefault(b => b.Name == name)
-            ?? throw new HostException("Không tìm thấy file sao lưu. Hãy chọn lại.");
-        VerifyBackup(file.Path, password);
+        VerifyBackup(source, password);
 
         lock (_gate)
         {
@@ -116,7 +156,7 @@ public sealed partial class AppHost
             var wasStarted = _started;
             await old.Sync.StopAsync();
             old.Db.Dispose();
-            try { old.Backup.Restore(file.Path, password, _dbFile); }
+            try { old.Backup.Restore(source, password, _dbFile); }
             catch
             {
                 Graph fresh;

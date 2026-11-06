@@ -226,6 +226,7 @@ public sealed partial class AppHost
         "backup.setPassword" => BackupSetPassword(a),
         "backup.now" => BackupNow(),
         "backup.setExtraFolder" => BackupSetExtraFolder(a),
+        "backup.listFolder" => BackupListFolder(a),
         "backup.restore" => await BackupRestore(a),
         "update.check" => await UpdateCheck(),
         "update.install" => await UpdateInstall(),

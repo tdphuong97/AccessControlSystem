@@ -9,6 +9,9 @@
   const spin = (n) => icon('spinner', n || 18).replace('class="ic"', 'class="ic xoay"');
   const errBox = (m) => (m ? '<div class="alert alert-err" role="alert">' + icon('alertCircle', 18) + '<span>' + esc(m) + '</span></div>' : '');
   const PW_WARNING = 'Mất mật khẩu này thì không khôi phục được bản sao lưu';
+  const NEW_PC_HINT = "Máy tính mới: chép file .acsbak vào thư mục bất kỳ rồi bấm 'Chọn từ thư mục khác'.";
+  // "E:\SaoLuuACS" + "ACS-....acsbak" -> full path for backup.restore {path}
+  const joinPath = (folder, name) => String(folder).replace(/[\\/]+$/, '') + '\\' + name;
 
   function statusPill(d) {
     if (d.authPaused) return '<span class="pill pill-err"><span class="dot" style="background:var(--err)"></span>Sai mật khẩu, đã dừng</span>';
@@ -192,7 +195,10 @@
         '<button type="button" class="btn btn-primary" data-act="bak-now"' + (!b.hasPassword || s.bakBusy ? ' disabled' : '') + '>' + (s.bakBusy ? spin(18) + 'Đang sao lưu…' : 'Sao lưu ngay') + '</button></div></div>' +
         (b.hasPassword ? '<div class="small muted">' + PW_WARNING + '. App cũng tự sao lưu trước mỗi lần cập nhật.</div>' : '') + errBox(s.bakErr) + '</div>' +
         (!b.hasPassword || s.pwOpen ? pwForm() : '') +
-        (files ? '<div class="card"><h3 class="h2">Các bản sao lưu</h3><ul class="bakfiles">' + files + '</ul></div>' : '') +
+        '<div class="card"><div class="rowsb wrap"><h3 class="h2" style="margin:0">Khôi phục</h3>' +
+        '<button type="button" class="btn" data-act="restore-other"' + (s.bakBusy ? ' disabled' : '') + '>' + icon('folder', 18) + 'Chọn từ thư mục khác</button></div>' +
+        (files ? '<ul class="bakfiles">' + files + '</ul>' : '<p class="muted" style="margin:8px 0 0">Chưa có bản sao lưu nào trên máy tính này.</p>') +
+        '<div class="hint">' + esc(NEW_PC_HINT) + '</div></div>' +
         '<div class="card"><label class="field-lbl" for="bk-folder">Chép thêm một bản ra thư mục khác (USB hoặc ổ mạng)</label>' +
         '<div class="rowwrap nowrapm"><input id="bk-folder" class="input in48 in-mono grow" type="text" autocomplete="off" placeholder="Ví dụ: E:\\SaoLuuACS" value="' + esc(b.extraFolder || '') + '">' +
         '<button type="button" class="btn" data-act="folder-save">Lưu thư mục</button>' + (b.extraFolder ? '<button type="button" class="btn" data-act="folder-clear">Bỏ thư mục</button>' : '') + '</div>' +
@@ -235,34 +241,85 @@
       el.disabled = true; saveFolder(v);
     });
     on(host, 'click', '[data-act="folder-clear"]', (el) => { el.disabled = true; saveFolder(null); });
-    on(host, 'click', '[data-act="restore"]', (el) => {
-      const name = el.dataset.name;
-      const f = ((s.bak && s.bak.files) || []).find((x) => x.name === name);
+    // Restore dialog. `local` = one of backup.status.files, or null to pick a file in another folder (new PC, USB).
+    function openRestore(local) {
+      const whatText = (c) => (c
+        ? 'Toàn bộ dữ liệu hiện tại (người, khuôn mặt, vân tay, thiết lập máy) sẽ được thay bằng bản sao lưu <strong class="mono">' + esc(c.name) + '</strong>' +
+          (c.at ? ' lúc ' + esc(R.fmtDateTime(c.at)) : '') + '. Những thay đổi sau thời điểm đó sẽ mất. App sẽ tự khởi động lại.'
+        : 'Nhập thư mục có file sao lưu (.acsbak), bấm "Xem", chọn một file rồi nhập mật khẩu sao lưu. Toàn bộ dữ liệu hiện tại sẽ được thay bằng bản đó. App sẽ tự khởi động lại.');
       ACS.ui.dialog('<div class="dlg-body"><h2 class="dlg-title">Khôi phục từ bản sao lưu?</h2>' +
-        '<p class="dlg-text">Toàn bộ dữ liệu hiện tại (người, khuôn mặt, vân tay, thiết lập máy) sẽ được thay bằng bản sao lưu <strong class="mono">' + esc(name) + '</strong>' +
-        (f ? ' lúc ' + esc(R.fmtDateTime(f.at)) : '') + '. Những thay đổi sau thời điểm đó sẽ mất. App sẽ tự khởi động lại.</p>' +
+        '<p class="dlg-text" data-what>' + whatText(local) + '</p>' +
+        '<details class="det" data-other' + (local ? '' : ' open') + ' style="margin-top:8px"><summary>Chọn từ thư mục khác</summary>' +
+        '<label class="field-lbl" for="rs-folder" style="margin-top:8px">Thư mục có file .acsbak (USB, ổ mạng, thư mục đã chép)</label>' +
+        '<div class="rowwrap nowrapm"><input id="rs-folder" class="input in48 in-mono grow" type="text" autocomplete="off" placeholder="Ví dụ: E:\\SaoLuuACS">' +
+        '<button type="button" class="btn" data-look>Xem</button></div><div data-list></div></details>' +
         '<label class="field-lbl" for="rs-pw" style="margin-top:12px">Mật khẩu sao lưu</label><input id="rs-pw" class="input in48" type="password" autocomplete="off">' +
         '<div class="hint">Mật khẩu bạn đã đặt lúc tạo bản sao lưu này.</div><div data-err></div>' +
         '<div class="dlg-actions"><button type="button" class="btn" data-no>Thôi</button><button type="button" class="btn btn-danger" data-yes>Khôi phục</button></div></div>', {
         onOpen(d) {
           let running = false;
+          // chosen: {name, at} for a local file, {name, at, path} for a file in another folder
+          let chosen = local ? { name: local.name, at: local.at } : null;
+          let found = [];
           d.addEventListener('cancel', (ev) => { if (running) ev.preventDefault(); });
           d.addEventListener('click', (ev) => { if (running && ev.target === d) ev.stopImmediatePropagation(); }, true);
           const err = d.querySelector('[data-err]'), yes = d.querySelector('[data-yes]'), no = d.querySelector('[data-no]'), pw = d.querySelector('#rs-pw');
-          pw.focus();
+          const folder = d.querySelector('#rs-folder'), look = d.querySelector('[data-look]'), list = d.querySelector('[data-list]'), what = d.querySelector('[data-what]');
+          (local ? pw : folder).focus();
           no.addEventListener('click', () => d.finish(false));
-          const go = async () => {
-            if (!pw.value) { err.innerHTML = errBox('Hãy nhập mật khẩu sao lưu.'); return; }
-            running = true; yes.disabled = no.disabled = pw.disabled = true; yes.textContent = 'Đang khôi phục…'; err.innerHTML = '';
+          function drawList(dir) {
+            list.innerHTML = !found.length
+              ? '<p class="small muted" style="margin:8px 0 0">Không có file sao lưu (ACS-….acsbak) trong thư mục này.</p>'
+              : '<div class="radios" style="margin-top:8px">' + found.map((f, i) => {
+                const on = chosen && chosen.path === joinPath(dir, f.name);
+                return '<label class="radio' + (on ? ' on' : '') + '"><input type="radio" name="rs-file" value="' + i + '"' + (on ? ' checked' : '') + '>' +
+                  '<span><span class="rt mono">' + esc(f.name) + '</span><span class="rs">' + esc(R.fmtDateTime(f.at)) + ' · ' + esc(R.fmtSize(f.size)) + '</span></span></label>';
+              }).join('') + '</div>';
+          }
+          const browse = async () => {
+            const dir = folder.value.trim();
+            err.innerHTML = '';
+            if (!dir) { err.innerHTML = errBox('Hãy nhập đường dẫn thư mục, ví dụ E:\\SaoLuuACS.'); return; }
+            look.disabled = true;
             try {
-              await ACS.bridge.call('backup.restore', { name, password: pw.value });
+              found = await ACS.bridge.call('backup.listFolder', { folder: dir });
+              list.dataset.dir = dir;
+              if (found.length === 1) chosen = { name: found[0].name, at: found[0].at, path: joinPath(dir, found[0].name) };
+              drawList(dir);
+              what.innerHTML = whatText(chosen);
+            } catch (e) { found = []; list.innerHTML = ''; err.innerHTML = errBox(ACS.ui.errMessage(e)); }
+            look.disabled = false;
+          };
+          look.addEventListener('click', browse);
+          folder.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); browse(); } });
+          list.addEventListener('change', (ev) => {
+            const f = found[+ev.target.value];
+            if (!f) return;
+            chosen = { name: f.name, at: f.at, path: joinPath(list.dataset.dir, f.name) };
+            drawList(list.dataset.dir);
+            what.innerHTML = whatText(chosen);
+            pw.focus();
+          });
+          const go = async () => {
+            if (!chosen) { err.innerHTML = errBox('Hãy chọn một file sao lưu: nhập thư mục, bấm "Xem" rồi chọn file.'); return; }
+            if (!pw.value) { err.innerHTML = errBox('Hãy nhập mật khẩu sao lưu.'); return; }
+            running = true; yes.disabled = no.disabled = pw.disabled = look.disabled = folder.disabled = true; yes.textContent = 'Đang khôi phục…'; err.innerHTML = '';
+            try {
+              await ACS.bridge.call('backup.restore', chosen.path ? { path: chosen.path, password: pw.value } : { name: chosen.name, password: pw.value });
               err.innerHTML = '<div class="notice-ok" role="status">' + icon('checkCircle', 18) + '<div>Đã khôi phục. App đang tự khởi động lại…</div></div>';
-            } catch (e) { running = false; yes.disabled = no.disabled = pw.disabled = false; yes.textContent = 'Khôi phục'; err.innerHTML = errBox(ACS.ui.errMessage(e)); }
+            } catch (e) {
+              running = false; yes.disabled = no.disabled = pw.disabled = look.disabled = folder.disabled = false; yes.textContent = 'Khôi phục'; err.innerHTML = errBox(ACS.ui.errMessage(e));
+            }
           };
           yes.addEventListener('click', go);
           pw.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') go(); });
         } });
+    }
+    on(host, 'click', '[data-act="restore"]', (el) => {
+      const f = ((s.bak && s.bak.files) || []).find((x) => x.name === el.dataset.name);
+      openRestore(f || { name: el.dataset.name, at: null });
     });
+    on(host, 'click', '[data-act="restore-other"]', () => openRestore(null));
 
     // ---------- other settings ----------
     function drawOth() {

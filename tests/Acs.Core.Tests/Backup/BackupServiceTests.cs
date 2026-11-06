@@ -57,6 +57,26 @@ public sealed class BackupServiceTests : IDisposable
     }
 
     [Fact]
+    public void List_reads_backup_files_from_any_folder()
+    {
+        var (db, _, svc, _) = Make("a");
+        AddPerson(db, "1001", "Nguyễn Văn An");
+        svc.SetPassword("mat-khau-sao-luu");
+        var made = svc.Create("thu-cong");
+        var usb = Path.Combine(_root, "usb");
+        Directory.CreateDirectory(usb);
+        File.Copy(made, Path.Combine(usb, Path.GetFileName(made)));
+        File.WriteAllText(Path.Combine(usb, "ghi-chu.txt"), "x");
+        File.WriteAllText(Path.Combine(usb, "other.acsbak"), "x");   // not an ACS-*.acsbak name
+
+        var found = Assert.Single(svc.List(usb));
+        Assert.Equal(Path.GetFileName(made), found.Name);
+        Assert.Equal(Path.Combine(usb, found.Name), found.Path);
+        Assert.Empty(svc.List(Path.Combine(_root, "missing")));
+        Assert.Single(svc.List());   // the data folder's own list is unchanged
+    }
+
+    [Fact]
     public void Backup_restore_round_trip_on_new_keystore()
     {
         var a = Make("a");

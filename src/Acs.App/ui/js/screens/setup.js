@@ -36,6 +36,7 @@
         const showForm = s.adding || (!s.devs.length && !s.formClosed);
         return '<div><h1 class="h1 h1-md">Chào mừng! Hãy thêm máy chấm công</h1><p class="sub">Làm một lần khi mới cài, khoảng 5 phút. Nên thêm đủ cả 2 máy; thêm máy thứ hai sau cũng được.</p></div>' +
           savedList() + (!showForm && !s.devs.length ? '<div class="card empty"><p class="muted">Chưa có máy nào. Bấm "Thêm máy" để nhập máy đầu tiên.</p></div>' : '') + (showForm ? D.formHtml(null, { title: s.devs.length ? 'Thêm máy tiếp theo' : 'Máy chấm công đầu tiên' }) : '<div><button type="button" class="btn" data-act="su-add">' + icon('plus', 18) + (s.devs.length ? 'Thêm máy khác' : 'Thêm máy') + '</button></div>') +
+          '<p class="small muted">Cài lại trên máy tính mới và có file sao lưu (.acsbak)? Vào <a href="#/settings">Máy chấm công &amp; cập nhật</a>, mục Sao lưu, bấm "Chọn từ thư mục khác".</p>' +
           foot('', nextBtn('Tiếp: Kiểm tra kết nối', s.devs.length > 0));
       }
       if (s.step === 1) {

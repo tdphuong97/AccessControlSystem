@@ -214,6 +214,66 @@ public sealed class AppHostTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task restore_on_a_new_pc_from_a_file_in_another_folder()
+    {
+        var h = NewHost();
+        await AddDevice(h);
+        await Create(h, "1001", "Nguyễn Văn An");
+        await h.HandleAsync("backup.setPassword", J("""{"password":"mat-khau-sao-luu"}"""));
+        var name = Out(await h.HandleAsync("backup.now", J())).GetProperty("files")[0].GetProperty("name").GetString()!;
+        var usb = Path.Combine(_folder, "usb");
+        Directory.CreateDirectory(usb);
+        File.Copy(Path.Combine(_folder, "backups", name), Path.Combine(usb, name));
+
+        // A new PC: its own empty data folder, no local backups.
+        var other = _folder + "-newpc";
+        AppHost NewPc() { var x = AppHost.Create(other, new PassThrough(), _factory, _time, "1.0.0", null, 1000); _hosts.Add(x); return x; }
+        try
+        {
+            var pc = NewPc();
+            Assert.Equal(0, Out(await pc.HandleAsync("backup.status", J())).GetProperty("files").GetArrayLength());
+            var listed = Out(await pc.HandleAsync("backup.listFolder", J(Ser(new { folder = usb }))));
+            Assert.Equal(name, listed[0].GetProperty("name").GetString());
+            Assert.True(listed[0].GetProperty("size").GetInt64() > 0);
+            Assert.NotEqual(JsonValueKind.Null, listed[0].GetProperty("at").ValueKind);
+
+            var path = Path.Combine(usb, name);
+            await Assert.ThrowsAsync<Acs.Core.Backup.BackupException>(() =>
+                pc.HandleAsync("backup.restore", J(Ser(new { path, password = "sai-mat-khau-roi" }))));
+            Assert.Null(await pc.HandleAsync("backup.restore", J(Ser(new { path, password = "mat-khau-sao-luu" }))));
+            Assert.True(pc.RestartRequested);
+            await pc.StopAsync();
+
+            var after = NewPc();
+            Assert.Equal("Nguyễn Văn An", (await Row0(after)).GetProperty("fullName").GetString());
+            Assert.True(await NeedsReconcile(after));
+        }
+        finally
+        {
+            foreach (var x in _hosts.ToList()) await x.StopAsync();
+            try { Directory.Delete(other, true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task backup_list_folder_and_restore_path_are_validated()
+    {
+        var h = NewHost();
+        var e1 = await Assert.ThrowsAsync<HostException>(() => h.HandleAsync("backup.listFolder", J(Ser(new { folder = @"relative\dir" }))));
+        Assert.Contains("đường dẫn đầy đủ", e1.Message);
+        var e2 = await Assert.ThrowsAsync<HostException>(() => h.HandleAsync("backup.listFolder", J(Ser(new { folder = Path.Combine(_folder, "khong-co") }))));
+        Assert.Contains("Không thấy thư mục", e2.Message);
+        Directory.CreateDirectory(Path.Combine(_folder, "trong"));
+        Assert.Equal(0, Out(await h.HandleAsync("backup.listFolder", J(Ser(new { folder = Path.Combine(_folder, "trong") })))).GetArrayLength());
+
+        await Assert.ThrowsAsync<HostException>(() => h.HandleAsync("backup.restore", J(Ser(new { path = Path.Combine(_folder, "acs.db"), password = "x" }))));
+        await Assert.ThrowsAsync<HostException>(() => h.HandleAsync("backup.restore", J(Ser(new { path = "ACS-x.acsbak", password = "x" }))));
+        var e3 = await Assert.ThrowsAsync<HostException>(() => h.HandleAsync("backup.restore", J(Ser(new { path = Path.Combine(_folder, "ACS-none.acsbak"), password = "x" }))));
+        Assert.Contains("Không tìm thấy file sao lưu", e3.Message);
+        Assert.False(h.RestartRequested);
+    }
+
+    [Fact]
     public async Task unknown_command_throws_vietnamese_message()
     {
         var h = NewHost();

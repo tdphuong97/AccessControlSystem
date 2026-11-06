@@ -244,9 +244,20 @@
       if (a.folder && !/^[A-Za-z]:[\\/]|^\\\\/.test(a.folder)) throw new Error('Không dùng được thư mục này. Hãy nhập đường dẫn đầy đủ, ví dụ E:\\SaoLuuACS.');
       extra = a.folder || null; return null;
     },
+    // Another folder (new PC, USB): any full path lists two invented files; "E:\\Trong" is an empty folder.
+    'backup.listFolder': async (a) => {
+      await wait(400);
+      const dir = String(a.folder || '').trim();
+      if (!/^[A-Za-z]:[\\/]|^\\\\/.test(dir)) throw new Error('Hãy nhập đường dẫn đầy đủ của thư mục có file .acsbak (ví dụ E:\\SaoLuuACS hoặc \\\\may-chu\\SaoLuu).');
+      if (/trong$/i.test(dir)) return [];
+      return [{ name: 'ACS-20261105-210000-hang-ngay.acsbak', at: ago(30 * 3600000), size: 1802240 },
+        { name: 'ACS-20261101-090000-thu-cong.acsbak', at: ago(5 * 86400000), size: 1750000 }];
+    },
     'backup.restore': async (a) => {
       await wait(900);
+      if (!a.name && !/\.acsbak$/i.test(String(a.path || ''))) throw new Error('Hãy chọn một file sao lưu .acsbak bằng đường dẫn đầy đủ.');
       if (a.password === 'sai') throw new Error('Mật khẩu sao lưu chưa đúng. Hãy nhập lại; nếu đã quên mật khẩu thì không mở được bản sao lưu này.');
+      needsReconcile = true;   // the real app restarts and then asks for So khớp
       return null;
     },
     'update.check': async () => { await wait(600); return update; },

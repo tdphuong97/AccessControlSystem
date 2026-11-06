@@ -28,6 +28,7 @@
     shield: '<path d="M12 3l7.5 3v5.5c0 4.5-3.2 8-7.5 9.5-4.3-1.5-7.5-5-7.5-9.5V6z"/><path d="M9 12l2 2 4-4"/>',
     spinner: '<path d="M12 3a9 9 0 1 0 9 9"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
+    folder: '<path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>',
   };
   const LOGO = '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" style="flex-shrink:0"><rect width="24" height="24" rx="6" fill="#1D5FD1"/><path d="M7 9.5V8a1 1 0 0 1 1-1h1.5M14.5 7H16a1 1 0 0 1 1 1v1.5M17 14.5V16a1 1 0 0 1-1 1h-1.5M9.5 17H8a1 1 0 0 1-1-1v-1.5" fill="none" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round"/><circle cx="10.3" cy="10.8" r="0.9" fill="#FFFFFF"/><circle cx="13.7" cy="10.8" r="0.9" fill="#FFFFFF"/><path d="M10 13.6c1.1.9 2.9.9 4 0" fill="none" stroke="#FFFFFF" stroke-width="1.4" stroke-linecap="round"/></svg>';
 
