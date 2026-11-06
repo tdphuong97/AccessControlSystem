@@ -384,6 +384,31 @@ public sealed class SyncEngineTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Fresh_state_row_never_claims_a_finger_list_nobody_read()
+    {
+        var d = _h.AddDevice();
+        _h.AddPerson("1001", "Nguyễn An");
+        _h.AddPerson("1002", "Trần Bình");
+        _h.AddFace("1002");
+        var fake = _h.Factory.For(d);
+        await fake.UpsertUserAsync(new HikUserWrite("1001", "Nguyễn An", "2026-01-01T00:00:00", JobRules.NoEndDate, true, 1), default);
+        await fake.SetFingerprintAsync("1001", 3, SyncHarness.Tpl("ModelA"), 1, default);
+        await fake.UpsertUserAsync(new HikUserWrite("1002", "Trần Bình", "2026-01-01T00:00:00", JobRules.NoEndDate, true, 1), default);
+        await fake.SetFingerprintAsync("1002", 4, SyncHarness.Tpl("ModelA"), 1, default);
+        _h.Enqueue(d, "1001", JobKind.UpsertUser);   // its read-back says numOfFP = 1: which finger is unknown
+        _h.Enqueue(d, "1002", JobKind.SetFace);      // no user read at all
+        _h.AddPerson("1003", "Lê Cường");
+        _h.Enqueue(d, "1003", JobKind.UpsertUser);   // new on the device: numOfFP = 0 is a complete answer
+        _h.Engine.Start();
+        await _h.WaitDone(d);
+        Assert.False(_h.Db.Jobs.GetState("1001", d)!.FingersKnown);
+        Assert.False(_h.Db.Jobs.GetState("1002", d)!.FingersKnown);
+        var none = _h.Db.Jobs.GetState("1003", d)!;
+        Assert.True(none.FingersKnown);
+        Assert.Empty(none.Fingers);
+    }
+
+    [Fact]
     public async Task Upsert_with_no_state_row_and_the_same_name_on_the_device_proceeds()
     {
         var d = _h.AddDevice();

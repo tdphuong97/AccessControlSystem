@@ -74,6 +74,13 @@ public sealed partial class AppHost
         {
             var cur = Db.Devices.Get(existingId) ?? throw new HostException("Không tìm thấy máy chấm công.");
             var changedLogin = password.Length > 0 || host != cur.Host || user != cur.Username;
+            if (host != cur.Host)
+            {
+                // A new address = possibly another (replaced or reset) unit: nothing confirmed on the old one may show
+                // as ✓ for it. So khớp reads the new unit and sends what is missing.
+                Db.Jobs.DeleteStates(existingId);
+                if (Db.People.Count() > 0) SetNeedsReconcile(true);
+            }
             Db.Devices.Update(cur with
             {
                 Name = name, Host = host, Username = user, Password = password.Length > 0 ? password : cur.Password,

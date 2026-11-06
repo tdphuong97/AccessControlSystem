@@ -296,6 +296,21 @@ public sealed class ReconcilerTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Stored_list_that_disagrees_with_the_device_count_is_read_again()
+    {
+        _h.AddPerson("1001", "An");
+        _h.AddFinger("1001", 1, "ModelA");
+        _h.AddFinger("1001", 6, "ModelA");
+        await _dev1.UpsertUserAsync(W("1001", "An"), Ct);
+        await _dev1.SetFingerprintAsync("1001", 1, SyncHarness.Tpl("ModelA"), 1, Ct);
+        await _dev1.SetFingerprintAsync("1001", 6, SyncHarness.Tpl("ModelA"), 1, Ct);
+        // A stale "known" list (e.g. written before anyone read the device) with the app and device counts equal.
+        _h.Db.Jobs.SetState(new DeviceStateRecord("1001", _d1, true, true, false, new HashSet<int>(), new HashSet<int>(), _h.Now));
+        await _rec.BuildAsync(null, Ct);
+        Assert.Equal(new HashSet<int> { 1, 6 }, _h.Db.Jobs.GetState("1001", _d1)!.Fingers);
+    }
+
+    [Fact]
     public async Task Known_state_with_matching_count_is_not_read_again()
     {
         _h.AddPerson("1001", "An");

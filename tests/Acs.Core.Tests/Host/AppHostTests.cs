@@ -158,6 +158,73 @@ public sealed class AppHostTests : IAsyncDisposable
         Assert.Equal(done.OrderBy(x => x), done);
     }
 
+    [Theory]
+    [InlineData("edit")]
+    [InlineData("face")]
+    public async Task person_on_both_devices_ends_ok_on_both_after_import_a_write_and_reconcile(string write)
+    {
+        var h = NewHost();
+        var a = await AddDevice(h, "Máy A");
+        var b = await AddDevice(h, "Máy B");
+        foreach (var d in new[] { a, b }) await SeedOnDevice(_factory.For(d), "1001", "Nguyễn Văn An", true, 1, 6);
+        await h.HandleAsync("import.start", J($$"""{"deviceId":{{a}}}"""));
+        await h.StartAsync();
+
+        // A write reaches B before anyone read B's fingers: B's fresh state row must not claim "no fingers".
+        if (write == "edit")
+            await h.HandleAsync("people.update", J("""{"employeeNo":"1001","fullName":"Nguyễn Văn An","groupName":"Kho"}"""));
+        else
+        {
+            var jpeg = Convert.ToBase64String([0xFF, 0xD8, 0xFF, 0xE0, 9, 8, 7, 0xFF, 0xD9]);
+            await h.HandleAsync("face.save", J($$"""{"employeeNo":"1001","imageDataUrl":"data:image/jpeg;base64,{{jpeg}}","source":"file"}"""));
+        }
+        await Until(() => h.Db.Jobs.ListOpen().Count == 0 && h.Db.Jobs.GetState("1001", b) is not null,
+            () => _time.Advance(TimeSpan.FromSeconds(1)));
+        var fresh = h.Db.Jobs.GetState("1001", b)!;
+        Assert.False(fresh.FingersKnown);
+        Assert.Empty(fresh.Fingers);
+
+        await h.HandleAsync("reconcile.plan", J());
+        await h.HandleAsync("reconcile.apply", J("""{"strangers":{}}"""));
+        await Until(() => h.Db.Jobs.ListOpen().Count == 0 && Row0(h).Result.GetProperty("sync").GetString() == "ok",
+            () => _time.Advance(TimeSpan.FromSeconds(1)));
+        var states = Out(await h.HandleAsync("people.get", J("""{"employeeNo":"1001"}"""))).GetProperty("devices");
+        Assert.All(states.EnumerateArray(), d => Assert.Equal("ok", d.GetProperty("state").GetString()));
+        var onB = h.Db.Jobs.GetState("1001", b)!;
+        Assert.True(onB.FingersKnown);
+        Assert.Equal(new HashSet<int> { 1, 6 }, onB.Fingers);   // read from the device, not assumed
+        Assert.False(await NeedsReconcile(h));
+    }
+
+    [Fact]
+    public async Task a_changed_device_address_forgets_what_the_old_unit_confirmed()
+    {
+        var h = NewHost();
+        var a = await AddDevice(h, "Máy A");
+        await Create(h, "1001", "An");
+        await h.StartAsync();
+        await Until(() => Row0(h).Result.GetProperty("sync").GetString() == "ok", () => _time.Advance(TimeSpan.FromSeconds(1)));
+        Assert.NotNull(h.Db.Jobs.GetState("1001", a));
+
+        // The unit was replaced: a new, empty device at a new address.
+        _factory.Add(a, new FakeDevice());
+        await h.HandleAsync("devices.save", J($$"""{"id":{{a}},"name":"Máy A","host":"192.168.1.202","username":"admin","password":"","doorNo":1,"isCaptureDefault":true,"isFingerReader":false}"""));
+        Assert.Null(h.Db.Jobs.GetState("1001", a));
+        var row = await Row0(h);
+        Assert.Equal("pending", row.GetProperty("sync").GetString());   // never ✓ for an empty unit
+        Assert.True(await NeedsReconcile(h));
+
+        await h.HandleAsync("reconcile.plan", J());
+        await h.HandleAsync("reconcile.apply", J("""{"strangers":{}}"""));
+        await Until(() => Row0(h).Result.GetProperty("sync").GetString() == "ok", () => _time.Advance(TimeSpan.FromSeconds(1)));
+        Assert.NotNull(await _factory.For(a).FindUserAsync("1001", default));
+
+        // Only an address change does this: renaming keeps what was confirmed.
+        await h.HandleAsync("devices.save", J($$"""{"id":{{a}},"name":"Máy A mới","host":"192.168.1.202","username":"admin","password":"","doorNo":1,"isCaptureDefault":true,"isFingerReader":false}"""));
+        Assert.NotNull(h.Db.Jobs.GetState("1001", a));
+        Assert.False(await NeedsReconcile(h));
+    }
+
     [Fact]
     public async Task an_import_that_never_ran_does_not_ask_for_reconcile()
     {

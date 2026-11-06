@@ -161,6 +161,7 @@
       if (!a.name || !a.host) throw new Error('Hãy nhập tên và địa chỉ của máy.');
       let d = devices.find((x) => x.id === a.id);
       if (d) {
+        if (a.host !== d.host && people.length) needsReconcile = true;   // another unit may sit at the new address
         Object.assign(d, { name: a.name, host: a.host, username: a.username, doorNo: a.doorNo, isCaptureDefault: a.isCaptureDefault, isFingerReader: a.isFingerReader });
         if (d.authPaused && a.password) { d.authPaused = false; d.message = null; }   // an empty password keeps the stored one
       } else {

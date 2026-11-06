@@ -80,8 +80,8 @@
       $('p-stale').innerHTML = stale;
       // A new device or a restore: nothing is queued for that device until So khớp runs (app.state.needsReconcile).
       $('p-rec').innerHTML = st && st.needsReconcile && st.devices.length
-        ? '<div class="alert alert-wait" role="note">' + icon('refresh', 18) + '<span>Vừa thêm máy mới hoặc khôi phục dữ liệu. ' +
-          'Chạy So khớp 2 máy để gửi dữ liệu sang máy này. <a href="#/reconcile">Mở So khớp 2 máy</a></span></div>' : '';
+        ? '<div class="alert alert-wait" role="note">' + icon('refresh', 18) + '<span>Có máy mới, máy vừa đổi, vừa khôi phục hoặc vừa lấy dữ liệu — ' +
+          'chạy So khớp 2 máy để gửi đủ cho mọi máy. <a href="#/reconcile">Mở So khớp 2 máy</a></span></div>' : '';
       const active = counts ? counts.all - counts.locked : 0;
       $('p-count').textContent = counts ? active + ' người đang có quyền ra vào' : '';
       const people = counts ? counts.all - counts.locked : 0;

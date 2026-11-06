@@ -270,8 +270,21 @@ internal sealed class DeviceWorker
         throw new JobFailure("not_saved", JobRules.NotSavedMessage);
     }
 
+    /// <summary>The stored state, or a fresh row. A fresh row's finger list is UNKNOWN: nobody has read it yet, and an
+    /// empty "known" list would make So khớp skip the read and leave the person "pending" for ever.</summary>
     private DeviceStateRecord State(string no) =>
-        _db.Jobs.GetState(no, _id) ?? new DeviceStateRecord(no, _id, false, false, false, new HashSet<int>(), new HashSet<int>(), null);
+        _db.Jobs.GetState(no, _id)
+        ?? new DeviceStateRecord(no, _id, false, false, false, new HashSet<int>(), new HashSet<int>(), null) { FingersKnown = false };
+
+    /// <summary>
+    /// After a verified user write: the device's numOfFP is a read. 0 = the device holds no finger for this person
+    /// (known, empty); a count that disagrees with the stored list means that list is stale (unknown until a finger
+    /// read; nothing stays "confirmed"). An agreeing known list is kept.
+    /// </summary>
+    private static DeviceStateRecord AfterUserRead(DeviceStateRecord s, HikUser u) =>
+        u.FingerCount == 0 ? s with { Fingers = new HashSet<int>(), FingersKnown = true }
+        : s.FingersKnown && s.Fingers.Count == u.FingerCount ? s
+        : s with { Fingers = new HashSet<int>(), FingersKnown = false };
 
     /// <summary>Writes device_state after a verified change (skipped when the person no longer exists in the app).</summary>
     private void Save(string no, Func<DeviceStateRecord, DeviceStateRecord> change)
@@ -294,16 +307,21 @@ internal sealed class DeviceWorker
                 if (_db.Jobs.GetState(no, _id) is null && await hik.FindUserAsync(no, ct) is { } other && !SameName(other.Name, p.FullName))
                     throw new JobFailure("conflict", JobRules.NumberTakenMessage(other.Name));
                 var enabled = p.Status == PersonStatus.Active;
-                await WriteUserAsync(hik, p, dev.DoorNo, enabled, ct);
-                Save(no, s => s with { UserPresent = true, UserEnabled = enabled });
+                var written = await WriteUserAsync(hik, p, dev.DoorNo, enabled, ct);
+                Save(no, s => AfterUserRead(s, written) with { UserPresent = true, UserEnabled = enabled });
                 break;
             }
             case JobKind.DisableUser:
             {
                 if (_db.People.Get(no) is not { } p) return null;
-                if (await hik.FindUserAsync(no, ct) is null) { Save(no, s => s with { UserPresent = false, UserEnabled = false }); return null; }
-                await WriteUserAsync(hik, p, dev.DoorNo, false, ct);
-                Save(no, s => s with { UserPresent = true, UserEnabled = false });
+                if (await hik.FindUserAsync(no, ct) is null)
+                {
+                    // Not on the device at all: no face, no finger there either (a confirmed, complete answer).
+                    Save(no, s => s with { UserPresent = false, UserEnabled = false, FacePresent = false, Fingers = new HashSet<int>(), FingersKnown = true });
+                    return null;
+                }
+                var disabled = await WriteUserAsync(hik, p, dev.DoorNo, false, ct);
+                Save(no, s => AfterUserRead(s, disabled) with { UserPresent = true, UserEnabled = false });
                 break;
             }
             case JobKind.DeleteUser:
@@ -374,12 +392,15 @@ internal sealed class DeviceWorker
         return new Note(nameof(JobKind.DisableUser), JobRules.KeptOnDeviceMessage);
     }
 
-    private async Task WriteUserAsync(IHikDevice hik, PersonRecord p, int doorNo, bool enabled, CancellationToken ct)
+    /// <summary>Writes the user and returns the device's read-back of it (name, validity, numOfFace, numOfFP).</summary>
+    private async Task<HikUser> WriteUserAsync(IHikDevice hik, PersonRecord p, int doorNo, bool enabled, CancellationToken ct)
     {
         await hik.UpsertUserAsync(JobRules.ToWrite(p, doorNo, enabled), ct);
         var w = JobRules.ToWrite(p, doorNo, enabled);
-        await VerifyAsync(async () => await hik.FindUserAsync(p.EmployeeNo, ct) is { } u && u.Name == p.FullName && u.Enabled == enabled
+        HikUser? seen = null;
+        await VerifyAsync(async () => (seen = await hik.FindUserAsync(p.EmployeeNo, ct)) is { } u && u.Name == p.FullName && u.Enabled == enabled
             && JobRules.NormTime(u.BeginTime) == JobRules.NormTime(w.BeginTime) && JobRules.NormTime(u.EndTime) == JobRules.NormTime(w.EndTime), ct);
+        return seen!;
     }
 
     private async Task SetFingerAsync(DeviceRecord dev, JobRecord job, IHikDevice hik, CancellationToken ct)

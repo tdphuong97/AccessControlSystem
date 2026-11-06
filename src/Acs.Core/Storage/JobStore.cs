@@ -144,6 +144,9 @@ public sealed class JobStore
         ("$fp", s.FacePresent ? 1 : 0), ("$f", (s.FingersKnown ? "" : UnknownMark.ToString()) + FormatSet(s.Fingers)), ("$n", FormatSet(s.NeedsScan)),
         ("$v", s.VerifiedAt is { } v ? Database.Ts(v) : null));
 
+    /// <summary>Forgets everything confirmed on one device (it was replaced or reset: its address changed).</summary>
+    public int DeleteStates(int deviceId) => _db.Exec("DELETE FROM device_state WHERE device_id=$d", ("$d", deviceId));
+
     public void DeleteState(string employeeNo, int deviceId) =>
         _db.Exec("DELETE FROM device_state WHERE employee_no=$e AND device_id=$d", ("$e", employeeNo), ("$d", deviceId));
 
