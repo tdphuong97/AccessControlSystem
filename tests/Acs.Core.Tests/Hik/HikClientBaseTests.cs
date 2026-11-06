@@ -65,7 +65,7 @@ public class HikClientBaseTests
             contentType: "application/xml");
         var ex = await Assert.ThrowsAsync<HikRejectedException>(() => Make(h).GetDeviceInfoAsync(default));
         Assert.Equal("weird", ex.Code);
-        Assert.StartsWith("Máy từ chối:", ex.Message);
+        Assert.StartsWith("Máy từ chối yêu cầu (mã weird)", ex.Message);
     }
 
     [Fact]
@@ -79,7 +79,9 @@ public class HikClientBaseTests
         Assert.IsType<HikTransientException>(HikErrorMap.FromResponse(200, "{\"statusCode\":4,\"subStatusCode\":\"deviceBusy\"}"));
         Assert.IsType<HikAuthException>(HikErrorMap.FromResponse(401, ""));
         var r = Assert.IsType<HikRejectedException>(HikErrorMap.FromResponse(200, "{\"statusCode\":4,\"subStatusCode\":\"zzz\",\"errorMsg\":\"boom\"}"));
-        Assert.Equal("Máy từ chối: boom. Xem Chi tiết và báo lại cho người làm phần mềm.", r.Message);
+        Assert.Equal("Máy từ chối yêu cầu (mã zzz). Xem Chi tiết và báo lại cho người làm phần mềm.", r.Message);
+        Assert.DoesNotContain("boom", r.Message);
+        Assert.Equal("boom", r.Detail);
         Assert.Equal("zzz", r.Code);
         var dup = Assert.IsType<HikRejectedException>(HikErrorMap.FromResponse(200, "{\"statusCode\":4,\"subStatusCode\":\"employeeNoAlreadyExist\"}"));
         Assert.Contains("đã có", dup.Message);
@@ -129,5 +131,46 @@ public class HikClientBaseTests
     {
         var d = new DeviceRecord(1, "Máy tầng trệt", "192.168.1.201", "admin", "p", 1, true, false, null, null, null, "g", false, null);
         Assert.IsType<HikClient>(new HikDeviceFactory().Create(d));
+    }
+
+    private const string Bom = "﻿";
+
+    [Fact]
+    public async Task Bom_prefixed_json_200_with_error_is_rejected()
+    {
+        var h = new FakeIsapiHandler();
+        h.On(HttpMethod.Get, "/ISAPI/System/deviceInfo", _ => new FakeIsapiHandler.Reply(HttpStatusCode.OK, Bom + "{\"statusCode\":6,\"subStatusCode\":\"badJsonContent\"}"));
+        await Assert.ThrowsAsync<HikRejectedException>(() => Make(h).GetDeviceInfoAsync(default));
+    }
+
+    [Fact]
+    public async Task Bom_prefixed_xml_200_with_error_is_rejected()
+    {
+        var h = new FakeIsapiHandler();
+        h.On(HttpMethod.Get, "/ISAPI/System/deviceInfo", _ => new FakeIsapiHandler.Reply(HttpStatusCode.OK,
+            Bom + "<?xml version=\"1.0\"?><ResponseStatus><statusCode>6</statusCode><subStatusCode>weird</subStatusCode></ResponseStatus>", "application/xml"));
+        await Assert.ThrowsAsync<HikRejectedException>(() => Make(h).GetDeviceInfoAsync(default));
+    }
+
+    [Fact]
+    public async Task Bom_prefixed_deviceInfo_xml_parses()
+    {
+        var h = new FakeIsapiHandler();
+        h.On(HttpMethod.Get, "/ISAPI/System/deviceInfo", _ => new FakeIsapiHandler.Reply(HttpStatusCode.OK,
+            Bom + "<DeviceInfo><model>M</model><serialNumber>S</serialNumber><firmwareVersion>F</firmwareVersion></DeviceInfo>", "application/xml"));
+        Assert.Equal(new DeviceInfo("M", "S", "F"), await Make(h).GetDeviceInfoAsync(default));
+    }
+
+    [Fact]
+    public void Factory_caches_per_device_and_rebuilds_on_change()
+    {
+        var f = new HikDeviceFactory();
+        var d = new DeviceRecord(1, "Máy tầng trệt", "192.168.1.201", "admin", "p", 1, true, false, null, null, null, "g", false, null);
+        var a = f.Create(d);
+        Assert.Same(a, f.Create(d with { Name = "Máy tầng 1" }));
+        var b = f.Create(d with { Password = "q" });
+        Assert.NotSame(a, b);
+        Assert.Same(b, f.Create(d with { Password = "q" }));
+        Assert.NotSame(b, f.Create(d with { Id = 2, Password = "q" }));
     }
 }

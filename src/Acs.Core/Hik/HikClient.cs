@@ -22,11 +22,18 @@ public sealed partial class HikClient : IHikDevice, IDisposable
         };
     }
 
+    /// <summary>UTF-8 decode that drops a leading BOM (some firmwares send one).</summary>
+    internal static string Decode(byte[] b)
+        => (b.Length >= 3 && b[0] == 0xEF && b[1] == 0xBB && b[2] == 0xBF ? Encoding.UTF8.GetString(b, 3, b.Length - 3) : Encoding.UTF8.GetString(b));
+
+    /// <summary>Drops a leading BOM and whitespace so { and < sniffing works.</summary>
+    internal static string StripBom(string s) => s.TrimStart((char)0xFEFF).TrimStart();
+
     public void Dispose() => _http.Dispose();
 
     /// <summary>Sends a request and returns the body as text. Every response goes through HikErrorMap.</summary>
     internal async Task<string> SendAsync(HttpMethod method, string path, HttpContent? body, TimeSpan? timeout, CancellationToken ct)
-        => Encoding.UTF8.GetString(await SendRawAsync(method, path, body, timeout, ct));
+        => Decode(await SendRawAsync(method, path, body, timeout, ct));
 
     internal Task<string> GetAsync(string path, CancellationToken ct, TimeSpan? timeout = null)
         => SendAsync(HttpMethod.Get, path, null, timeout, ct);
@@ -64,10 +71,10 @@ public sealed partial class HikClient : IHikDevice, IDisposable
         }
 
         var code = (int)resp.StatusCode;
-        var looksText = bytes.Length > 0 && (bytes[0] == (byte)'{' || bytes[0] == (byte)'<' || bytes[0] == 0xEF || bytes[0] <= (byte)' ');
+        var looksText = bytes.Length > 0 && (bytes[0] == 0xEF || bytes[0] == (byte)'{' || bytes[0] == (byte)'<' || bytes[0] <= (byte)' ');
         if (code >= 400 || looksText)
         {
-            var err = HikErrorMap.FromResponse(code, Encoding.UTF8.GetString(bytes));
+            var err = HikErrorMap.FromResponse(code, Decode(bytes));
             if (err is not null) throw err;
         }
         return bytes;

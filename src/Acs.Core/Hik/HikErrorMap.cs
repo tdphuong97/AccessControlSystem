@@ -42,7 +42,7 @@ public static class HikErrorMap
         var code = sub ?? status?.ToString() ?? http.ToString();
         if (sub is not null && Known.TryGetValue(sub, out var vi))
             return new HikRejectedException(code, vi, detail);
-        return new HikRejectedException(code, $"Máy từ chối: {(string.IsNullOrWhiteSpace(msg) ? code : msg)}. {UnknownHint}", detail);
+        return new HikRejectedException(code, $"Máy từ chối yêu cầu (mã {code}). {UnknownHint}", string.IsNullOrWhiteSpace(msg) ? detail : Trim(msg));
     }
 
     public static string Trim(string s) => s.Length <= 500 ? s : s[..500];
@@ -50,12 +50,12 @@ public static class HikErrorMap
     private static void Parse(string body, out int? status, out string? sub, out string? msg)
     {
         status = null; sub = null; msg = null;
-        var t = body.TrimStart();
+        var t = HikClient.StripBom(body);
         try
         {
             if (t.StartsWith('{'))
             {
-                using var doc = JsonDocument.Parse(body);
+                using var doc = JsonDocument.Parse(t);
                 var r = doc.RootElement;
                 if (r.ValueKind != JsonValueKind.Object) return;
                 if (r.TryGetProperty("statusCode", out var sc))
@@ -67,7 +67,7 @@ public static class HikErrorMap
             }
             else if (t.StartsWith('<'))
             {
-                var root = XDocument.Parse(body).Root;
+                var root = XDocument.Parse(t).Root;
                 if (root is null || root.Name.LocalName != "ResponseStatus") return;
                 string? Get(string n) => root.Elements().FirstOrDefault(e => e.Name.LocalName == n)?.Value;
                 status = int.TryParse(Get("statusCode"), out var n) ? n : null;

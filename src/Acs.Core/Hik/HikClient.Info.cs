@@ -26,16 +26,16 @@ public sealed partial class HikClient
     // Reads a scalar by key name anywhere in a JSON or XML body; null when absent.
     internal static string? Find(string body, string key)
     {
-        var t = body.TrimStart();
+        var t = HikClient.StripBom(body);
         try
         {
             if (t.StartsWith('{'))
             {
-                using var doc = JsonDocument.Parse(body);
+                using var doc = JsonDocument.Parse(t);
                 return FindJson(doc.RootElement, key);
             }
             if (t.StartsWith('<'))
-                return XDocument.Parse(body).Descendants().FirstOrDefault(e => e.Name.LocalName == key && !e.HasElements)?.Value;
+                return XDocument.Parse(t).Descendants().FirstOrDefault(e => e.Name.LocalName == key && !e.HasElements)?.Value;
         }
         catch (Exception e) when (e is JsonException or System.Xml.XmlException) { }
         return null;
