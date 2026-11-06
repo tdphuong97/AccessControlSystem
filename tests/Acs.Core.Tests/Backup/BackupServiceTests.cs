@@ -19,6 +19,18 @@ public sealed class BackupServiceTests : IDisposable
         public byte[] Unprotect(byte[] data) => (byte[])data.Clone();
     }
 
+    private sealed class FlakyProtector : IKeyProtector
+    {
+        public int FailOnCall; // 1-based count of Protect calls; 0 = never
+        public int Calls;
+        public byte[] Protect(byte[] data)
+        {
+            if (FailOnCall != 0 && ++Calls == FailOnCall) throw new IOException("disk full");
+            return (byte[])data.Clone();
+        }
+        public byte[] Unprotect(byte[] data) => (byte[])data.Clone();
+    }
+
     public void Dispose()
     {
         foreach (var d in _dbs) d.Dispose();
@@ -135,5 +147,84 @@ public sealed class BackupServiceTests : IDisposable
         a.Db.Settings.Set("backup.extraFolder", extra);
         var file = a.Svc.Create("manual");
         Assert.True(File.Exists(Path.Combine(extra, Path.GetFileName(file))));
+    }
+
+    [Theory]
+    [InlineData(1)] // data key write fails
+    [InlineData(2)] // backup key write fails after the data key was replaced
+    public void Failed_key_write_rolls_back_and_the_old_data_still_opens(int failOnCall)
+    {
+        var src = Make("src");
+        AddPerson(src.Db, "2002", "Nguồn");
+        src.Svc.SetPassword("mat-khau-12345");
+        var file = src.Svc.Create("manual");
+
+        // the PC being restored: its own db, key and a leftover -wal file
+        var dir = Path.Combine(_root, "old");
+        var prot = new FlakyProtector();
+        var keys = new KeyStore(Path.Combine(dir, "keys"), prot);
+        var dbFile = Path.Combine(dir, "acs.db");
+        using (var old = new Database(dbFile, new DataProtector(keys.GetOrCreateDataKey())))
+            AddPerson(old, "1001", "Cũ");
+        File.WriteAllText(dbFile + "-wal", "wal");
+        var svc = new BackupService(null!, keys, Path.Combine(dir, "backups"), _time, Iter);
+
+        prot.FailOnCall = failOnCall;
+        var ex = Assert.Throws<BackupException>(() => svc.Restore(file, "mat-khau-12345", dbFile));
+        Assert.Equal("Không khôi phục được bản sao lưu. Dữ liệu cũ vẫn được giữ nguyên.", ex.Message);
+
+        using var still = new Database(dbFile, new DataProtector(keys.GetOrCreateDataKey()));
+        Assert.Equal("Cũ", still.People.Get("1001")!.FullName);
+        Assert.Null(still.People.Get("2002"));
+        Assert.False(File.Exists(dbFile + ".bak-restore"));
+        Assert.False(File.Exists(dbFile + ".restore.tmp"));
+    }
+
+    [Fact]
+    public void Successful_restore_removes_the_aside_files()
+    {
+        var src = Make("src");
+        AddPerson(src.Db, "2002", "Nguồn");
+        src.Svc.SetPassword("mat-khau-12345");
+        var file = src.Svc.Create("manual");
+        var dir = Path.Combine(_root, "dst");
+        var keys = new KeyStore(Path.Combine(dir, "keys"), new PassThrough());
+        var dbFile = Path.Combine(dir, "acs.db");
+        using (var old = new Database(dbFile, new DataProtector(keys.GetOrCreateDataKey()))) AddPerson(old, "1001", "Cũ");
+        File.WriteAllText(dbFile + "-wal", "wal");
+        new BackupService(null!, keys, Path.Combine(dir, "backups"), _time, Iter).Restore(file, "mat-khau-12345", dbFile);
+        Assert.Empty(Directory.GetFiles(dir, "*.bak-restore"));
+        Assert.False(File.Exists(dbFile + "-wal"));
+        using var db = new Database(dbFile, new DataProtector(keys.GetOrCreateDataKey()));
+        Assert.Equal("Nguồn", db.People.Get("2002")!.FullName);
+    }
+
+    [Fact]
+    public void CheckPassword_true_false_and_throws_only_for_a_missing_file()
+    {
+        var a = Make("a");
+        a.Svc.SetPassword("mat-khau-12345");
+        var file = a.Svc.Create("manual");
+        Assert.True(a.Svc.CheckPassword(file, "mat-khau-12345"));
+        Assert.False(a.Svc.CheckPassword(file, "sai-mat-khau-999"));
+
+        var bytes = File.ReadAllBytes(file);
+        bytes[^1] ^= 0xFF; // tampering
+        var bad = Path.Combine(_root, "tampered.acsbak");
+        File.WriteAllBytes(bad, bytes);
+        Assert.False(a.Svc.CheckPassword(bad, "mat-khau-12345"));
+
+        Assert.Throws<BackupException>(() => a.Svc.CheckPassword(Path.Combine(_root, "none.acsbak"), "x"));
+    }
+
+    [Fact]
+    public void Snapshot_goes_to_the_app_data_tmp_folder_and_is_removed()
+    {
+        var a = Make("a");
+        a.Svc.SetPassword("mat-khau-12345");
+        a.Svc.Create("manual");
+        var tmp = Path.Combine(Path.GetDirectoryName(a.Folder)!, "tmp");
+        Assert.True(Directory.Exists(tmp));
+        Assert.Empty(Directory.GetFiles(tmp));
     }
 }

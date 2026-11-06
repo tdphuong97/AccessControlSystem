@@ -56,7 +56,9 @@ public sealed class BackupService
         var name = $"ACS-{now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}-{Sanitise(reason)}.acsbak";
         var path = Path.Combine(_folder, name);
 
-        var snap = Path.Combine(Path.GetTempPath(), "acs-snap-" + Guid.NewGuid().ToString("N") + ".db");
+        var snapDir = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(_folder)) ?? _folder, "tmp");
+        Directory.CreateDirectory(snapDir);
+        var snap = Path.Combine(snapDir, "acs-snap-" + Guid.NewGuid().ToString("N") + ".db");
         byte[] plain;
         try
         {
@@ -76,9 +78,12 @@ public sealed class BackupService
         var nonce = file.AsSpan(5 + SaltSize, NonceSize);
         var tag = file.AsSpan(5 + SaltSize + NonceSize, TagSize);
         RandomNumberGenerator.Fill(nonce);
-        using (var gcm = new AesGcm(key, TagSize))
+        try
+        {
+            using var gcm = new AesGcm(key, TagSize);
             gcm.Encrypt(nonce, plain, file.AsSpan(HeaderSize), tag);
-        CryptographicOperations.ZeroMemory(plain);
+        }
+        finally { CryptographicOperations.ZeroMemory(plain); CryptographicOperations.ZeroMemory(key); }
 
         var tmp = path + ".tmp";
         File.WriteAllBytes(tmp, file);
@@ -100,22 +105,26 @@ public sealed class BackupService
     }
 
     /// <summary>
-    /// Decrypts <paramref name="path"/>, replaces the database file and the data key. The caller must have
-    /// stopped the engine and disposed the live Database first (AppHost restarts the app afterwards).
-    /// <paramref name="dbFile"/> defaults to <see cref="AppPaths.DbFile"/>. The database is written to a temp file and
-    /// moved into place, so a failed restore never leaves a half-written database. The backup password becomes
-    /// the backup key on this PC, so backups continue without asking again.
+    /// Checks the password against the file by decrypting it in memory only; nothing is written. False for a wrong
+    /// password, a tampered or malformed file; BackupException only when the file is missing or unreadable.
     /// </summary>
-    public void Restore(string path, string password, string? dbFile = null)
+    public bool CheckPassword(string path, string password)
     {
-        const string bad = "Mật khẩu sao lưu không đúng hoặc file đã hỏng.";
+        var opened = Open(path, password);
+        if (opened is null) return false;
+        CryptographicOperations.ZeroMemory(opened.Value.Plain);
+        CryptographicOperations.ZeroMemory(opened.Value.Key);
+        return true;
+    }
+
+    private (byte[] Plain, byte[] Key, byte[] Salt)? Open(string path, string password)
+    {
         byte[] file;
         try { file = File.ReadAllBytes(path); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         { throw new BackupException("Không đọc được file sao lưu.", ex); }
         if (file.Length < HeaderSize + DataKeySize || !file.AsSpan(0, 4).SequenceEqual(Magic) || file[4] != 1)
-            throw new BackupException(bad);
-
+            return null;
         var salt = file.AsSpan(5, SaltSize).ToArray();
         var key = Derive(password ?? "", salt);
         var plain = new byte[file.Length - HeaderSize];
@@ -123,27 +132,70 @@ public sealed class BackupService
         {
             using var gcm = new AesGcm(key, TagSize);
             gcm.Decrypt(file.AsSpan(5 + SaltSize, NonceSize), file.AsSpan(HeaderSize), file.AsSpan(5 + SaltSize + NonceSize, TagSize), plain);
+            return (plain, key, salt);
         }
-        catch (CryptographicException ex) { throw new BackupException(bad, ex); }
+        catch (CryptographicException)
+        {
+            CryptographicOperations.ZeroMemory(plain);
+            CryptographicOperations.ZeroMemory(key);
+            return null;
+        }
+    }
 
-        var target = dbFile ?? AppPaths.DbFile;
-        var dir = Path.GetDirectoryName(Path.GetFullPath(target))!;
-        Directory.CreateDirectory(dir);
-        var tmp = target + ".restore.tmp";
+    /// <summary>
+    /// Decrypts <paramref name="path"/>, replaces the database file and the data key. The caller must have
+    /// stopped the engine and disposed the live Database first (AppHost restarts the app afterwards).
+    /// <paramref name="dbFile"/> defaults to <see cref="AppPaths.DbFile"/>. The old database (with -wal/-shm) and old
+    /// keys are kept aside until the new pair is fully in place; any failure rolls both back, so the old data stays
+    /// openable. The backup password becomes the backup key on this PC.
+    /// </summary>
+    public void Restore(string path, string password, string? dbFile = null)
+    {
+        var opened = Open(path, password) ?? throw new BackupException("Mật khẩu sao lưu không đúng hoặc file đã hỏng.");
+        var (plain, key, salt) = opened;
         try
         {
-            File.WriteAllBytes(tmp, plain.AsSpan(DataKeySize).ToArray());
-            foreach (var side in new[] { target + "-wal", target + "-shm" }) if (File.Exists(side)) File.Delete(side);
-            File.Move(tmp, target, overwrite: true);
+            var target = dbFile ?? AppPaths.DbFile;
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(target))!);
+            var tmp = target + ".restore.tmp";
+            string[] set = [target, target + "-wal", target + "-shm"];
+            var moved = new List<string>();
+            byte[]? oldKey = null;
+            (byte[] Key, byte[] Salt)? oldBackup = null;
+            var keyReplaced = false;
+            try
+            {
+                try { oldKey = _keys.GetOrCreateDataKey(); } catch { }
+                try { oldBackup = _keys.GetBackupKey(); } catch { }
+                File.WriteAllBytes(tmp, plain.AsSpan(DataKeySize).ToArray());
+                foreach (var f in set)
+                    if (File.Exists(f)) { File.Move(f, f + ".bak-restore", overwrite: true); moved.Add(f); }
+                _keys.ReplaceDataKey(plain.AsSpan(0, DataKeySize).ToArray());
+                keyReplaced = true;
+                _keys.SetBackupKey(key, salt);
+                File.Move(tmp, target, overwrite: true);
+            }
+            catch (Exception ex)
+            {
+                try { File.Delete(tmp); } catch { }
+                try { if (File.Exists(target)) File.Delete(target); } catch { }
+                foreach (var f in moved)
+                    try { File.Move(f + ".bak-restore", f, overwrite: true); } catch { }
+                if (keyReplaced && oldKey is not null)
+                {
+                    try { _keys.ReplaceDataKey(oldKey); } catch { }
+                    if (oldBackup is { } ob) try { _keys.SetBackupKey(ob.Key, ob.Salt); } catch { }
+                }
+                throw new BackupException("Không khôi phục được bản sao lưu. Dữ liệu cũ vẫn được giữ nguyên.", ex);
+            }
+            foreach (var f in moved)
+                try { File.Delete(f + ".bak-restore"); } catch { }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        finally
         {
-            try { File.Delete(tmp); } catch { }
-            throw new BackupException("Không ghi được dữ liệu khôi phục. Hãy đóng phần mềm khác đang dùng dữ liệu rồi thử lại.", ex);
+            CryptographicOperations.ZeroMemory(plain);
+            CryptographicOperations.ZeroMemory(key);
         }
-        _keys.ReplaceDataKey(plain.AsSpan(0, DataKeySize).ToArray());
-        _keys.SetBackupKey(key, salt);
-        CryptographicOperations.ZeroMemory(plain);
     }
 
     private byte[] Derive(string password, byte[] salt) =>
