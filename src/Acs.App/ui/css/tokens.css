@@ -1,0 +1,12 @@
+:root {
+  --accent: #1D5FD1; --accent-hover: #164BA8; --accent-ink: #1D4FA8; --accent-soft: #EAF1FD; --accent-line: #C7D8F7; --avatar-bg: #E3ECFA;
+  --text: #0F1B2D; --text-2: #3A4757; --text-3: #1F2B3A; --muted: #526072; --placeholder: #5B6878;
+  --line: #DDE3EA; --line-2: #CBD4DF; --line-row: #E8ECF1; --line-bar: #E1E6ED;
+  --soft: #F6F8FB; --soft-2: #FBFCFD; --strip: #F3F5F8; --chip-count: #E4E9F0;
+  --ok: #0F7A45; --ok-bg: #E7F5EE; --ok-dot: #12A150; --ok-ink: #0B5E35; --ok-soft: #F0F8F3; --ok-line: #CFE8DA;
+  --wait: #8A4B00; --wait-bg: #FFF0DC; --wait-dot: #D97706; --wait-soft: #FFFAF3; --wait-line: #F0D2AC; --wait-ink: #5C3A10; --wait-btn-line: #E6C9A3;
+  --err: #B42318; --err-bg: #FDECEA; --err-line: #F4C7C2;
+  --font: 'Be Vietnam Pro', system-ui, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  --gutter: clamp(16px, 3vw, 28px);
+}
