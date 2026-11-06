@@ -14,7 +14,7 @@ import zlib
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# The mark on a teal tile: an arrow dropping into a bar cut into parts, the last part still filling.
+# The mark on a blue (#1D5FD1) rounded tile: white face-scan corner brackets, two dot eyes and a smile (same shape as the UI logo).
 SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="100%" height="100%">
   <rect width="24" height="24" rx="6" fill="#1D5FD1"/>
   <path d="M7 9.5V8a1 1 0 0 1 1-1h1.5M14.5 7H16a1 1 0 0 1 1 1v1.5M17 14.5V16a1 1 0 0 1-1 1h-1.5M9.5 17H8a1 1 0 0 1-1-1v-1.5" fill="none" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round"/>

@@ -105,7 +105,8 @@ sealed class WebHost
             id = root.GetProperty("id").GetInt32();
             var cmd = root.GetProperty("cmd").GetString() ?? "";
             var args = root.TryGetProperty("args", out var a) ? a.Clone() : default;
-            var result = await _handler(cmd, args);
+            // Off the UI thread: many core commands do database or device work before their first await.
+            var result = await Task.Run(() => _handler(cmd, args));
             reply = new JsonObject { ["id"] = id, ["result"] = JsonSerializer.SerializeToNode(result, AppHost.Json) };
         }
         catch (Exception ex)

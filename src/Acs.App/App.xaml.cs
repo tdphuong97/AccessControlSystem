@@ -48,6 +48,8 @@ public partial class App : Application
         {
             // Already running: ask that window to come forward, then leave.
             try { _show.Set(); } catch (Exception) { }
+            _show.Dispose();
+            _show = null;
             _single.Dispose();
             _single = null;
             Exiting = true;
@@ -57,7 +59,7 @@ public partial class App : Application
 
         DispatcherUnhandledException += (_, ex) =>
         {
-            MessageBox.Show("Phần mềm gặp lỗi: " + ex.Exception.Message + "\nBạn có thể tiếp tục dùng; nếu lỗi lặp lại, hãy khởi động lại phần mềm.",
+            MessageBox.Show("Phần mềm gặp lỗi. Bạn có thể tiếp tục dùng; nếu lỗi lặp lại, hãy khởi động lại phần mềm.\n\nChi tiết: " + ex.Exception.Message,
                 "Access Control System", MessageBoxButton.OK, MessageBoxImage.Error);
             ex.Handled = true;
         };
@@ -66,7 +68,7 @@ public partial class App : Application
         SessionEnding += (_, _) =>
         {
             Exiting = true;
-            try { Task.Run(StopHostAsync).Wait(TimeSpan.FromSeconds(8)); } catch (Exception) { }
+            try { Task.Run(StopHostAsync).Wait(TimeSpan.FromSeconds(4)); } catch (Exception) { }
         };
 
         var minimized = e.Args.Contains("--minimized");
@@ -81,7 +83,7 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            MessageBox.Show("Không khởi động được phần mềm: " + ex.Message + "\nHãy đóng mọi cửa sổ Access Control System rồi mở lại.",
+            MessageBox.Show("Không khởi động được phần mềm. Hãy đóng mọi cửa sổ Access Control System rồi mở lại.\n\nChi tiết: " + ex.Message,
                 "Access Control System", MessageBoxButton.OK, MessageBoxImage.Error);
             Exiting = true;
             Shutdown();
@@ -125,32 +127,56 @@ public partial class App : Application
         Shutdown();
     }
 
+    /// <summary>The single-instance mutex is owned by the UI thread, so it must be released there.</summary>
+    void ReleaseOnUiThread(Action after)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            ReleaseSingleInstance();
+            after();
+        });
+    }
+
     /// <summary>After backup.restore the host is already stopped: start a fresh copy of the exe and leave.</summary>
     async Task RestartAsync()
     {
         Exiting = true;
         try { await StopHostAsync(); } catch (Exception) { }
-        ReleaseSingleInstance();
-        try
+        ReleaseOnUiThread(() =>
         {
-            if (Environment.ProcessPath is { } exe)
-                Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true })?.Dispose();
-        }
-        catch (Exception) { }
-        Shutdown();
+            try
+            {
+                if (Environment.ProcessPath is { } exe)
+                    Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true })?.Dispose();
+            }
+            catch (Exception) { }
+            Shutdown();
+        });
     }
 
     async Task RunInstallerAsync(string path)
     {
+        // Start the installer first: if that fails (UAC cancelled, file missing) the app just keeps running.
+        try
+        {
+            Process.Start(new ProcessStartInfo(path, "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /UPDATE=1") { UseShellExecute = true })?.Dispose();
+        }
+        catch (Exception)
+        {
+            throw new HostException("Không chạy được bộ cài cập nhật. Hãy thử lại hoặc tải bản mới trên trang phát hành.");
+        }
         Exiting = true;
         try { await StopHostAsync(); } catch (Exception) { }
-        ReleaseSingleInstance();
-        Process.Start(new ProcessStartInfo(path, "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /UPDATE=1") { UseShellExecute = true })?.Dispose();
-        Shutdown();
+        ReleaseOnUiThread(Shutdown);
     }
 
     static void ApplyStartWithWindows(bool on)
     {
+        if (on && Environment.ProcessPath is null)
+        {
+            Debug.WriteLine("ApplyStartWithWindows: ProcessPath is null, skipped.");
+            return;
+        }
         using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true) ?? Registry.CurrentUser.CreateSubKey(RunKey);
         if (on) key.SetValue(RunValue, $"\"{Environment.ProcessPath}\" --minimized");
         else key.DeleteValue(RunValue, throwOnMissingValue: false);
@@ -167,6 +193,7 @@ public partial class App : Application
     {
         Tray?.Dispose();
         ReleaseSingleInstance();
+        _show?.Dispose();
         base.OnExit(e);
     }
 }
