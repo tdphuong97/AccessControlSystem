@@ -34,6 +34,7 @@ public sealed class AppHostTests : IAsyncDisposable
     private readonly FakeDeviceFactory _factory = new();
     private readonly List<AppHost> _hosts = [];
     private readonly List<(string Name, object? Data)> _events = [];
+    private List<(string Name, object? Data)> Ev { get { lock (_events) return [.. _events]; } }
 
     private AppHost NewHost(Updater? updater = null, string version = "1.0.0")
     {
@@ -93,8 +94,8 @@ public sealed class AppHostTests : IAsyncDisposable
         await h.StartAsync();
         await Until(() => Out(h.HandleAsync("people.list", J("""{"filter":"all"}""")).Result)[0].GetProperty("sync").GetString() == "ok",
             () => _time.Advance(TimeSpan.FromSeconds(1)));
-        await Until(() => { lock (_events) return _events.Any(e => e.Name == "person.changed"); }, () => _time.Advance(TimeSpan.FromSeconds(1)));
-        Assert.Contains(_events, e => e.Name == "devices.changed");
+        await Until(() => { return Ev.Any(e => e.Name == "person.changed"); }, () => _time.Advance(TimeSpan.FromSeconds(1)));
+        Assert.Contains(Ev, e => e.Name == "devices.changed");
     }
 
     [Fact]
@@ -260,7 +261,7 @@ public sealed class AppHostTests : IAsyncDisposable
 
         Assert.Null(await h.HandleAsync("backup.restore", J($$"""{"name":"{{file}}","password":"mat-khau-sao-luu"}""")));
         Assert.True(h.RestartRequested);
-        Assert.Contains(_events, e => e.Name == "app.restart");
+        Assert.Contains(Ev, e => e.Name == "app.restart");
         await Assert.ThrowsAsync<HostException>(() => h.HandleAsync("people.list", J()));
         await h.StopAsync();
 
@@ -307,21 +308,21 @@ public sealed class AppHostTests : IAsyncDisposable
         var h = NewHost(FeedWith("1.1.0", new byte[2_000_000]));
         await h.StartAsync();
         _time.Advance(TimeSpan.FromSeconds(30));
-        Assert.DoesNotContain(_events, e => e.Name == "update.available");
+        Assert.DoesNotContain(Ev, e => e.Name == "update.available");
         _time.Advance(TimeSpan.FromSeconds(31));
-        await Until(() => _events.Any(e => e.Name == "update.available"));
-        var view = Out(_events.First(e => e.Name == "update.available").Data);
+        await Until(() => Ev.Any(e => e.Name == "update.available"));
+        var view = Out(Ev.First(e => e.Name == "update.available").Data);
         Assert.Equal("1.1.0", view.GetProperty("version").GetString());
         Assert.Equal(1.9, view.GetProperty("sizeMb").GetDouble());
         await h.StopAsync();
 
         var off = NewHost(FeedWith("1.1.0", new byte[10]));
         await off.HandleAsync("settings.set", J("""{"autoCheckUpdates":false}"""));
-        _events.Clear();
+        lock (_events) _events.Clear();
         await off.StartAsync();
         _time.Advance(TimeSpan.FromHours(21));
         await Task.Delay(200);
-        Assert.DoesNotContain(_events, e => e.Name == "update.available");
+        Assert.DoesNotContain(Ev, e => e.Name == "update.available");
         Assert.False(Out(await off.HandleAsync("settings.get", J())).GetProperty("autoCheckUpdates").GetBoolean());
     }
 
@@ -341,7 +342,7 @@ public sealed class AppHostTests : IAsyncDisposable
         Assert.Null(await h.HandleAsync("update.install", J()));
         Assert.NotNull(ran);
         Assert.True(File.Exists(ran));
-        Assert.Contains(_events, e => e.Name == "update.progress");
+        Assert.Contains(Ev, e => e.Name == "update.progress");
         Assert.Contains(h.Backup.List(), b => b.Name.EndsWith("-truoc-cap-nhat.acsbak"));
         Assert.Equal("1.1.0", Out(await h.HandleAsync("app.state", J())).GetProperty("update").GetProperty("version").GetString());
     }
@@ -360,5 +361,104 @@ public sealed class AppHostTests : IAsyncDisposable
         var s2 = Out(await h.HandleAsync("backup.setExtraFolder", J("""{"folder":null}""")));
         Assert.Equal(JsonValueKind.Null, s2.GetProperty("extraFolder").ValueKind);
         Assert.NotEqual(JsonValueKind.Null, s2.GetProperty("lastAt").ValueKind);
+    }
+
+    private sealed class Hang : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
+        {
+            await Task.Delay(Timeout.Infinite, ct);
+            return new HttpResponseMessage();
+        }
+    }
+
+    [Fact]
+    public async Task update_check_timeout_is_a_vietnamese_message_not_english_text()
+    {
+        var h = NewHost(new Updater(new HttpClient(new Hang()), "http://x.test/latest.json"));
+        h.FeedTimeout = TimeSpan.FromMilliseconds(100);
+        var ex = await Assert.ThrowsAsync<HostException>(() => h.HandleAsync("update.check", J()));
+        Assert.Equal(AppHost.SlowNetworkMessage, ex.Message);
+    }
+
+    [Fact]
+    public async Task update_install_twice_at_once_refuses_the_second()
+    {
+        var h = NewHost(FeedWith("1.1.0", new byte[1000]));
+        var gate = new TaskCompletionSource();
+        h.RunInstaller = _ => gate.Task;
+        var first = h.HandleAsync("update.install", J());
+        await Task.Delay(300);
+        var ex = await Assert.ThrowsAsync<HostException>(() => h.HandleAsync("update.install", J()));
+        Assert.Equal("Đang cập nhật…", ex.Message);
+        gate.SetResult();
+        await first;
+    }
+
+    [Fact]
+    public async Task wrong_restore_password_leaves_the_engine_running()
+    {
+        var h = NewHost();
+        await AddDevice(h);
+        await h.StartAsync();
+        await h.HandleAsync("backup.setPassword", J("""{"password":"mat-khau-sao-luu"}"""));
+        var file = Out(await h.HandleAsync("backup.now", J())).GetProperty("files")[0].GetProperty("name").GetString()!;
+        await Assert.ThrowsAsync<Acs.Core.Backup.BackupException>(() =>
+            h.HandleAsync("backup.restore", J($$"""{"name":"{{file}}","password":"sai-mat-khau-roi"}""")));
+        Assert.False(h.RestartRequested);
+
+        await Create(h, "1001", "An");   // still accepted, and the worker still sends it
+        await Until(() => Out(h.HandleAsync("people.list", J()).Result)[0].GetProperty("sync").GetString() == "ok",
+            () => _time.Advance(TimeSpan.FromSeconds(1)));
+    }
+
+    [Fact]
+    public async Task command_during_restore_is_refused_while_running_ones_finish()
+    {
+        var h = NewHost();
+        var dev = await AddDevice(h);
+        await Create(h, "1001", "An");
+        await h.HandleAsync("backup.setPassword", J("""{"password":"mat-khau-sao-luu"}"""));
+        var file = Out(await h.HandleAsync("backup.now", J())).GetProperty("files")[0].GetProperty("name").GetString()!;
+        _factory.For(dev).CaptureDelay = TimeSpan.FromMilliseconds(1500);
+
+        var capture = h.HandleAsync("face.capture", J($$"""{"employeeNo":"1001","deviceId":{{dev}}}"""));
+        await Task.Delay(100);
+        var restore = h.HandleAsync("backup.restore", J($$"""{"name":"{{file}}","password":"mat-khau-sao-luu"}"""));
+        await Task.Delay(400);
+        var ex = await Assert.ThrowsAsync<HostException>(() => h.HandleAsync("people.list", J()));
+        Assert.Equal(AppHost.RestoringMessage, ex.Message);
+
+        await capture;
+        Assert.Null(await restore);
+        Assert.True(h.RestartRequested);
+    }
+
+    [Fact]
+    public async Task log_list_shows_vietnamese_actions_and_keeps_unknown_codes()
+    {
+        var h = NewHost();
+        foreach (var code in new[] { "UpsertUser", "SetFace", "Ping", "Auth", "Worker", "Mystery" })
+            h.Db.Log.Add("1001", null, code, true, "x");
+        var rows = Out(await h.HandleAsync("log.list", J("""{"limit":200}"""))).EnumerateArray()
+            .Select(r => r.GetProperty("action").GetString()).Reverse().ToArray();
+        Assert.Equal(["Thông tin", "Khuôn mặt", "Kiểm tra kết nối", "Đăng nhập máy", "Luồng gửi dữ liệu", "Mystery"], rows!);
+    }
+
+    [Fact]
+    public async Task problem_filters_skip_locked_people_and_inputs_are_validated()
+    {
+        var h = NewHost();
+        await Create(h, "1", "An");
+        await Create(h, "2", "Bình");
+        await h.HandleAsync("people.lock", J("""{"employeeNo":"2"}"""));
+        Assert.Equal(1, Out(await h.HandleAsync("people.list", J("""{"filter":"noFace"}"""))).GetArrayLength());
+        Assert.Equal(1, Out(await h.HandleAsync("people.list", J("""{"filter":"noFinger"}"""))).GetArrayLength());
+        Assert.Equal(1, Out(await h.HandleAsync("people.list", J("""{"filter":"locked"}"""))).GetArrayLength());
+
+        await Assert.ThrowsAsync<HostException>(() => h.HandleAsync("devices.save",
+            J("""{"name":"M","host":"1.2.3.4","username":"a","password":"b","doorNo":0}""")));
+        await Assert.ThrowsAsync<HostException>(() => h.HandleAsync("backup.setExtraFolder", J("""{"folder":"relative-dir"}""")));
+        Assert.Empty(h.Db.Devices.List());
     }
 }

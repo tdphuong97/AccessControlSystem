@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Text.Json;
 using Acs.Core.Backup;
+using Acs.Core.Security;
+using Acs.Core.Storage;
 
 namespace Acs.Core.Host;
 
@@ -37,6 +39,8 @@ public sealed partial class AppHost
         if (string.IsNullOrEmpty(folder)) Db.Settings.Set(BackupService.ExtraFolderSetting, "");
         else
         {
+            if (!Path.IsPathFullyQualified(folder))
+                throw new HostException("Hãy nhập đường dẫn đầy đủ, ví dụ D:\\SaoLuu hoặc \\\\may-chu\\SaoLuu.");
             try { Directory.CreateDirectory(folder); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
             { throw new HostException("Không dùng được thư mục này. Hãy chọn thư mục khác (ví dụ ổ đĩa mạng hoặc USB)."); }
@@ -61,8 +65,27 @@ public sealed partial class AppHost
     }
 
     /// <summary>
-    /// Replaces the database from a backup. On success the host is closed and RestartRequested is set (plus the
-    /// app.restart event): the App must relaunch itself. A wrong password leaves everything running as before.
+    /// Checks name + password against a scratch copy (own key store and database), so a wrong password can be
+    /// refused before anything live is touched.
+    /// </summary>
+    private void VerifyBackup(string path, string password)
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), "acs-verify-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            using var scratch = new Database(Path.Combine(tmp, "acs.db"), new DataProtector(new byte[32]));
+            var keys = new KeyStore(Path.Combine(tmp, "keys"), _protector);
+            var svc = _backupIterations is { } n ? new BackupService(scratch, keys, tmp, _time, n) : new BackupService(scratch, keys, tmp, _time);
+            svc.Restore(path, password, Path.Combine(tmp, "verify.db"));
+        }
+        finally { try { Directory.Delete(tmp, true); } catch { /* temp clean-up only */ } }
+    }
+
+    /// <summary>
+    /// Replaces the database from a backup. The password is verified first, so a wrong one changes nothing. Then new
+    /// commands are refused ("Đang khôi phục"), running ones drain, the engine stops and the database is replaced.
+    /// On success the host is closed and RestartRequested is set (plus the app.restart event): the App must relaunch
+    /// itself. If the swap itself fails, a fresh graph on the old database is published and the engine restarted.
     /// </summary>
     private async Task<object?> BackupRestore(JsonElement a)
     {
@@ -70,20 +93,39 @@ public sealed partial class AppHost
         var password = OptStr(a, "password") ?? "";
         var file = Backup.List().FirstOrDefault(b => b.Name == name)
             ?? throw new HostException("Không tìm thấy file sao lưu. Hãy chọn lại.");
-        var wasStarted = _started;
-        await Sync.StopAsync();
-        Db.Dispose();
-        try { Backup.Restore(file.Path, password, _dbFile); }
-        catch
+        VerifyBackup(file.Path, password);
+
+        lock (_gate)
         {
-            Build(OpenDb());
-            if (wasStarted) Sync.Start();
-            throw;
+            if (_restoring) throw new HostException(RestoringMessage);
+            _restoring = true;
         }
-        _closed = true;
-        RestartRequested = true;
-        _updateTimer?.Dispose();
-        Emit("app.restart", null);
-        return null;
+        var done = false;
+        try
+        {
+            while (true)
+            {
+                lock (_gate) if (_inflight <= 1) break;   // this call is the one left
+                await Task.Delay(10);
+            }
+            var old = _g;
+            var wasStarted = _started;
+            await old.Sync.StopAsync();
+            old.Db.Dispose();
+            try { old.Backup.Restore(file.Path, password, _dbFile); }
+            catch
+            {
+                var fresh = Build(OpenDb());
+                _g = fresh;
+                if (wasStarted) fresh.Sync.Start();
+                throw;
+            }
+            done = true;
+            lock (_gate) { _closed = true; _updateTimer?.Dispose(); }
+            RestartRequested = true;
+            Emit("app.restart", null);
+            return null;
+        }
+        finally { if (!done) lock (_gate) _restoring = false; }
     }
 }

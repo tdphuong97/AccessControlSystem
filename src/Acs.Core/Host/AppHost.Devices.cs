@@ -53,7 +53,10 @@ public sealed partial class AppHost
         var capture = Bool(a, "isCaptureDefault");
         var reader = Bool(a, "isFingerReader");
 
-        int id;
+        if (door < 1) throw new HostException("Số cửa phải từ 1 trở lên.");
+        var id = Db.Tx(() =>
+        {
+        int sid;
         if (OptInt(a, "id") is { } existingId)
         {
             var cur = Db.Devices.Get(existingId) ?? throw new HostException("Không tìm thấy máy chấm công.");
@@ -64,19 +67,21 @@ public sealed partial class AppHost
                 DoorNo = door, IsCaptureDefault = capture, IsFingerReader = reader,
                 AuthPaused = changedLogin ? false : cur.AuthPaused,
             });
-            id = existingId;
+            sid = existingId;
         }
         else
         {
             if (password.Length == 0) throw new HostException("Nhập mật khẩu của máy.");
-            id = Db.Devices.Insert(new DeviceRecord(0, name, host, user, password, door, capture, reader, null, null, null,
+            sid = Db.Devices.Insert(new DeviceRecord(0, name, host, user, password, door, capture, reader, null, null, null,
                 "device-0", false, null));
-            var created = Db.Devices.Get(id)!;
-            Db.Devices.Update(created with { FpGroup = "device-" + id });
+            var created = Db.Devices.Get(sid)!;
+            Db.Devices.Update(created with { FpGroup = "device-" + sid });
         }
         if (capture)
-            foreach (var other in Db.Devices.List().Where(d => d.Id != id && d.IsCaptureDefault))
+            foreach (var other in Db.Devices.List().Where(d => d.Id != sid && d.IsCaptureDefault))
                 Db.Devices.Update(other with { IsCaptureDefault = false });
+        return sid;
+        });
         Sync.Wake();
         var view = DeviceViews().First(d => d.Id == id);
         Emit("devices.changed", DeviceViews());
@@ -146,7 +151,7 @@ public sealed partial class AppHost
         var names = Db.Devices.List().ToDictionary(d => d.Id, d => d.Name);
         var limit = Math.Clamp(OptInt(a, "limit") ?? 200, 1, 1000);
         return Db.Log.List(OptStr(a, "employeeNo"), OptInt(a, "deviceId"), limit)
-            .Select(l => new LogRow(l.At, l.DeviceId is { } d ? names.GetValueOrDefault(d) : null, l.EmployeeNo, l.Action, l.Ok, l.Message))
+            .Select(l => new LogRow(l.At, l.DeviceId is { } d ? names.GetValueOrDefault(d) : null, l.EmployeeNo, LogAction(l.Action), l.Ok, l.Message))
             .ToList();
     }
 }
