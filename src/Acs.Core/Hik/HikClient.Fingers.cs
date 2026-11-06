@@ -229,6 +229,8 @@ public sealed partial class HikClient
                 {
                     if (f.ValueKind != JsonValueKind.Object) continue;
                     count++;
+                    // Defensive: a loosely-filtering device may list another person's fingers.
+                    if (Pick(f, "employeeNo") is { } owner && !string.Equals(owner, employeeNo, StringComparison.Ordinal)) continue;
                     var data = Pick(f, "fingerData");
                     var id = PickInt(f, "fingerPrintID", "fingerNo");
                     if (data is null || id <= 0) continue;

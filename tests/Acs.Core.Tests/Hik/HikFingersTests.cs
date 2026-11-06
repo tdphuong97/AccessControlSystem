@@ -166,6 +166,26 @@ public class HikFingersTests
     }
 
     [Fact]
+    public async Task ReadFingers_skips_fingers_of_another_employee()
+    {
+        var h = new FakeIsapiHandler().On(HttpMethod.Post, Upload, _ => new(HttpStatusCode.OK,
+            "{\"FingerPrintInfo\":{\"status\":\"NoFP\",\"FingerPrintList\":[" +
+            "{\"employeeNo\":\"2002\",\"fingerPrintID\":1,\"fingerData\":\"XXX=\"}," +
+            "{\"employeeNo\":\"1001\",\"fingerPrintID\":3,\"fingerData\":\"AAA=\"}," +
+            "{\"fingerPrintID\":4,\"fingerData\":\"BBB=\"}]}}"));
+        var list = await Make(h).ReadFingerprintsAsync("1001", default);
+        Assert.Equal([new HikFinger(3, "AAA="), new HikFinger(4, "BBB=")], list);   // no employeeNo = the one asked for
+    }
+
+    [Fact]
+    public async Task ReadFingers_only_other_employees_gives_nothing()
+    {
+        var h = new FakeIsapiHandler().On(HttpMethod.Post, Upload,
+            "{\"FingerPrintInfo\":{\"status\":\"MORE\",\"FingerPrintList\":[{\"employeeNo\":\"2002\",\"fingerPrintID\":1,\"fingerData\":\"XXX=\"}]}}");
+        Assert.Empty(await Make(h).ReadFingerprintsAsync("1001", default));
+    }
+
+    [Fact]
     public async Task ReadFingers_stops_on_repeated_page()
     {
         var h = new FakeIsapiHandler().On(HttpMethod.Post, Upload,

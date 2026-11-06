@@ -175,6 +175,26 @@ public class HikFacesTests
     }
 
     [Fact]
+    public async Task DownloadFace_userinfo_fallback_never_takes_another_persons_photo()
+    {
+        // Loosely-filtering firmware answers with another user first: that photo must never become 1's face.
+        var h = new FakeIsapiHandler()
+            .On(HttpMethod.Post, FdSearch, "{\"numOfMatches\":0}")
+            .On(HttpMethod.Post, UserSearch, "{\"UserInfoSearch\":{\"UserInfo\":[{\"employeeNo\":\"2\",\"faceURL\":\"/pic/other.jpg\"}]}}")
+            .On(HttpMethod.Get, "/pic/other.jpg", _ => Bin(Jpeg));
+        Assert.Null(await Make(h).DownloadFaceAsync("1", default));
+        Assert.DoesNotContain(h.Requests, r => r.Method == HttpMethod.Get);
+
+        var h2 = new FakeIsapiHandler()
+            .On(HttpMethod.Post, FdSearch, "{\"numOfMatches\":0}")
+            .On(HttpMethod.Post, UserSearch,
+                "{\"UserInfoSearch\":{\"UserInfo\":[{\"employeeNo\":\"10\",\"picURL\":\"/pic/other.jpg\"},{\"employeeNo\":\"1\",\"picURL\":\"/pic/mine.jpg\"}]}}")
+            .On(HttpMethod.Get, "/pic/mine.jpg", _ => Bin(Jpeg));
+        Assert.Equal(Jpeg, await Make(h2).DownloadFaceAsync("1", default));
+        Assert.Equal("/pic/mine.jpg", h2.Requests.Single(r => r.Method == HttpMethod.Get).PathAndQuery);
+    }
+
+    [Fact]
     public async Task DeleteFace_puts_FPID_list()
     {
         var h = new FakeIsapiHandler().On(HttpMethod.Put, FdDelete, Ok);

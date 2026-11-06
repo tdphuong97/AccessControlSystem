@@ -145,12 +145,18 @@ public sealed partial class HikClient
                     UserInfoSearchCond = new { searchID = "acs", searchResultPosition = 0, maxResults = 1, EmployeeNoList = new[] { new { employeeNo } } },
                 }, ct);
                 using var doc = JsonDocument.Parse(StripBom(text));
+                // Only the entry for exactly this employeeNo: loosely-filtering firmware may list other users
+                // first, and taking their photo would store (and later send) the wrong person's face.
                 if (doc.RootElement.ValueKind == JsonValueKind.Object
-                    && doc.RootElement.TryGetProperty("UserInfoSearch", out var s)
+                    && doc.RootElement.TryGetProperty("UserInfoSearch", out var s) && s.ValueKind == JsonValueKind.Object
                     && s.TryGetProperty("UserInfo", out var arr) && arr.ValueKind == JsonValueKind.Array)
                     foreach (var u in arr.EnumerateArray())
+                    {
+                        if (u.ValueKind != JsonValueKind.Object || !u.TryGetProperty("employeeNo", out var no)
+                            || !string.Equals(no.ToString(), employeeNo, StringComparison.Ordinal)) continue;
                         foreach (var name in new[] { "faceURL", "picURL" })
                             if (url is null && u.TryGetProperty(name, out var v) && !string.IsNullOrWhiteSpace(v.ToString())) url = v.ToString();
+                    }
             }
             catch (Exception ex) when (ex is HikRejectedException or HikNotSupportedException or JsonException) { }
         }
