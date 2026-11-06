@@ -27,6 +27,13 @@ public static class JobRules
     /// <summary>Times compare equal when the first 19 characters (yyyy-MM-ddTHH:mm:ss) match; a zone suffix is ignored.</summary>
     public static string NormTime(string t) => t.Length >= 19 ? t[..19] : t;
 
+    /// <summary>"No end date": what the app sends (2035-12-31) or the device's own default (2037-12-31, what
+    /// Hikvision's menu and iVMS-4200 write for "no limit").</summary>
+    public static bool IsNoEnd(string t) => t.Length >= 10 && t[..10] is "2035-12-31" or "2037-12-31";
+
+    /// <summary>End times match when equal, or when both mean "no end date".</summary>
+    public static bool SameEnd(string a, string b) => NormTime(a) == NormTime(b) || (IsNoEnd(a) && IsNoEnd(b));
+
     public static HikUserWrite ToWrite(PersonRecord p, int doorNo, bool enabled) => new(
         p.EmployeeNo, p.FullName,
         p.ValidFrom.ToString("yyyy-MM-dd") + "T00:00:00",

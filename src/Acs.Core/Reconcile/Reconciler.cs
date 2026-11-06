@@ -90,7 +90,7 @@ public sealed class Reconciler(Database db, IHikDeviceFactory factory, SyncEngin
                 var w = JobRules.ToWrite(p, dev.DoorNo, true);
                 if (du.Name.Trim() != p.FullName.Trim() || !du.Enabled
                     || JobRules.NormTime(du.BeginTime) != JobRules.NormTime(w.BeginTime)
-                    || JobRules.NormTime(du.EndTime) != JobRules.NormTime(w.EndTime))
+                    || !JobRules.SameEnd(du.EndTime, w.EndTime))
                     items.Add(new DiffItem(p.EmployeeNo, p.FullName, DiffKind.InfoMismatch, []));
                 if (appFace && du.FaceCount == 0)
                     items.Add(new DiffItem(p.EmployeeNo, p.FullName, DiffKind.MissingFace, []));
@@ -164,7 +164,10 @@ public sealed class Reconciler(Database db, IHikDeviceFactory factory, SyncEngin
                 foreach (var it in d.Items)
                 {
                     var no = it.EmployeeNo;
-                    if (db.People.Get(no) is null) continue;
+                    if (db.People.Get(no) is not { } person) continue;
+                    // The plan may be minutes old: a person locked (or unlocked) since keeps what Lock/Unlock queued.
+                    // An UpsertUser for someone locked meanwhile would cancel their DeleteUser/DisableUser.
+                    if ((it.Kind == DiffKind.LockedButEnabled) != (person.Status == PersonStatus.Locked)) continue;
                     switch (it.Kind)
                     {
                         case DiffKind.MissingPerson: EnqueueFull(d.DeviceId, no, now); break;

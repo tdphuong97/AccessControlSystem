@@ -194,6 +194,39 @@ public sealed class ReconcilerTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Device_2037_no_end_date_is_not_a_mismatch()
+    {
+        _h.AddPerson("1001", "An");   // no end date in the app
+        await _dev1.UpsertUserAsync(new HikUserWrite("1001", "An", "2026-01-01T00:00:00", "2037-12-31T23:59:59", true, 1), Ct);
+        var items = (await _rec.BuildAsync(null, Ct)).Devices.Single().Items;
+        Assert.DoesNotContain(items, i => i.Kind == DiffKind.InfoMismatch);
+    }
+
+    [Fact]
+    public async Task Apply_leaves_people_locked_or_unlocked_since_the_plan_alone()
+    {
+        _h.AddPerson("1001", "An");                           // missing on the device...
+        _h.AddPerson("1002", "Bình", PersonStatus.Locked);    // ...and locked but still enabled there
+        await _dev1.UpsertUserAsync(W("1002", "Bình"), Ct);
+        var plan = await _rec.BuildAsync(null, Ct);
+        Assert.Contains(plan.Devices.Single().Items, i => i.EmployeeNo == "1001" && i.Kind == DiffKind.MissingPerson);
+        Assert.Contains(plan.Devices.Single().Items, i => i.EmployeeNo == "1002" && i.Kind == DiffKind.LockedButEnabled);
+
+        // Before the admin presses "Bổ sung": 1001 is locked, 1002 unlocked.
+        var p1 = _h.Db.People.Get("1001")!;
+        _h.Db.People.Update(p1 with { Status = PersonStatus.Locked });
+        _h.Enqueue(_d1, "1001", JobKind.DisableUser);
+        var p2 = _h.Db.People.Get("1002")!;
+        _h.Db.People.Update(p2 with { Status = PersonStatus.Active });
+
+        await _rec.ApplyAsync(plan, new Dictionary<string, StrangerChoice>(), Ct);
+        var jobs = _h.Db.Jobs.ListOpen(_d1);
+        Assert.Contains(jobs, j => j.EmployeeNo == "1001" && j.Kind == JobKind.DisableUser);   // not cancelled by an upsert
+        Assert.DoesNotContain(jobs, j => j.EmployeeNo == "1001" && j.Kind == JobKind.UpsertUser);
+        Assert.DoesNotContain(jobs, j => j.EmployeeNo == "1002");   // no lock jobs for someone active again
+    }
+
+    [Fact]
     public async Task Name_whitespace_is_not_a_mismatch()
     {
         _h.AddPerson("1001", "An");

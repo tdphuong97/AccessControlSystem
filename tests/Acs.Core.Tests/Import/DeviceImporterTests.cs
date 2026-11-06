@@ -58,6 +58,16 @@ public sealed class DeviceImporterTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Device_default_2037_end_date_means_no_end_date()
+    {
+        await _dev.UpsertUserAsync(new HikUserWrite("1001", "An", "2026-03-01T00:00:00", "2037-12-31T23:59:59", true, 1), Ct);
+        await _dev.UpsertUserAsync(new HikUserWrite("1002", "Bình", "2026-03-01T00:00:00", JobRules.NoEndDate, true, 1), Ct);
+        await _imp.ImportAllAsync(_d1, null, Ct);
+        Assert.Null(_h.Db.People.Get("1001")!.ValidTo);   // "không thời hạn", not a date
+        Assert.Null(_h.Db.People.Get("1002")!.ValidTo);
+    }
+
+    [Fact]
     public async Task Import_twice_adds_nothing()
     {
         await Seed("1001", "An", true, true, 1, 2);
