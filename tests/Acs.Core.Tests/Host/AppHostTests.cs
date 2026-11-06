@@ -98,6 +98,109 @@ public sealed class AppHostTests : IAsyncDisposable
         Assert.Contains(Ev, e => e.Name == "devices.changed");
     }
 
+    private static async Task SeedOnDevice(FakeDevice dev, string no, string name, bool face, params int[] fingers)
+    {
+        await dev.UpsertUserAsync(new Acs.Core.Hik.HikUserWrite(no, name, "2026-01-01T00:00:00", "2035-12-31T23:59:59", true, 1), default);
+        if (face) await dev.SetFaceAsync(no, [0xFF, 0xD8, 0xFF, 0xD9], default);
+        foreach (var f in fingers) await dev.SetFingerprintAsync(no, f, Convert.ToBase64String(Encoding.ASCII.GetBytes("T" + f)), 1, default);
+    }
+
+    private async Task<JsonElement> Row0(AppHost h) => Out(await h.HandleAsync("people.list", J()))[0];
+
+    private static string[] Names(JsonElement arr) => arr.EnumerateArray().Select(x => x.GetString()!).ToArray();
+
+    private async Task<bool> NeedsReconcile(AppHost h) =>
+        Out(await h.HandleAsync("app.state", J())).GetProperty("needsReconcile").GetBoolean();
+
+    [Fact]
+    public async Task first_import_shows_the_other_device_pending_until_reconcile_is_verified()
+    {
+        var h = NewHost();
+        var a = await AddDevice(h, "Máy A");
+        var b = await AddDevice(h, "Máy B");
+        await SeedOnDevice(_factory.For(a), "1001", "Nguyễn Văn An", true, 1, 6);
+        await h.HandleAsync("import.start", J($$"""{"deviceId":{{a}}}"""));
+
+        // No job exists for B and B never confirmed anything: never "✓ Đủ 2 máy".
+        var row = await Row0(h);
+        Assert.Equal("pending", row.GetProperty("sync").GetString());
+        Assert.Equal(["Máy B"], Names(row.GetProperty("waitingDevices")));
+        Assert.Equal(1, Out(await h.HandleAsync("people.list", J("""{"filter":"notSynced"}"""))).GetArrayLength());
+        var devs = Out(await h.HandleAsync("people.get", J("""{"employeeNo":"1001"}"""))).GetProperty("devices");
+        Assert.Equal("ok", devs[0].GetProperty("state").GetString());   // A: confirmed by the import read
+        Assert.Equal("pending", devs[1].GetProperty("state").GetString());
+        Assert.Equal(4, devs[1].GetProperty("items").GetArrayLength());   // info, face, 2 fingers
+        Assert.All(devs[1].GetProperty("items").EnumerateArray(),
+            i => Assert.Equal(AppHost.NotOnDeviceMessage, i.GetProperty("message").GetString()));
+        Assert.True(await NeedsReconcile(h));
+
+        await h.StartAsync();
+        await h.HandleAsync("reconcile.plan", J());
+        await h.HandleAsync("reconcile.apply", J("""{"strangers":{}}"""));
+        Assert.False(await NeedsReconcile(h));
+        await Until(() => Row0(h).Result.GetProperty("sync").GetString() == "ok", () => _time.Advance(TimeSpan.FromSeconds(1)));
+        var onB = _factory.For(b);
+        Assert.NotNull(await onB.FindUserAsync("1001", default));
+        Assert.True(await onB.HasFaceAsync("1001", default));
+        var fingersOnB = (await onB.ReadFingerprintsAsync("1001", default)).Select(f => f.FingerId).ToArray();
+        Assert.Equal(new[] { 1, 6 }, fingersOnB);
+    }
+
+    [Fact]
+    public async Task a_device_added_later_is_pending_for_everyone_and_asks_for_reconcile()
+    {
+        var h = NewHost();
+        await AddDevice(h, "Máy A");
+        Assert.False(await NeedsReconcile(h));   // first device and nothing in the app: nothing to send
+        await Create(h, "1001", "An");
+        await h.StartAsync();
+        await Until(() => Row0(h).Result.GetProperty("sync").GetString() == "ok", () => _time.Advance(TimeSpan.FromSeconds(1)));
+
+        await AddDevice(h, "Máy B");
+        var row = await Row0(h);
+        Assert.Equal("pending", row.GetProperty("sync").GetString());
+        Assert.Equal(["Máy B"], Names(row.GetProperty("waitingDevices")));
+        Assert.True(await NeedsReconcile(h));
+    }
+
+    [Fact]
+    public async Task locked_person_is_ok_only_where_the_device_confirmed_absent_or_disabled()
+    {
+        var h = NewHost();
+        var a = await AddDevice(h, "Máy A");
+        await Create(h, "1001", "An");
+        await h.StartAsync();
+        await Until(() => Row0(h).Result.GetProperty("sync").GetString() == "ok", () => _time.Advance(TimeSpan.FromSeconds(1)));
+        await h.HandleAsync("people.lock", J("""{"employeeNo":"1001"}"""));
+        await Until(() => Out(h.HandleAsync("people.get", J("""{"employeeNo":"1001"}""")).Result).GetProperty("devices")[0]
+            .GetProperty("state").GetString() == "ok", () => _time.Advance(TimeSpan.FromSeconds(1)));
+        Assert.Null(await _factory.For(a).FindUserAsync("1001", default));
+
+        await AddDevice(h, "Máy B");   // knows nothing about this person yet
+        var onB = Out(await h.HandleAsync("people.get", J("""{"employeeNo":"1001"}"""))).GetProperty("devices")[1];
+        Assert.Equal("pending", onB.GetProperty("state").GetString());
+        Assert.Equal(AppHost.LockedUnknownMessage, onB.GetProperty("items")[0].GetProperty("message").GetString());
+        Assert.Equal(0, Out(await h.HandleAsync("people.list", J("""{"filter":"notSynced"}"""))).GetArrayLength());
+    }
+
+    [Fact]
+    public async Task restore_asks_for_reconcile_after_the_restart()
+    {
+        var h = NewHost();
+        await AddDevice(h);
+        await h.HandleAsync("backup.setPassword", J("""{"password":"mat-khau-sao-luu"}"""));
+        var file = Out(await h.HandleAsync("backup.now", J())).GetProperty("files")[0].GetProperty("name").GetString()!;
+        Assert.False(await NeedsReconcile(h));
+        Assert.Null(await h.HandleAsync("backup.restore", J($$"""{"name":"{{file}}","password":"mat-khau-sao-luu"}""")));
+        await h.StopAsync();
+
+        var h2 = NewHost();
+        Assert.True(await NeedsReconcile(h2));
+        Assert.False(File.Exists(Path.Combine(_folder, AppHost.RestoreMarkerName)));
+        await h2.HandleAsync("reconcile.plan", J());   // the device already matches: nothing to send
+        Assert.False(await NeedsReconcile(h2));
+    }
+
     [Fact]
     public async Task unknown_command_throws_vietnamese_message()
     {

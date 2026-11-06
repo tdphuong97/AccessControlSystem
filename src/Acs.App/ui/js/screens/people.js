@@ -57,7 +57,7 @@
   function render(host, params, ctx) {
     let filter = 'all', query = '', showAll = false, rows = [], counts = null, seq = 0, timer = 0;
     host.innerHTML = '<div class="pad stack">' +
-      '<div id="p-upd"></div><div id="p-stale"></div>' +
+      '<div id="p-upd"></div><div id="p-rec"></div><div id="p-stale"></div>' +
       '<div class="pagehead"><div><h1 class="h1">Người dùng</h1><p class="sub" id="p-count"></p></div>' +
       '<a class="btn btn-big" href="#/new/info">' + icon('addPerson', 20) + 'Thêm người mới</a></div>' +
       '<div class="devcards" id="p-dev"></div>' +
@@ -78,6 +78,10 @@
         ? '<div class="alert alert-wait">' + icon('clock', 18) + '<span>' + st.staleLocked + ' người đã khoá quá 6 tháng — nên xoá hẳn. ' +
           '<a href="#/people" data-act="show-locked">Xem danh sách đã khoá</a></span></div>' : '';
       $('p-stale').innerHTML = stale;
+      // A new device or a restore: nothing is queued for that device until So khớp runs (app.state.needsReconcile).
+      $('p-rec').innerHTML = st && st.needsReconcile && st.devices.length
+        ? '<div class="alert alert-wait" role="note">' + icon('refresh', 18) + '<span>Vừa thêm máy mới hoặc khôi phục dữ liệu. ' +
+          'Chạy So khớp 2 máy để gửi dữ liệu sang máy này. <a href="#/reconcile">Mở So khớp 2 máy</a></span></div>' : '';
       const active = counts ? counts.all - counts.locked : 0;
       $('p-count').textContent = counts ? active + ' người đang có quyền ra vào' : '';
       const people = counts ? counts.all - counts.locked : 0;

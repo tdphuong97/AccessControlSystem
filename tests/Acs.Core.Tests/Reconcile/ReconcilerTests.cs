@@ -200,14 +200,30 @@ public sealed class ReconcilerTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task Finger_ids_are_not_invented_when_counts_match()
+    public async Task First_reconcile_reads_fingers_even_when_counts_match()
     {
         _h.AddPerson("1001", "An");
         _h.AddFinger("1001", 1, "ModelA");
         await _dev1.UpsertUserAsync(W("1001", "An"), Ct);
         await _dev1.SetFingerprintAsync("1001", 5, SyncHarness.Tpl("ModelA"), 1, Ct); // same count, different id
+        var items = (await _rec.BuildAsync(null, Ct)).Devices.Single().Items;
+        Assert.Equal(new HashSet<int> { 5 }, _h.Db.Jobs.GetState("1001", _d1)!.Fingers);   // read, not invented
+        Assert.Equal([1], items.Single(i => i.Kind == DiffKind.MissingFingers).Fingers);
+        Assert.Equal([5], items.Single(i => i.Kind == DiffKind.ExtraFingers).Fingers);
+    }
+
+    [Fact]
+    public async Task Known_state_with_matching_count_is_not_read_again()
+    {
+        _h.AddPerson("1001", "An");
+        _h.AddFinger("1001", 1, "ModelA");
+        await _dev1.UpsertUserAsync(W("1001", "An"), Ct);
+        await _dev1.SetFingerprintAsync("1001", 1, SyncHarness.Tpl("ModelA"), 1, Ct);
         await _rec.BuildAsync(null, Ct);
-        Assert.Empty(_h.Db.Jobs.GetState("1001", _d1)!.Fingers);
+        var reads = _dev1.Calls.Count(c => c == nameof(IHikDevice.ReadFingerprintsAsync));
+        await _rec.BuildAsync(null, Ct);
+        Assert.Equal(reads, _dev1.Calls.Count(c => c == nameof(IHikDevice.ReadFingerprintsAsync)));
+        Assert.Equal(new HashSet<int> { 1 }, _h.Db.Jobs.GetState("1001", _d1)!.Fingers);
     }
 
     private sealed class SyncProgress(List<string> sink) : IProgress<string>

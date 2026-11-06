@@ -48,6 +48,8 @@ public sealed class PeopleStore
         return _db.Query(sql, Map, ps.ToArray());
     }
 
+    public int Count() => Convert.ToInt32(_db.Scalar("SELECT COUNT(*) FROM people"));
+
     public void Delete(string employeeNo) => _db.Exec("DELETE FROM people WHERE employee_no=$e", ("$e", employeeNo));
 
     /// <summary>Highest all-digit number + 1, keeping the width of leading zeros. No numeric id gives "1001".</summary>
@@ -72,6 +74,9 @@ public sealed class PeopleStore
         if (id is not null) return Convert.ToInt32(id);
         return (int)_db.InsertId("INSERT INTO groups(name) VALUES($n)", ("$n", name));
     });
+
+    public Dictionary<int, string> GroupNames() =>
+        _db.Query("SELECT id, name FROM groups", r => (r.GetInt32(0), r.GetString(1))).ToDictionary(x => x.Item1, x => x.Item2);
 
     public string? GroupName(int? id) =>
         id is null ? null : _db.Scalar("SELECT name FROM groups WHERE id=$i", ("$i", id)) as string;

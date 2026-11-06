@@ -92,10 +92,11 @@ public sealed class Reconciler(Database db, IHikDeviceFactory factory, SyncEngin
             else if (du.Enabled)
                 items.Add(new DiffItem(p.EmployeeNo, p.FullName, DiffKind.LockedButEnabled, []));
 
-            // Fingers are only read when the counts differ; otherwise keep what was stored before.
+            // Fingers are read when the counts differ or nothing was ever confirmed for this device (no state row);
+            // otherwise keep what was stored before.
             IReadOnlySet<int> fingers = prev?.Fingers ?? new HashSet<int>();
             IReadOnlySet<int> needScan = prev?.NeedsScan ?? new HashSet<int>();
-            if (du.FingerCount != appFingers.Count)
+            if (prev is null || du.FingerCount != appFingers.Count)
             {
                 var devIds = (await hik.ReadFingerprintsAsync(p.EmployeeNo, ct)).Select(f => f.FingerId).ToHashSet();
                 if (p.Status == PersonStatus.Active)

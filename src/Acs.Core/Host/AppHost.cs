@@ -34,6 +34,7 @@ public sealed partial class AppHost
     private readonly string _dbFile;
     private readonly string _backupFolder;
     private readonly string _updatesFolder;
+    private readonly string _restoreMarker;
     private readonly int? _backupIterations;
     private readonly HttpClient? _ownHttp;
     private readonly Updater _updater;
@@ -91,6 +92,7 @@ public sealed partial class AppHost
         _dbFile = Path.Combine(dataFolder, "acs.db");
         _backupFolder = Path.Combine(dataFolder, "backups");
         _updatesFolder = Path.Combine(dataFolder, "updates");
+        _restoreMarker = Path.Combine(dataFolder, RestoreMarkerName);
         if (updater is null)
         {
             _ownHttp = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
@@ -100,6 +102,21 @@ public sealed partial class AppHost
         _updater = updater;
         _protector = protector;
         _g = Build(OpenDb());
+        ApplyRestoreMarker();
+    }
+
+    /// <summary>File written after a successful backup.restore; the next start turns it into needsReconcile.</summary>
+    public const string RestoreMarkerName = "restored.flag";
+
+    private void ApplyRestoreMarker()
+    {
+        if (!File.Exists(_restoreMarker)) return;
+        try
+        {
+            SetNeedsReconcile(true);   // the restored device_state may be older than what the devices hold now
+            File.Delete(_restoreMarker);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* retried on the next start */ }
     }
 
     /// <param name="updater">Tests pass one that talks to a local server; the App leaves it null.</param>

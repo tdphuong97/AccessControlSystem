@@ -1,6 +1,6 @@
 // Mock host used when the page is opened outside WebView2 (design checks, screenshots). Answers every C3
 // command with believable sample data. All people and devices are invented.
-// Query flags: ?err (one failed sync), ?locked (a stale locked person), ?noupdate, ?authpause, ?firstrun (no devices yet), ?empty, ?nobackup (no backup password), ?plansame (reconcile finds nothing)
+// Query flags: ?err (one failed sync), ?locked (a stale locked person), ?noupdate, ?authpause, ?firstrun (no devices yet), ?empty, ?nobackup (no backup password), ?plansame (reconcile finds nothing), ?needrec (app.state.needsReconcile)
 (function () {
   const ACS = (window.ACS = window.ACS || {});
   const F = () => ACS.fmt;
@@ -78,6 +78,8 @@
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
   let settings = { autoCheckUpdates: true, startWithWindows: false };
+  // True after a new device or a restore, until reconcile.apply (or a plan with nothing to send).
+  let needsReconcile = /needrec/.test(q);
   let extra = null;
   const bak = { hasPassword: !/nobackup|firstrun/.test(q), lastAt: ago(6 * 3600000), files: [
     { name: 'acs-2026-11-06.acsbak', at: ago(6 * 3600000), size: 1843200 }, { name: 'acs-2026-11-05.acsbak', at: ago(30 * 3600000), size: 1802240 },
@@ -94,7 +96,8 @@
 
   const handlers = {
     'app.state': () => ({ version: '0.9.0', firstRun: devices.length === 0, devices, update, pendingJobs: devices.reduce((n, d) => n + d.pending, 0),
-      failedJobs: people.filter((p) => p.error).length, staleLocked: people.filter((p) => p.locked && p.created > 180).length }),
+      failedJobs: people.filter((p) => p.error).length, staleLocked: people.filter((p) => p.locked && p.created > 180).length,
+      needsReconcile: needsReconcile && devices.length > 0 }),
     'people.list': (a) => people.filter(filters[a.filter || 'all'] || filters.all)
       .filter((p) => !a.query || norm(p.fullName + ' ' + p.employeeNo).includes(norm(a.query))).map(row),
     'people.nextNo': () => String((people.length ? Math.max(...people.map((p) => +p.employeeNo)) : 1000) + 1),
@@ -165,6 +168,7 @@
           isCaptureDefault: a.isCaptureDefault, isFingerReader: a.isFingerReader, model: null, online: a.host !== '192.168.1.202', authPaused: false,
           lastSeen: null, pending: 0, failed: 0, message: null };
         devices.push(d);
+        if (people.length || devices.length > 1) needsReconcile = true;
       }
       ACS.bridge.emit('devices.changed', JSON.parse(JSON.stringify(devices)));
       return d;
@@ -191,7 +195,7 @@
       await wait(900);
       ACS.bridge.emit('reconcile.progress', { message: 'Đang đọc Máy tầng 1…' });
       await wait(900);
-      if (/plansame/.test(q)) return { devices: devices.map((d) => ({ deviceId: d.id, deviceName: d.name, items: [], strangers: [] })) };
+      if (/plansame/.test(q)) { needsReconcile = false; return { devices: devices.map((d) => ({ deviceId: d.id, deviceName: d.name, items: [], strangers: [] })) }; }
       const d1 = devices[0] || { id: 1, name: 'Máy tầng trệt' }, d2 = devices[1] || { id: 2, name: 'Máy tầng 1' };
       return { devices: [
         { deviceId: d1.id, deviceName: d1.name, items: [], strangers: [{ deviceId: d1.id, employeeNo: '2001', name: 'Mai Thị Lan', faceCount: 1, fingerCount: 1 }] },
@@ -209,6 +213,7 @@
     'reconcile.apply': async () => {
       ACS.bridge.emit('reconcile.progress', { message: 'Đang tạo việc gửi cho Máy tầng 1…' });
       await wait(1200);
+      needsReconcile = false;
       return null;
     },
     'import.start': async () => {

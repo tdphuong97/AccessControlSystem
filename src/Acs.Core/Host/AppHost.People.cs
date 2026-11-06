@@ -55,21 +55,27 @@ public sealed partial class AppHost
             people = people.Where(p => p.EmployeeNo.Contains(query, StringComparison.OrdinalIgnoreCase)
                 || Vi.IndexOf(Fold(p.FullName), q, Loose) >= 0).ToList();
         }
+        // Bulk reads only: one query each for jobs, device states, faces and finger ids (no per-person queries).
         var open = Db.Jobs.ListOpen().ToLookup(j => j.EmployeeNo);
+        var states = Db.Jobs.ListStates().ToDictionary(st => (st.EmployeeNo, st.DeviceId));
         var faces = Db.Biometrics.FaceOwners();
-        var fingerCounts = Db.Biometrics.FingerCounts();
-        var devices = Db.Devices.List().ToDictionary(d => d.Id, d => d.Name);
+        var fingerIds = Db.Biometrics.FingerIds();
+        var devices = Db.Devices.List();
+        var groups = Db.People.GroupNames();
         var now = Now;
         var rows = new List<PersonRow>();
         foreach (var p in people.OrderBy(p => p.FullName, Comparer<string>.Create((x, y) => Vi.Compare(x, y, CompareOptions.IgnoreCase)))
                      .ThenBy(p => p.EmployeeNo, StringComparer.Ordinal))
         {
             var mine = open[p.EmployeeNo].ToList();
-            var sync = mine.Any(j => j.Status == JobStatus.Failed) ? "error" : mine.Count > 0 ? "pending" : "ok";
-            var waiting = mine.Select(j => devices.GetValueOrDefault(j.DeviceId, "?")).Distinct().ToList();
             var hasFace = faces.Contains(p.EmployeeNo);
-            var fingers = fingerCounts.GetValueOrDefault(p.EmployeeNo);
-            var row = new PersonRow(p.EmployeeNo, p.FullName, Initials(p.FullName), Db.People.GroupName(p.GroupId), hasFace, fingers,
+            var ids = fingerIds.GetValueOrDefault(p.EmployeeNo) ?? [];
+            var perDevice = devices.Select(d => DeviceSyncOf(d, p, hasFace, ids, states.GetValueOrDefault((p.EmployeeNo, d.Id)),
+                mine.Where(j => j.DeviceId == d.Id).ToList())).ToList();
+            var sync = perDevice.Any(x => x.State == "error") ? "error" : perDevice.Any(x => x.State == "pending") ? "pending" : "ok";
+            var waiting = perDevice.Where(x => x.State != "ok").Select(x => x.DeviceName).ToList();
+            var fingers = ids.Count;
+            var row = new PersonRow(p.EmployeeNo, p.FullName, Initials(p.FullName), p.GroupId is { } g ? groups.GetValueOrDefault(g) : null, hasFace, fingers,
                 sync, waiting, now - p.CreatedAt < TimeSpan.FromDays(7), p.Status == PersonStatus.Locked);
             var keep = filter switch
             {

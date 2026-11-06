@@ -132,6 +132,7 @@ public sealed partial class AppHost
                 throw;
             }
             done = true;
+            try { File.WriteAllText(_restoreMarker, "1"); } catch { /* the hint is best-effort; the restore itself succeeded */ }
             lock (_gate) { _closed = true; _updateTimer?.Dispose(); }
             RestartRequested = true;
             Emit("app.restart", null);

@@ -66,6 +66,7 @@
       s.phase = 'reading'; s.err = ''; s.msg = ''; draw();
       try {
         const plan = await ACS.bridge.call('reconcile.plan');
+        if (ACS.refreshState) ACS.refreshState().catch(() => {});   // a plan with nothing to send also clears the notice
         if (!ctx.alive()) return;
         s.plan = plan; s.choices = R.buildStrangers(plan, {}); s.phase = 'plan';
       } catch (e) {
@@ -88,6 +89,7 @@
       s.phase = 'applying'; s.msg = ''; s.err = ''; draw();
       try {
         await ACS.bridge.call('reconcile.apply', { strangers: R.buildStrangers(s.plan, s.choices) });
+        if (ACS.refreshState) ACS.refreshState().catch(() => {});   // clears the "chạy So khớp" notice
         if (!ctx.alive()) return;
         s.phase = 'done'; draw();
         if (opts.onDone) opts.onDone();

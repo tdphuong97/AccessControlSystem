@@ -18,8 +18,10 @@ public sealed record DeviceView(int Id, string Name, string Host, string Usernam
 
 public sealed record UpdateView(string Version, string Notes, double SizeMb);
 
+/// <param name="NeedsReconcile">True after a new device was added (with data to send) or a backup was restored, until a
+/// reconcile.apply succeeds or a plan finds nothing to send: the people screen asks the admin to run So khớp.</param>
 public sealed record AppStateView(string Version, bool FirstRun, IReadOnlyList<DeviceView> Devices, UpdateView? Update,
-    int PendingJobs, int FailedJobs, int StaleLocked);
+    int PendingJobs, int FailedJobs, int StaleLocked, bool NeedsReconcile);
 
 public sealed record FaceResult(string ImageDataUrl, IReadOnlyList<DeviceSync> Devices);
 

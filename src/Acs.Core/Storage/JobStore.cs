@@ -113,11 +113,21 @@ public sealed class JobStore
         return (p, f);
     }
 
+    private const string StateCols = "employee_no, device_id, user_present, user_enabled, face_present, fingers, needs_scan, verified_at";
+
+    private static DeviceStateRecord MapState(SqliteDataReader r) => new(r.GetString(0), r.GetInt32(1), r.GetInt32(2) != 0,
+        r.GetInt32(3) != 0, r.GetInt32(4) != 0, ParseSet(r.GetString(5)), ParseSet(r.GetString(6)), Database.NTs(r, "verified_at"));
+
     public DeviceStateRecord? GetState(string employeeNo, int deviceId) => _db.QueryOne(
-        "SELECT employee_no, device_id, user_present, user_enabled, face_present, fingers, needs_scan, verified_at FROM device_state WHERE employee_no=$e AND device_id=$d",
-        r => new DeviceStateRecord(r.GetString(0), r.GetInt32(1), r.GetInt32(2) != 0, r.GetInt32(3) != 0, r.GetInt32(4) != 0,
-            ParseSet(r.GetString(5)), ParseSet(r.GetString(6)), Database.NTs(r, "verified_at")),
+        $"SELECT {StateCols} FROM device_state WHERE employee_no=$e AND device_id=$d", MapState,
         ("$e", employeeNo), ("$d", deviceId));
+
+    /// <summary>Every device_state row in one query (people.list must not ask per person).</summary>
+    public IReadOnlyList<DeviceStateRecord> ListStates() => _db.Query($"SELECT {StateCols} FROM device_state", MapState);
+
+    /// <summary>True while any device still has a pending, running or failed job for this employee number.</summary>
+    public bool HasOpen(string employeeNo) =>
+        Convert.ToInt32(_db.Scalar($"SELECT COUNT(*) FROM jobs WHERE employee_no=$e AND {Open}", ("$e", employeeNo))) > 0;
 
     public void SetState(DeviceStateRecord s) => _db.Exec(
         "INSERT INTO device_state(employee_no, device_id, user_present, user_enabled, face_present, fingers, needs_scan, verified_at) VALUES($e,$d,$up,$ue,$fp,$f,$n,$v) " +

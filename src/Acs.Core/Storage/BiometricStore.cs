@@ -37,6 +37,27 @@ public sealed class BiometricStore
     /// <summary>Employee numbers that have a face, without reading or decrypting the photos.</summary>
     public HashSet<string> FaceOwners() => _db.Query("SELECT employee_no FROM faces", r => r.GetString(0)).ToHashSet();
 
+    /// <summary>True when the app holds a face for this person, without reading or decrypting the photo.</summary>
+    public bool HasFace(string employeeNo) => _db.Scalar("SELECT 1 FROM faces WHERE employee_no=$e", ("$e", employeeNo)) is not null;
+
+    /// <summary>(finger id, sensor group) of every stored template of one person, without decrypting them.</summary>
+    public IReadOnlyList<(int FingerId, string FpGroup)> FingerGroups(string employeeNo) => _db.Query(
+        "SELECT finger_id, fp_group FROM fingerprints WHERE employee_no=$e ORDER BY finger_id, fp_group",
+        r => (r.GetInt32(0), r.GetString(1)), ("$e", employeeNo));
+
+    /// <summary>Distinct finger ids per employee (ascending), without reading or decrypting the templates.</summary>
+    public Dictionary<string, List<int>> FingerIds()
+    {
+        var map = new Dictionary<string, List<int>>();
+        foreach (var (no, id) in _db.Query("SELECT DISTINCT employee_no, finger_id FROM fingerprints ORDER BY employee_no, finger_id",
+                     r => (r.GetString(0), r.GetInt32(1))))
+        {
+            if (!map.TryGetValue(no, out var l)) map[no] = l = [];
+            l.Add(id);
+        }
+        return map;
+    }
+
     /// <summary>Distinct finger ids per employee, without reading or decrypting the templates.</summary>
     public Dictionary<string, int> FingerCounts() => _db.Query(
         "SELECT employee_no, COUNT(DISTINCT finger_id) FROM fingerprints GROUP BY employee_no",

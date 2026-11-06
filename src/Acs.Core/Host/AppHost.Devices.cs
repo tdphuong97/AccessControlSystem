@@ -12,13 +12,19 @@ public sealed partial class AppHost
 {
     private ReconcilePlan? _plan;
 
+    /// <summary>Settings key behind app.state.needsReconcile ("1" = ask the admin to run So khớp).</summary>
+    public const string NeedsReconcileKey = "reconcile.needed";
+
+    private void SetNeedsReconcile(bool on) => Db.Settings.Set(NeedsReconcileKey, on ? "1" : "0");
+
     private AppStateView AppState()
     {
         var devices = DeviceViews();
         var cutoff = Now - TimeSpan.FromDays(180);
         var stale = Db.People.List(null, PersonStatus.Locked).Count(p => p.LockedAt is { } at && at < cutoff);
         return new AppStateView(_version, devices.Count == 0, devices, _foundUpdate is null ? null : ToView(_foundUpdate),
-            devices.Sum(d => d.Pending), devices.Sum(d => d.Failed), stale);
+            devices.Sum(d => d.Pending), devices.Sum(d => d.Failed), stale,
+            devices.Count > 0 && Db.Settings.Get(NeedsReconcileKey) == "1");
     }
 
     private List<DeviceView> DeviceViews()
@@ -76,6 +82,8 @@ public sealed partial class AppHost
                 "device-0", false, null));
             var created = Db.Devices.Get(sid)!;
             Db.Devices.Update(created with { FpGroup = "device-" + sid });
+            // A new device starts empty as far as the app knows: nothing is queued for it, So khớp sends the data.
+            if (Db.People.Count() > 0 || Db.Devices.List().Count > 1) SetNeedsReconcile(true);
         }
         if (capture)
             foreach (var other in Db.Devices.List().Where(d => d.Id != sid && d.IsCaptureDefault))
@@ -120,6 +128,8 @@ public sealed partial class AppHost
     {
         var plan = await Reconciler.BuildAsync(new Progress<string>(m => Emit("reconcile.progress", new { message = m })), _cts.Token);
         _plan = plan;
+        // Nothing to send anywhere (ExtraFingers is information only): the devices already match the app.
+        if (!plan.Devices.Any(d => d.Items.Any(i => i.Kind != DiffKind.ExtraFingers))) SetNeedsReconcile(false);
         return plan;
     }
 
@@ -132,6 +142,7 @@ public sealed partial class AppHost
                 map[p.Name] = Enum.TryParse<StrangerChoice>(p.Value.GetString(), true, out var c) ? c : StrangerChoice.Skip;
         await Reconciler.ApplyAsync(plan, map, _cts.Token);
         _plan = null;
+        SetNeedsReconcile(false);
         Sync.Wake();
         return null;
     }
@@ -139,11 +150,18 @@ public sealed partial class AppHost
     private async Task<ImportSummary> ImportStart(JsonElement a)
     {
         var id = Int(a, "deviceId");
-        var summary = await Importer.ImportAllAsync(id,
-            new Progress<ImportProgress>(p => Emit("import.progress", new { done = p.Done, total = p.Total, currentName = p.CurrentName })),
-            _cts.Token);
-        Sync.Wake();
-        return summary;
+        try
+        {
+            return await Importer.ImportAllAsync(id,
+                new Progress<ImportProgress>(p => Emit("import.progress", new { done = p.Done, total = p.Total, currentName = p.CurrentName })),
+                _cts.Token);
+        }
+        finally
+        {
+            // Imported people exist only on the source device: the others get them through So khớp.
+            try { if (Db.Devices.List().Count > 1 && Db.People.Count() > 0) SetNeedsReconcile(true); } catch { /* the hint is best-effort */ }
+            Sync.Wake();
+        }
     }
 
     private IReadOnlyList<LogRow> LogList(JsonElement a)
