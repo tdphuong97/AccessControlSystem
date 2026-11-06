@@ -1,0 +1,75 @@
+using System.Net;
+using System.Text;
+using System.Text.Json;
+
+namespace Acs.Core.Hik;
+
+/// <summary>Real Hikvision ISAPI client. Partial: users, faces and fingerprints live in HikClient.*.cs.</summary>
+public sealed partial class HikClient : IHikDevice, IDisposable
+{
+    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(20);
+    public static readonly TimeSpan CaptureTimeout = TimeSpan.FromSeconds(60);
+
+    private readonly HttpClient _http;
+
+    public HikClient(string host, string user, string password, HttpMessageHandler? inner = null)
+    {
+        inner ??= new HttpClientHandler { ServerCertificateCustomValidationCallback = (_, _, _, _) => true };
+        _http = new HttpClient(new DigestHandler(user, password, inner), disposeHandler: true)
+        {
+            BaseAddress = new Uri(host.Contains("://") ? host.TrimEnd('/') : "http://" + host.TrimEnd('/')),
+            Timeout = Timeout.InfiniteTimeSpan,   // per-call timeouts are applied in SendRawAsync
+        };
+    }
+
+    public void Dispose() => _http.Dispose();
+
+    /// <summary>Sends a request and returns the body as text. Every response goes through HikErrorMap.</summary>
+    internal async Task<string> SendAsync(HttpMethod method, string path, HttpContent? body, TimeSpan? timeout, CancellationToken ct)
+        => Encoding.UTF8.GetString(await SendRawAsync(method, path, body, timeout, ct));
+
+    internal Task<string> GetAsync(string path, CancellationToken ct, TimeSpan? timeout = null)
+        => SendAsync(HttpMethod.Get, path, null, timeout, ct);
+
+    internal Task<string> SendJsonAsync(HttpMethod method, string path, object payload, CancellationToken ct, TimeSpan? timeout = null)
+        => SendAsync(method, path, JsonBody(payload), timeout, ct);
+
+    internal static StringContent JsonBody(object payload)
+        => new(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+    /// <summary>
+    /// Core call. Network errors and timeouts become HikTransientException; a cancelled caller token propagates as
+    /// OperationCanceledException; 401 (after the Digest handler's single re-challenge) becomes HikAuthException, never
+    /// retried; other failures (including HTTP 200 with statusCode != 1) are mapped by HikErrorMap.
+    /// </summary>
+    internal async Task<byte[]> SendRawAsync(HttpMethod method, string path, HttpContent? body, TimeSpan? timeout, CancellationToken ct)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(timeout ?? DefaultTimeout);
+        using var req = new HttpRequestMessage(method, path) { Content = body };
+        HttpResponseMessage resp;
+        byte[] bytes;
+        try
+        {
+            resp = await _http.SendAsync(req, cts.Token);
+            using (resp) bytes = await resp.Content.ReadAsByteArrayAsync(cts.Token);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new HikTransientException("Máy không trả lời kịp. Kiểm tra máy đã bật và cùng mạng, app sẽ tự thử lại.", "timeout");
+        }
+        catch (HttpRequestException e)
+        {
+            throw new HikTransientException("Không kết nối được máy. Kiểm tra dây mạng, địa chỉ IP và nguồn của máy, app sẽ tự thử lại.", HikErrorMap.Trim(e.Message));
+        }
+
+        var code = (int)resp.StatusCode;
+        var looksText = bytes.Length > 0 && (bytes[0] == (byte)'{' || bytes[0] == (byte)'<' || bytes[0] == 0xEF || bytes[0] <= (byte)' ');
+        if (code >= 400 || looksText)
+        {
+            var err = HikErrorMap.FromResponse(code, Encoding.UTF8.GetString(bytes));
+            if (err is not null) throw err;
+        }
+        return bytes;
+    }
+}
