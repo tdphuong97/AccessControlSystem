@@ -38,7 +38,8 @@ public sealed class ProbeRunner(IHikDevice main, IHikDevice? peer, Func<string, 
                 }
                 catch (OperationCanceledException)
                 {
-                    report.Step("Huỷ bởi người dùng (Ctrl+C)", false, 0, "Huỷ trong lúc kiểm tra ban đầu; chưa ghi gì lên máy nên không cần dọn dẹp.");
+                    report.Step(ct.IsCancellationRequested ? "Huỷ bởi người dùng (Ctrl+C)" : "Hết thời gian chờ", false, 0,
+                        "Dừng trong lúc kiểm tra ban đầu; chưa ghi gì lên máy nên không cần dọn dẹp.");
                     return false;
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
@@ -54,7 +55,11 @@ public sealed class ProbeRunner(IHikDevice main, IHikDevice? peer, Func<string, 
             }
             catch (OperationCanceledException)
             {
-                report.Step("Huỷ bởi người dùng (Ctrl+C)", false, 0, "Đang dọn dẹp người thử 99999.");
+                report.Step(ct.IsCancellationRequested ? "Huỷ bởi người dùng (Ctrl+C)" : "Hết thời gian chờ", false, 0, "Đang dọn dẹp người thử 99999.");
+            }
+            catch (Exception ex)
+            {
+                report.Step("Lỗi không lường trước", false, 0, Describe(ex));
             }
         }
         finally
@@ -62,12 +67,21 @@ public sealed class ProbeRunner(IHikDevice main, IHikDevice? peer, Func<string, 
             if (started)
                 foreach (var (label, dev) in Devices())
                 {
-                    await TimedVoid($"{label}: xoá người thử 99999 (dọn dẹp)", () => dev.DeleteUserAsync(TestNo, CancellationToken.None), "đã xoá");
-                    await Verify($"{label}: xác nhận 99999 đã biến mất", () => dev.FindUserAsync(TestNo, CancellationToken.None),
-                        u => u is null ? (true, "đã xoá hẳn") : (false, "99999 VẪN CÒN trên máy sau khi xoá — cần xoá tay"));
+                    // each device and each action is isolated: cleanup never throws and never skips the other device
+                    await Safe($"{label}: xoá người thử 99999 (dọn dẹp)", () =>
+                        TimedVoid($"{label}: xoá người thử 99999 (dọn dẹp)", () => dev.DeleteUserAsync(TestNo, CancellationToken.None), "đã xoá"));
+                    await Safe($"{label}: xác nhận 99999 đã biến mất", () =>
+                        Verify($"{label}: xác nhận 99999 đã biến mất", () => dev.FindUserAsync(TestNo, CancellationToken.None),
+                            u => u is null ? (true, "đã xoá hẳn") : (false, "99999 VẪN CÒN trên máy sau khi xoá — cần xoá tay")));
                 }
         }
         return report.Failed == 0;
+    }
+
+    private async Task Safe(string name, Func<Task> action)
+    {
+        try { await action(); }
+        catch (Exception ex) { report.Step(name, false, 0, Describe(ex)); }
     }
 
     private IEnumerable<(string Label, IHikDevice Dev)> Devices()
@@ -99,7 +113,7 @@ public sealed class ProbeRunner(IHikDevice main, IHikDevice? peer, Func<string, 
         if (!created) { report.Note("Bỏ qua các bước sau vì không tạo được người thử."); return; }
         await Verify("Máy chính: đọc lại người thử", () => main.FindUserAsync(TestNo, ct),
             u => u is null ? (false, "KHÔNG thấy người 99999 sau khi tạo")
-                           : (true, $"thấy: {u.Name}, enabled={u.Enabled}, mặt={u.FaceCount}, vân tay={u.FingerCount}"));
+                           : (true, $"thấy (khớp tên TEST ACS: {(u.Name == TestName ? "có" : "KHÔNG")}), enabled={u.Enabled}, mặt={u.FaceCount}, vân tay={u.FingerCount}"));
 
         // 4. face
         await waitForPerson("Mời người thử đứng trước máy rồi bấm Enter để chụp khuôn mặt.");
@@ -147,7 +161,7 @@ public sealed class ProbeRunner(IHikDevice main, IHikDevice? peer, Func<string, 
                 if (_face is not null && !r.h) problems.Add("KHÔNG có khuôn mặt");
                 var (fok, ftext) = _template is null ? (true, $"{r.f.Count} vân tay") : FingerVerdict(r.f, _template);
                 if (!fok) problems.Add(ftext);
-                return (problems.Count == 0, $"thấy {r.u.Name}; mặt={(r.h ? "có" : "không")}; {ftext}" + (problems.Count == 0 ? "" : " | " + string.Join("; ", problems)));
+                return (problems.Count == 0, $"thấy; mặt={(r.h ? "có" : "không")}; {ftext}" + (problems.Count == 0 ? "" : " | " + string.Join("; ", problems)));
             });
         }
     }

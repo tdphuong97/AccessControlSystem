@@ -55,7 +55,9 @@ Task Wait(string message)
     return Task.CompletedTask;
 }
 
-var ok = await new ProbeRunner(main, peer, Wait, report).RunAsync(cts.Token);
+bool ok;
+try { ok = await new ProbeRunner(main, peer, Wait, report).RunAsync(cts.Token); }
+catch (Exception ex) { report.Step("Lỗi không lường trước", false, 0, ex.GetType().Name + ": " + ex.Message); ok = false; }
 Console.WriteLine();
 Console.WriteLine(report.Text);
 var path = report.Save(opts.TryGetValue("out", out var outDir) ? outDir : Directory.GetCurrentDirectory(), DateTime.Now);

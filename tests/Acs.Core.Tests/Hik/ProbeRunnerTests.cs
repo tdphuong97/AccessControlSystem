@@ -86,13 +86,83 @@ public class ProbeRunnerTests
         Assert.Null(await main.FindUserAsync("99999", default));
     }
 
-    [Fact]
-    public async Task Probe_fails_when_peer_drops_the_template()
+    /// <summary>Test-local wrapper that can drop one kind of write or throw on cleanup.</summary>
+    private sealed class FlakyDevice(FakeDevice inner) : IHikDevice
     {
-        var (_, _, report, ok, _) = await Run((_, p) => p.ForgetWrites = true);
+        public bool DropFingerprint, DropFace, DeleteThrowsCancel;
+        public int DeleteCalls;
+        public Task<DeviceInfo> GetDeviceInfoAsync(CancellationToken ct) => inner.GetDeviceInfoAsync(ct);
+        public Task<DeviceCapabilities> GetCapabilitiesAsync(CancellationToken ct) => inner.GetCapabilitiesAsync(ct);
+        public IAsyncEnumerable<HikUser> ListUsersAsync(CancellationToken ct) => inner.ListUsersAsync(ct);
+        public Task<HikUser?> FindUserAsync(string no, CancellationToken ct) => inner.FindUserAsync(no, ct);
+        public Task UpsertUserAsync(HikUserWrite u, CancellationToken ct) => inner.UpsertUserAsync(u, ct);
+        public Task DeleteUserAsync(string no, CancellationToken ct)
+        {
+            DeleteCalls++;
+            if (DeleteThrowsCancel) throw new OperationCanceledException("timeout");
+            return inner.DeleteUserAsync(no, ct);
+        }
+        public Task<byte[]> CaptureFaceAsync(CancellationToken ct) => inner.CaptureFaceAsync(ct);
+        public Task SetFaceAsync(string no, byte[] j, CancellationToken ct) => DropFace ? Task.CompletedTask : inner.SetFaceAsync(no, j, ct);
+        public Task<bool> HasFaceAsync(string no, CancellationToken ct) => inner.HasFaceAsync(no, ct);
+        public Task<byte[]?> DownloadFaceAsync(string no, CancellationToken ct) => inner.DownloadFaceAsync(no, ct);
+        public Task DeleteFaceAsync(string no, CancellationToken ct) => inner.DeleteFaceAsync(no, ct);
+        public Task<CapturedFinger> CaptureFingerprintAsync(int id, CancellationToken ct) => inner.CaptureFingerprintAsync(id, ct);
+        public Task SetFingerprintAsync(string no, int id, string t, int r, CancellationToken ct) => DropFingerprint ? Task.CompletedTask : inner.SetFingerprintAsync(no, id, t, r, ct);
+        public Task<IReadOnlyList<HikFinger>> ReadFingerprintsAsync(string no, CancellationToken ct) => inner.ReadFingerprintsAsync(no, ct);
+        public Task DeleteFingerprintAsync(string no, int id, CancellationToken ct) => inner.DeleteFingerprintAsync(no, id, ct);
+    }
+
+    private static string[] PeerLine(ProbeReport r) => r.Text.Split('\n').Where(l => l.Contains("Máy phụ: kiểm tra lại")).ToArray();
+
+    [Fact]
+    public async Task Probe_fails_when_peer_drops_only_the_template()
+    {
+        var peerInner = new FakeDevice();
+        var report = new ProbeReport();
+        var ok = await new ProbeRunner(new FakeDevice(), new FlakyDevice(peerInner) { DropFingerprint = true }, _ => Task.CompletedTask, report).RunAsync(default);
         Assert.False(ok);
-        Assert.Contains(report.Text.Split('\n'), l => l.Contains("Máy phụ: kiểm tra lại") && l.StartsWith("[LỖI]"));
-        Assert.DoesNotContain(report.Text.Split('\n'), l => l.Contains("Máy chính: đọc lại") && l.StartsWith("[LỖI]"));
+        var line = Assert.Single(PeerLine(report));
+        Assert.StartsWith("[LỖI]", line);
+        Assert.Contains("KHÔNG khớp mẫu", line);
+        Assert.DoesNotContain("KHÔNG thấy", line);
+    }
+
+    [Fact]
+    public async Task Probe_fails_when_peer_drops_only_the_face()
+    {
+        var report = new ProbeReport();
+        var ok = await new ProbeRunner(new FakeDevice(), new FlakyDevice(new FakeDevice()) { DropFace = true }, _ => Task.CompletedTask, report).RunAsync(default);
+        Assert.False(ok);
+        var line = Assert.Single(PeerLine(report));
+        Assert.StartsWith("[LỖI]", line);
+        Assert.Contains("KHÔNG có khuôn mặt", line);
+        Assert.DoesNotContain("KHÔNG thấy", line);
+    }
+
+    [Fact]
+    public async Task Cleanup_on_peer_still_runs_when_main_cleanup_throws_cancellation()
+    {
+        var mainInner = new FakeDevice(); var peerInner = new FakeDevice();
+        var main = new FlakyDevice(mainInner) { DeleteThrowsCancel = true };
+        var report = new ProbeReport();
+        var ok = await new ProbeRunner(main, peerInner, _ => Task.CompletedTask, report).RunAsync(default);
+        Assert.False(ok);
+        Assert.Equal(1, main.DeleteCalls);
+        Assert.Contains(peerInner.Calls, c => c == nameof(IHikDevice.DeleteUserAsync));
+        Assert.Null(await peerInner.FindUserAsync("99999", default));
+        Assert.Contains("Máy chính: xoá người thử 99999 (dọn dẹp)", report.Text);
+    }
+
+    [Fact]
+    public async Task Report_never_contains_a_person_name()
+    {
+        var main = new FakeDevice();
+        await main.UpsertUserAsync(U1001, default);
+        var report = new ProbeReport();
+        await new ProbeRunner(main, null, _ => Task.CompletedTask, report).RunAsync(default);
+        Assert.DoesNotContain("Nguyen", report.Text);
+        Assert.DoesNotContain("name=", report.Text);
     }
 
     [Fact]
