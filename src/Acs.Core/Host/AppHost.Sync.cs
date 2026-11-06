@@ -7,7 +7,7 @@ namespace Acs.Core.Host;
 
 public sealed partial class AppHost
 {
-    private const string FailedMessage = "Có việc gửi sang máy bị lỗi. Mở Đồng bộ và bấm Thử lại.";
+    private const string FailedMessage = "Có việc gửi sang máy bị lỗi. Ở tab \"Người dùng\", mở người có dấu \"Lỗi gửi\" để xem cách xử lý và bấm Thử lại.";
 
     private static string KindLabel(JobKind kind, int? finger)
     {

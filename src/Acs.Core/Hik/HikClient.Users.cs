@@ -126,15 +126,7 @@ public sealed partial class HikClient
         await SendUtf8JsonAsync(HttpMethod.Post, "/ISAPI/AccessControl/UserInfo/Record?format=json", body, ct);
     }
 
-    /// <summary>
-    /// "User does not exist": a named subStatusCode containing "NotExist" (employeeNoNotExist, userNotExist...) wins;
-    /// the free-text Detail ("not exist") is consulted only when the code is a bare number.
-    /// </summary>
-    private static bool IsNotExist(HikRejectedException e)
-    {
-        if (e.Code.Contains("NotExist", StringComparison.OrdinalIgnoreCase)) return true;
-        return int.TryParse(e.Code, out _) && e.Detail?.Contains("not exist", StringComparison.OrdinalIgnoreCase) == true;
-    }
+    private static bool IsNotExist(HikRejectedException e) => HikErrorMap.IsNotExist(e);
 
     public async Task DeleteUserAsync(string employeeNo, CancellationToken ct)
         => await SendUtf8JsonAsync(HttpMethod.Put, "/ISAPI/AccessControl/UserInfo/Delete?format=json",

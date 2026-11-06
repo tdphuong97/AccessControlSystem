@@ -189,9 +189,9 @@ public sealed partial class HikClient
         var detail = HikErrorMap.Trim(text);
         return status switch
         {
-            "2" => new HikRejectedException("readerNotReady", "Máy chưa sẵn sàng nhận vân tay, thử lại", detail),
-            "3" => new HikRejectedException("fpMismatch", "Vân tay này không hợp với cảm biến của máy", detail),
-            "4" => new HikRejectedException("deviceFull", "Máy đầy", detail),
+            "2" => new HikRejectedException("readerNotReady", "Máy chưa sẵn sàng nhận vân tay. Chờ một lát rồi bấm Thử lại.", detail),
+            "3" => new HikRejectedException("fpMismatch", "Vân tay này không hợp với cảm biến của máy. Quét lại ngón này trực tiếp ở máy đó.", detail),
+            "4" => new HikRejectedException("deviceFull", "Máy đã đầy bộ nhớ vân tay. Xoá bớt vân tay không còn dùng trên máy rồi bấm Thử lại.", detail),
             _ => new HikRejectedException("fpStatus" + status,
                 $"Máy không nhận vân tay (mã {(status.Length == 0 ? "không rõ" : status)}). {HikErrorMap.UnknownHint}", detail),
         };

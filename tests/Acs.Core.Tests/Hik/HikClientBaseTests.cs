@@ -121,6 +121,41 @@ public class HikClientBaseTests
         await Assert.ThrowsAsync<HikTransientException>(() => Make(h).GetDeviceInfoAsync(default));
     }
 
+    /// <summary>Answers 200 with a body whose stream breaks while it is read (a connection reset mid-body).</summary>
+    private sealed class BrokenBody : HttpMessageHandler
+    {
+        private sealed class Content : HttpContent
+        {
+            protected override Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context) =>
+                throw new IOException("connection reset by peer");
+            protected override bool TryComputeLength(out long length) { length = 0; return false; }
+        }
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new Content() });
+    }
+
+    [Fact]
+    public async Task Broken_body_io_and_disposed_client_are_transient()
+    {
+        var e = await Assert.ThrowsAsync<HikTransientException>(() => new HikClient("192.168.1.201", "admin", "secret", new BrokenBody()).GetDeviceInfoAsync(default));
+        Assert.DoesNotContain("connection reset", e.Message);   // raw text only in Detail
+        await Assert.ThrowsAsync<HikTransientException>(() => Make(new FakeIsapiHandler { Throw = new IOException("reset") }).GetDeviceInfoAsync(default));
+        await Assert.ThrowsAsync<HikTransientException>(() => Make(new FakeIsapiHandler { Throw = new ObjectDisposedException("HttpClient") }).GetDeviceInfoAsync(default));
+        var disposed = Make(new FakeIsapiHandler().On(HttpMethod.Get, "/ISAPI/System/deviceInfo", "{}"));
+        disposed.Dispose();   // the factory replaced this client after a login change while a call was due
+        await Assert.ThrowsAsync<HikTransientException>(() => disposed.GetDeviceInfoAsync(default));
+    }
+
+    [Fact]
+    public void Default_handler_never_uses_a_proxy()
+    {
+        using var c = new HikClient("192.168.1.201", "admin", "secret");
+        var http = (HttpClient)typeof(HikClient).GetField("_http", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(c)!;
+        var handler = typeof(HttpMessageInvoker).GetField("_handler", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(http)!;
+        var inner = Assert.IsType<HttpClientHandler>(((DelegatingHandler)handler).InnerHandler);
+        Assert.False(inner.UseProxy);
+    }
+
     [Fact]
     public async Task Timeout_is_transient_but_caller_cancel_is_not()
     {

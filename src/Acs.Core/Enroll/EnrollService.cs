@@ -16,6 +16,8 @@ public sealed partial class EnrollService(Database db, IHikDeviceFactory factory
     public const int MinFingerQuality = 40;
     public const int MaxNameLength = 32;
     public const int MaxFaceBytes = 200 * 1024;
+    public const string NotJpegMessage = "Ảnh khuôn mặt phải là tệp JPEG. Chọn ảnh JPEG khác hoặc chụp bằng webcam.";
+    public const string TooBigMessage = "Ảnh khuôn mặt quá lớn (tối đa 200 KB). Chụp lại hoặc chọn ảnh khác/webcam.";
     public const string NumberBusyMessage = "Mã này vừa xoá và đang chờ gỡ khỏi máy. Đợi máy gỡ xong hoặc dùng mã khác.";
 
     private readonly ConcurrentDictionary<int, SemaphoreSlim> _busy = new();
@@ -114,9 +116,9 @@ public sealed partial class EnrollService(Database db, IHikDeviceFactory factory
     public void SaveFace(string employeeNo, byte[] jpeg, BiometricSource source)
     {
         if (jpeg is not { Length: >= 3 } || jpeg[0] != 0xFF || jpeg[1] != 0xD8 || jpeg[2] != 0xFF)
-            throw new EnrollException("Ảnh khuôn mặt phải là tệp JPEG.");
+            throw new EnrollException(NotJpegMessage);
         if (jpeg.Length > MaxFaceBytes)
-            throw new EnrollException("Ảnh khuôn mặt quá lớn (tối đa 200 KB).");
+            throw new EnrollException(TooBigMessage);
         db.Tx(() =>
         {
             RequirePerson(employeeNo);

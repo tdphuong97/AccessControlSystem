@@ -27,7 +27,7 @@ public static class HikErrorMap
         body ??= "";
         var detail = Trim(body);
         if (http == 401)
-            return new HikAuthException("Máy báo sai tài khoản hoặc mật khẩu, hoặc đã khoá tạm thời. Kiểm tra lại trong Cài đặt máy, hoặc chờ khoảng 30 phút rồi bấm Thử lại.", detail);
+            return new HikAuthException("Máy báo sai tài khoản hoặc mật khẩu, hoặc đã khoá tạm thời. Kiểm tra lại ở tab \"Máy chấm công & cập nhật\" (nút Sửa mật khẩu), hoặc chờ khoảng 30 phút rồi bấm Thử lại.", detail);
 
         Parse(body, out var status, out var sub, out var msg);
 
@@ -46,6 +46,16 @@ public static class HikErrorMap
     }
 
     public static string Trim(string s) => s.Length <= 500 ? s : s[..500];
+
+    /// <summary>
+    /// "User does not exist": a named subStatusCode containing "NotExist" (employeeNoNotExist, userNotExist...) wins;
+    /// the free-text Detail ("not exist") is consulted only when the code is a bare number.
+    /// </summary>
+    public static bool IsNotExist(HikRejectedException e)
+    {
+        if (e.Code.Contains("NotExist", StringComparison.OrdinalIgnoreCase)) return true;
+        return int.TryParse(e.Code, out _) && e.Detail?.Contains("not exist", StringComparison.OrdinalIgnoreCase) == true;
+    }
 
     private static void Parse(string body, out int? status, out string? sub, out string? msg)
     {

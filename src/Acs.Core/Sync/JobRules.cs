@@ -10,7 +10,7 @@ public static class JobRules
     public static readonly TimeSpan VerifyGap = TimeSpan.FromSeconds(1);
     public static readonly TimeSpan PingEvery = TimeSpan.FromSeconds(30);
     public const string NotSavedMessage = "Máy báo đã nhận nhưng đọc lại không thấy. Bấm Thử lại; nếu vẫn lỗi, xem Chi tiết.";
-    public const string AuthMessage = "Sai mật khẩu hoặc máy đang khoá tạm (khoảng 30 phút). Kiểm tra mật khẩu trong Thiết lập.";
+    public const string AuthMessage = "Sai mật khẩu hoặc máy đang khoá tạm (khoảng 30 phút). Kiểm tra mật khẩu ở tab \"Máy chấm công & cập nhật\" (nút Sửa mật khẩu).";
     public const string OfflineMessage = "Đang chờ — tự gửi khi máy có mạng.";
     public const string NoEndDate = "2035-12-31T23:59:59";
     /// <summary>UpsertUser stopped: the device holds this employee number under another person's name.</summary>

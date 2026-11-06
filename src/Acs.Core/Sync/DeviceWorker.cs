@@ -312,7 +312,8 @@ internal sealed class DeviceWorker
                 // deletes (people.delete, stranger "Gỡ khỏi máy") have no app person and are not affected.
                 if (_db.People.Get(no) is { Status: PersonStatus.Locked } locked && await KeepLockedAsync(dev, hik, locked, ct) is { } kept)
                     return kept;
-                await hik.DeleteUserAsync(no, ct);
+                try { await hik.DeleteUserAsync(no, ct); }
+                catch (HikRejectedException ex) when (HikErrorMap.IsNotExist(ex)) { /* already gone: the read-back below confirms it */ }
                 await VerifyAsync(async () => await hik.FindUserAsync(no, ct) is null, ct);
                 Save(no, s => s with { UserPresent = false, UserEnabled = false, FacePresent = false, Fingers = new HashSet<int>(), FingersKnown = true });
                 break;
@@ -405,7 +406,9 @@ internal sealed class DeviceWorker
                     used = other;
                     break;
                 }
-                catch (HikRejectedException ex) { last = ex; }
+                // Only "this sensor does not take this template" means: scan the finger on this device. Any other
+                // refusal (memory full, not ready, user missing...) fails the job with the device's own message.
+                catch (HikRejectedException ex) when (IsSensorMismatch(ex)) { last = ex; }
             }
             if (used is null)
             {
@@ -420,6 +423,9 @@ internal sealed class DeviceWorker
         // The read-back is the device's complete list for this person (device-only fingers included).
         Save(no, s => s with { Fingers = seen.Select(f => f.FingerId).ToHashSet(), FingersKnown = true, NeedsScan = Without(s.NeedsScan, job.FingerId) });
     }
+
+    private static bool IsSensorMismatch(HikRejectedException e) =>
+        e.Code.Equals("fpMismatch", StringComparison.OrdinalIgnoreCase) || e.Code.Equals("checkFingerPrintFailed", StringComparison.OrdinalIgnoreCase);
 
     private static bool SameName(string a, string b) =>
         string.Equals(a.Trim().Normalize(), b.Trim().Normalize(), StringComparison.OrdinalIgnoreCase);

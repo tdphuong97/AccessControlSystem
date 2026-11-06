@@ -93,12 +93,12 @@ public class HikFingersTests
         var h = new FakeIsapiHandler().On(HttpMethod.Put, SetUp, Status(3));
         var e = await Assert.ThrowsAsync<HikRejectedException>(() => Make(h).SetFingerprintAsync("1001", 1, "QUJD", 1, default));
         Assert.Equal("fpMismatch", e.Code);
-        Assert.Equal("Vân tay này không hợp với cảm biến của máy", e.Message);
+        Assert.Equal("Vân tay này không hợp với cảm biến của máy. Quét lại ngón này trực tiếp ở máy đó.", e.Message);
     }
 
     [Theory]
-    [InlineData(2, "Máy chưa sẵn sàng nhận vân tay, thử lại")]
-    [InlineData(4, "Máy đầy")]
+    [InlineData(2, "Máy chưa sẵn sàng nhận vân tay. Chờ một lát rồi bấm Thử lại.")]
+    [InlineData(4, "Máy đã đầy bộ nhớ vân tay. Xoá bớt vân tay không còn dùng trên máy rồi bấm Thử lại.")]
     public async Task SetFinger_other_statuses_map_to_vietnamese(int status, string message)
     {
         var h = new FakeIsapiHandler().On(HttpMethod.Put, SetUp, Status(status));
@@ -121,7 +121,8 @@ public class HikFingersTests
             .On(HttpMethod.Post, Download, "{\"statusCode\":1}")
             .On(HttpMethod.Get, Progress, "{\"FingerPrintStatus\":{\"totalStatus\":1,\"StatusList\":[{\"cardReaderRecvStatus\":4}]}}");
         var e = await Assert.ThrowsAsync<HikRejectedException>(() => Make(h).SetFingerprintAsync("1001", 1, "QUJD", 1, default));
-        Assert.Equal("Máy đầy", e.Message);
+        Assert.Equal("deviceFull", e.Code);
+        Assert.Equal("Máy đã đầy bộ nhớ vân tay. Xoá bớt vân tay không còn dùng trên máy rồi bấm Thử lại.", e.Message);
     }
 
     [Fact]

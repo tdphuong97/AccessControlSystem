@@ -148,6 +148,62 @@ public sealed class SyncEngineTests : IAsyncDisposable
         Assert.Equal("ModelB", Assert.Single(h.Db.Biometrics.GetFingers("1001")).FpGroup);   // no copy stored
     }
 
+    private sealed class RefusesFingers(IHikDevice inner, HikRejectedException refusal) : ForwardingDevice(inner)
+    {
+        public override Task SetFingerprintAsync(string employeeNo, int fingerId, string templateBase64, int readerNo, CancellationToken ct) => throw refusal;
+    }
+
+    [Theory]
+    [InlineData("deviceFull", "Máy đã đầy bộ nhớ vân tay. Xoá bớt vân tay không còn dùng trên máy rồi bấm Thử lại.")]
+    [InlineData("readerNotReady", "Máy chưa sẵn sàng nhận vân tay. Chờ một lát rồi bấm Thử lại.")]
+    [InlineData("employeeNoNotExist", "Máy chưa có người này. Bấm Thử lại để gửi người trước rồi mới gửi sinh trắc học.")]
+    public async Task Cross_group_refusal_other_than_a_sensor_mismatch_fails_with_its_own_message(string code, string message)
+    {
+        await using var h = new SyncHarness(new SingleDeviceFactory(new RefusesFingers(new FakeDevice(), new HikRejectedException(code, message))));
+        var d = h.AddDevice("Máy tầng 1", "ModelA");
+        h.AddPerson();
+        h.AddFinger("1001", 6, "ModelB");
+        h.Enqueue(d, "1001", JobKind.SetFinger, 6);
+        h.Engine.Start();
+        await h.Until(() => h.Db.Jobs.ListOpen(d).Any(j => j.Status == JobStatus.Failed));
+        var j = Assert.Single(h.Db.Jobs.ListOpen(d));
+        Assert.Equal("rejected", j.ErrorKind);
+        Assert.Equal(message, j.ErrorMessage);
+        Assert.DoesNotContain(6, h.Db.Jobs.GetState("1001", d)?.NeedsScan ?? new HashSet<int>());
+    }
+
+    [Fact]
+    public async Task Cross_group_checkFingerPrintFailed_also_means_needs_scan()
+    {
+        await using var h = new SyncHarness(new SingleDeviceFactory(new RefusesFingers(new FakeDevice(),
+            new HikRejectedException("checkFingerPrintFailed", "Máy không nhận vân tay này. Quét lại vân tay cho rõ rồi thử lại."))));
+        var d = h.AddDevice("Máy tầng 1", "ModelA");
+        h.AddPerson();
+        h.AddFinger("1001", 6, "ModelB");
+        h.Enqueue(d, "1001", JobKind.SetFinger, 6);
+        h.Engine.Start();
+        await h.Until(() => h.Db.Jobs.ListOpen(d).Any(j => j.Status == JobStatus.Failed));
+        Assert.Equal("needs_scan", Assert.Single(h.Db.Jobs.ListOpen(d)).ErrorKind);
+        Assert.Contains(6, h.Db.Jobs.GetState("1001", d)!.NeedsScan);
+    }
+
+    private sealed class AlreadyGone(IHikDevice inner) : ForwardingDevice(inner)
+    {
+        public override Task DeleteUserAsync(string employeeNo, CancellationToken ct) =>
+            throw new HikRejectedException("employeeNoNotExist", "Máy chưa có người này.", "{\"subStatusCode\":\"employeeNoNotExist\"}");
+    }
+
+    [Fact]
+    public async Task DeleteUser_answered_not_exist_is_done_once_absence_is_verified()
+    {
+        await using var h = new SyncHarness(new SingleDeviceFactory(new AlreadyGone(new FakeDevice())));
+        var d = h.AddDevice();
+        h.Enqueue(d, "1001", JobKind.DeleteUser);   // explicit delete: the person is no longer in the app
+        h.Engine.Start();
+        await h.WaitDone(d);
+        Assert.Contains(h.Db.Log.List("1001", d, 10), l => l.Ok && l.Action == nameof(JobKind.DeleteUser));
+    }
+
     [Fact]
     public async Task Cross_group_copy_is_not_stored_when_verify_fails()
     {

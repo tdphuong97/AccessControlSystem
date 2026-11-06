@@ -14,7 +14,8 @@ public sealed partial class HikClient : IHikDevice, IDisposable
 
     public HikClient(string host, string user, string password, HttpMessageHandler? inner = null)
     {
-        inner ??= new HttpClientHandler { ServerCertificateCustomValidationCallback = (_, _, _, _) => true };
+        // The devices sit on the local network: never route their traffic (and the digest login) through a system proxy.
+        inner ??= new HttpClientHandler { UseProxy = false, ServerCertificateCustomValidationCallback = (_, _, _, _) => true };
         _http = new HttpClient(new DigestHandler(user, password, inner), disposeHandler: true)
         {
             BaseAddress = new Uri(host.Contains("://") ? host.TrimEnd('/') : "http://" + host.TrimEnd('/')),
@@ -68,6 +69,12 @@ public sealed partial class HikClient : IHikDevice, IDisposable
         catch (HttpRequestException e)
         {
             throw new HikTransientException("Không kết nối được máy. Kiểm tra dây mạng, địa chỉ IP và nguồn của máy, app sẽ tự thử lại.", HikErrorMap.Trim(e.Message));
+        }
+        catch (Exception e) when (e is IOException or ObjectDisposedException)
+        {
+            // The connection dropped while the body was being read (HttpIOException is an IOException), or this client
+            // was replaced after a login change while a call was still running: both are worth a retry.
+            throw new HikTransientException("Mất kết nối với máy giữa chừng. Kiểm tra dây mạng và nguồn của máy, app sẽ tự thử lại.", HikErrorMap.Trim(e.Message));
         }
 
         var code = (int)resp.StatusCode;

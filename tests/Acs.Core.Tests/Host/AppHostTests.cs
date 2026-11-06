@@ -304,7 +304,7 @@ public sealed class AppHostTests : IAsyncDisposable
         var png = Convert.ToBase64String([0x89, 0x50, 0x4E, 0x47, 1, 2, 3, 4]);
         var ex = await Assert.ThrowsAsync<Acs.Core.Enroll.EnrollException>(() => h.HandleAsync("face.save",
             J($$"""{"employeeNo":"1001","imageDataUrl":"data:image/png;base64,{{png}}","source":"file"}""")));
-        Assert.Equal("Ảnh khuôn mặt phải là tệp JPEG.", ex.Message);
+        Assert.Equal(Acs.Core.Enroll.EnrollService.NotJpegMessage, ex.Message);
 
         var jpeg = Convert.ToBase64String([0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 0xFF, 0xD9]);
         var ok = Out(await h.HandleAsync("face.save", J($$"""{"employeeNo":"1001","imageDataUrl":"data:image/jpeg;base64,{{jpeg}}","source":"webcam"}""")));
