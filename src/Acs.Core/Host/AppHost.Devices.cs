@@ -166,16 +166,22 @@ public sealed partial class AppHost
     private async Task<ImportSummary> ImportStart(JsonElement a)
     {
         var id = Int(a, "deviceId");
+        var before = Db.People.Count();
+        var finished = false;
         try
         {
-            return await Importer.ImportAllAsync(id,
+            var summary = await Importer.ImportAllAsync(id,
                 new InOrder<ImportProgress>(p => Emit("import.progress", new { done = p.Done, total = p.Total, currentName = p.CurrentName })),
                 _cts.Token);
+            finished = true;
+            return summary;
         }
         finally
         {
-            // Imported people exist only on the source device: the others get them through So khớp.
-            try { if (Db.Devices.List().Count > 1 && Db.People.Count() > 0) SetNeedsReconcile(true); } catch { /* the hint is best-effort */ }
+            // Imported data exists only on the source device: the others get it through So khớp (also after a run
+            // that stopped half-way but already brought people in).
+            try { if (Db.Devices.List().Count > 1 && (finished || Db.People.Count() > before)) SetNeedsReconcile(true); }
+            catch { /* the hint is best-effort */ }
             Sync.Wake();
         }
     }

@@ -159,6 +159,19 @@ public sealed class AppHostTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task an_import_that_never_ran_does_not_ask_for_reconcile()
+    {
+        var h = NewHost();
+        var a = await AddDevice(h, "Máy A");
+        await AddDevice(h, "Máy B");
+        await h.HandleAsync("reconcile.plan", J());   // empty app and devices: nothing to send, hint cleared
+        Assert.False(await NeedsReconcile(h));
+        h.Db.Devices.SetAuthPaused(a, true);
+        await Assert.ThrowsAsync<Acs.Core.Hik.HikAuthException>(() => h.HandleAsync("import.start", J($$"""{"deviceId":{{a}}}""")));
+        Assert.False(await NeedsReconcile(h));
+    }
+
+    [Fact]
     public async Task a_device_added_later_is_pending_for_everyone_and_asks_for_reconcile()
     {
         var h = NewHost();
