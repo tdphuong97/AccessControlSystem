@@ -39,7 +39,8 @@ public sealed partial class AppHost
     {
         try
         {
-            if (_closed || !AutoCheckOn) return;
+            lock (_gate) if (_closed || _restoring) return;
+            if (!AutoCheckOn) return;
             var info = await CheckFeed();
             if (info is null) return;
             var isNew = _foundUpdate?.Version != info.Version;

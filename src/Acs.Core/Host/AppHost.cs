@@ -43,6 +43,13 @@ public sealed partial class AppHost
     private bool _started, _closed, _stopped, _restoring;
     private int _inflight;
     private int _installing;
+    private bool _broken;
+    public static readonly TimeSpan DrainLimit = TimeSpan.FromSeconds(60);
+    public const string BusyMessage = "Còn việc đang chạy (lấy dữ liệu, so khớp hoặc cập nhật). Đợi xong rồi khôi phục lại.";
+    public const string BrokenMessage = "Dữ liệu đang lỗi, hãy khởi động lại phần mềm.";
+
+    /// <summary>Test hook: replaces reopening the database after a failed restore swap.</summary>
+    public Func<Database>? ReopenDb { get; set; }
 
     public const string RestoringMessage = "Đang khôi phục dữ liệu, đợi xong rồi thử lại.";
     public const string SlowNetworkMessage = "Mạng chậm hoặc mất kết nối. Hãy thử lại sau.";
@@ -157,7 +164,7 @@ public sealed partial class AppHost
         lock (_gate)
         {
             if (_closed) throw new HostException("Phần mềm đang đóng hoặc khởi động lại. Hãy đợi một chút.");
-            if (_restoring) throw new HostException(RestoringMessage);
+            if (_restoring) throw new HostException(_broken ? BrokenMessage : RestoringMessage);
             _inflight++;
         }
         try { return await Dispatch(cmd, args); }

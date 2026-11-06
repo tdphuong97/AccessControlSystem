@@ -54,6 +54,7 @@ public sealed partial class AppHost
     {
         try
         {
+            lock (_gate) if (_restoring || _closed) return;
             if (!Backup.HasPassword) return;
             var last = Backup.List().FirstOrDefault();
             if (last is null || _time.GetLocalNow().DateTime - last.At > BackupEvery) Backup.Create("hang-ngay");
@@ -103,10 +104,13 @@ public sealed partial class AppHost
         var done = false;
         try
         {
+            // Drain first: nothing is stopped or disposed until no other command is running (bounded).
+            var deadline = _time.GetUtcNow() + DrainLimit;
             while (true)
             {
                 lock (_gate) if (_inflight <= 1) break;   // this call is the one left
-                await Task.Delay(10);
+                if (_time.GetUtcNow() >= deadline) throw new HostException(BusyMessage);
+                await Task.Delay(10, _cts.Token);   // real-time poll; only the 60 s limit follows TimeProvider
             }
             var old = _g;
             var wasStarted = _started;
@@ -115,7 +119,14 @@ public sealed partial class AppHost
             try { old.Backup.Restore(file.Path, password, _dbFile); }
             catch
             {
-                var fresh = Build(OpenDb());
+                Graph fresh;
+                try { fresh = Build(ReopenDb is { } open ? open() : OpenDb()); }
+                catch
+                {
+                    lock (_gate) _broken = true;   // _g still points at the disposed graph: refuse everything
+                    done = true;                   // keep _restoring set
+                    throw new HostException(BrokenMessage);
+                }
                 _g = fresh;
                 if (wasStarted) fresh.Sync.Start();
                 throw;

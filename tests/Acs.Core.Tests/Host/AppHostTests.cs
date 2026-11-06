@@ -472,4 +472,63 @@ public sealed class AppHostTests : IAsyncDisposable
         Assert.Same(run, finished);
         Assert.Null(await run);
     }
+
+    private async Task<(AppHost H, string File, int Dev)> Prepared()
+    {
+        var h = NewHost();
+        var dev = await AddDevice(h);
+        await h.StartAsync();
+        await h.HandleAsync("backup.setPassword", J("""{"password":"mat-khau-sao-luu"}"""));
+        var file = Out(await h.HandleAsync("backup.now", J())).GetProperty("files")[0].GetProperty("name").GetString()!;
+        return (h, file, dev);
+    }
+
+    [Fact]
+    public async Task restore_gives_up_when_a_command_never_finishes_and_everything_keeps_working()
+    {
+        var (h, file, dev) = await Prepared();
+        await Create(h, "1001", "An");
+        _factory.For(dev).CaptureDelay = TimeSpan.FromHours(1);   // a command that never finishes (ends at StopAsync)
+        var stuck = h.HandleAsync("face.capture", J($$"""{"employeeNo":"1001","deviceId":{{dev}}}"""));
+        await Task.Delay(100);
+        var restore = h.HandleAsync("backup.restore", J($$"""{"name":"{{file}}","password":"mat-khau-sao-luu"}"""));
+        await Until(() => restore.IsCompleted, () => _time.Advance(TimeSpan.FromSeconds(5)));
+        var ex = await Assert.ThrowsAsync<HostException>(() => restore);
+        Assert.Equal(AppHost.BusyMessage, ex.Message);
+        Assert.False(h.RestartRequested);
+
+        Assert.Equal(1, Out(await h.HandleAsync("people.list", J())).GetArrayLength());   // commands accepted again
+        await Create(h, "1002", "Bình");
+        await Until(() => Out(h.HandleAsync("people.list", J()).Result)[1].GetProperty("sync").GetString() == "ok",
+            () => _time.Advance(TimeSpan.FromSeconds(1)));   // engine was never stopped
+        _factory.For(dev).CaptureDelay = TimeSpan.Zero;
+        await h.StopAsync();
+        await Task.WhenAny(stuck.ContinueWith(_ => { }), Task.Delay(2000));
+    }
+
+    [Fact]
+    public async Task failed_swap_recovers_on_the_old_database()
+    {
+        var (h, file, dev) = await Prepared();
+        Directory.CreateDirectory(Path.Combine(_folder, "acs.db.restore.tmp"));   // makes the restore write fail
+        await Assert.ThrowsAsync<Acs.Core.Backup.BackupException>(() =>
+            h.HandleAsync("backup.restore", J($$"""{"name":"{{file}}","password":"mat-khau-sao-luu"}""")));
+        Assert.False(h.RestartRequested);
+        await Create(h, "1001", "An");
+        await Until(() => Out(h.HandleAsync("people.list", J()).Result)[0].GetProperty("sync").GetString() == "ok",
+            () => _time.Advance(TimeSpan.FromSeconds(1)));   // new graph, engine restarted
+    }
+
+    [Fact]
+    public async Task failed_swap_that_cannot_reopen_refuses_every_command()
+    {
+        var (h, file, _) = await Prepared();
+        Directory.CreateDirectory(Path.Combine(_folder, "acs.db.restore.tmp"));
+        h.ReopenDb = () => throw new IOException("disk gone");
+        var ex = await Assert.ThrowsAsync<HostException>(() =>
+            h.HandleAsync("backup.restore", J($$"""{"name":"{{file}}","password":"mat-khau-sao-luu"}""")));
+        Assert.Equal(AppHost.BrokenMessage, ex.Message);
+        var next = await Assert.ThrowsAsync<HostException>(() => h.HandleAsync("people.list", J()));
+        Assert.Equal(AppHost.BrokenMessage, next.Message);
+    }
 }
