@@ -21,6 +21,12 @@
     unlock: '<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 7.5-2"/>',
     trash: '<path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l.8 12.5h9.4L17.5 7M10 11v5.5M14 11v5.5"/>',
     x: '<path d="M6 6l12 12M18 6L6 18"/>',
+    faceScan: '<path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M9 14.5c1.6 1.4 4.4 1.4 6 0"/><path d="M9.5 10h.01M14.5 10h.01"/>',
+    webcam: '<circle cx="12" cy="10" r="6"/><circle cx="12" cy="10" r="2"/><path d="M8 20.5h8M12 16v4.5"/>',
+    image: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M20.5 16l-5-5-9 8.5"/>',
+    scan: '<path d="M7 16.5a11 11 0 0 0 1-4.5 4 4 0 0 1 8 0v1"/><path d="M12 12v1.5a14 14 0 0 1-1.6 6"/><path d="M4.5 13.5a14 14 0 0 0 .5-2A7 7 0 0 1 17.8 7.6"/><path d="M19 10.5a7 7 0 0 1 .2 1.5c0 2.6-.4 4.8-1.1 6.8"/><path d="M15.6 16.5c-.2 1.2-.6 2.4-1 3.5"/>',
+    shield: '<path d="M12 3l7.5 3v5.5c0 4.5-3.2 8-7.5 9.5-4.3-1.5-7.5-5-7.5-9.5V6z"/><path d="M9 12l2 2 4-4"/>',
+    spinner: '<path d="M12 3a9 9 0 1 0 9 9"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
   };
   const LOGO = '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" style="flex-shrink:0"><rect width="24" height="24" rx="6" fill="#1D5FD1"/><path d="M7 9.5V8a1 1 0 0 1 1-1h1.5M14.5 7H16a1 1 0 0 1 1 1v1.5M17 14.5V16a1 1 0 0 1-1 1h-1.5M9.5 17H8a1 1 0 0 1-1-1v-1.5" fill="none" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round"/><circle cx="10.3" cy="10.8" r="0.9" fill="#FFFFFF"/><circle cx="13.7" cy="10.8" r="0.9" fill="#FFFFFF"/><path d="M10 13.6c1.1.9 2.9.9 4 0" fill="none" stroke="#FFFFFF" stroke-width="1.4" stroke-linecap="round"/></svg>';

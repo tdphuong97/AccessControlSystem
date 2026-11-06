@@ -73,6 +73,7 @@
     if (!p) throw new Error('Không tìm thấy người này. Hãy quay lại danh sách và thử lại.');
     return p;
   };
+  const lowSeen = {};
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
   let settings = { autoCheckUpdates: true, startWithWindows: false };
@@ -95,7 +96,7 @@
     'people.create': (a) => {
       if (!a.fullName || !a.fullName.trim()) throw new Error('Hãy nhập họ tên rồi bấm Tiếp tục.');
       if (people.some((p) => p.employeeNo === String(a.employeeNo))) throw new Error('Mã nhân viên này đã có. Hãy chọn mã khác.');
-      const p = { employeeNo: String(a.employeeNo), fullName: a.fullName.trim(), groupName: a.groupName || null, hasFace: false, fingers: [], wait: [],
+      const p = { employeeNo: String(a.employeeNo), fullName: a.fullName.trim(), groupName: a.groupName || null, hasFace: false, fingers: [], wait: devices.filter((d) => !d.online).map((d) => d.name),
         created: 0, validFrom: day(0), validTo: a.validTo || null, locked: false };
       people.unshift(p);
       return detail(p);
@@ -109,17 +110,44 @@
     'people.lock': (a) => { const p = need(a); p.locked = true; return detail(p); },
     'people.unlock': (a) => { const p = need(a); p.locked = false; return detail(p); },
     'people.delete': (a) => { people.splice(people.indexOf(need(a)), 1); return null; },
-    'face.capture': async (a) => { const p = need(a); await wait(600); p.hasFace = true; return { imageDataUrl: portrait, devices: deviceSync(p) }; },
+    'face.capture': async (a) => {
+      const p = need(a);
+      await wait(1500);
+      const d = devices.find((x) => x.id === a.deviceId);
+      if (d && !d.online) throw new Error(d.name + ' đang mất kết nối nên chưa chụp được. Hãy chọn máy khác hoặc kiểm tra dây mạng và nguồn của máy.');
+      p.hasFace = true; return { imageDataUrl: portrait, devices: deviceSync(p) }; },
     'face.save': (a) => { const p = need(a); p.hasFace = true; return { imageDataUrl: a.imageDataUrl, devices: deviceSync(p) }; },
     'finger.capture': async (a) => {
       const p = need(a);
-      await wait(800);
+      await wait(1500);
+      const d = devices.find((x) => x.id === a.deviceId);
+      if (d && !d.online) throw new Error(d.name + ' đang mất kết nối nên chưa quét được. Hãy chọn máy khác hoặc kiểm tra dây mạng và nguồn của máy.');
+      // Little fingers fail once with a low-quality scan, like a dry or scratched finger would.
+      if ((a.fingerId === 5 || a.fingerId === 10) && !lowSeen[a.fingerId]) {
+        lowSeen[a.fingerId] = true;
+        throw new Error('Vân tay quét chưa rõ (chất lượng 31/100, cần từ 40). Hãy lau khô ngón tay, đặt chắc lên đầu đọc rồi bấm quét lại.');
+      }
       p.fingers = p.fingers.filter((f) => f[0] !== a.fingerId).concat([[a.fingerId, 82]]);
       return { fingerId: a.fingerId, label: F().fingerLabel(a.fingerId), quality: 82, devices: deviceSync(p) };
     },
     'finger.delete': (a) => { const p = need(a); p.fingers = p.fingers.filter((f) => f[0] !== a.fingerId); return detail(p); },
     'sync.person': (a) => deviceSync(need(a)),
-    'sync.retry': () => null,
+    'sync.retry': (a) => {
+      // The offline device comes back: waiting people turn green a moment later, announced by person.changed.
+      const targets = devices.filter((d) => a.deviceId == null || d.id === a.deviceId);
+      setTimeout(() => {
+        targets.forEach((d) => { d.online = true; d.authPaused = false; d.pending = 0; d.message = null; });
+        const names = targets.map((d) => d.name);
+        people.forEach((p) => {
+          if (p.wait.some((n) => names.includes(n))) {
+            p.wait = p.wait.filter((n) => !names.includes(n));
+            ACS.bridge.emit('person.changed', { employeeNo: p.employeeNo });
+          }
+        });
+        ACS.bridge.emit('devices.changed', JSON.parse(JSON.stringify(devices)));
+      }, 1200);
+      return null;
+    },
     'devices.list': () => devices,
     'devices.save': (a) => {
       const d = devices.find((x) => x.id === a.id);
