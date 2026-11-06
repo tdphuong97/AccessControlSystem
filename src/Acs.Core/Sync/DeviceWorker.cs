@@ -17,6 +17,9 @@ internal sealed class DeviceWorker
         public string? Detail { get; } = detail;
     }
 
+    /// <summary>What to log instead of the job kind when a job finished differently from its name.</summary>
+    private sealed record Note(string Action, string Message);
+
     private readonly int _id;
     private readonly Database _db;
     private readonly IHikDeviceFactory _factory;
@@ -182,12 +185,12 @@ internal sealed class DeviceWorker
         string action = job.Kind.ToString();
         try
         {
-            await ExecuteAsync(dev, job, Client(dev), ct);
+            var note = await ExecuteAsync(dev, job, Client(dev), ct);
             _db.Tx(() =>
             {
                 _db.Jobs.MarkDone(job.Id, Now);
                 _db.Devices.SetSeen(_id, null, Now);
-                _db.Log.Add(job.EmployeeNo, _id, action, true);
+                _db.Log.Add(job.EmployeeNo, _id, note?.Action ?? action, true, note?.Message);
                 return 0;
             });
             _nextPing = Now + JobRules.PingEvery;
@@ -277,14 +280,14 @@ internal sealed class DeviceWorker
         _db.Jobs.SetState(change(State(no)) with { VerifiedAt = Now });
     }
 
-    private async Task ExecuteAsync(DeviceRecord dev, JobRecord job, IHikDevice hik, CancellationToken ct)
+    private async Task<Note?> ExecuteAsync(DeviceRecord dev, JobRecord job, IHikDevice hik, CancellationToken ct)
     {
         var no = job.EmployeeNo;
         switch (job.Kind)
         {
             case JobKind.UpsertUser:
             {
-                if (_db.People.Get(no) is not { } p) return;
+                if (_db.People.Get(no) is not { } p) return null;
                 var enabled = p.Status == PersonStatus.Active;
                 await WriteUserAsync(hik, p, dev.DoorNo, enabled, ct);
                 Save(no, s => s with { UserPresent = true, UserEnabled = enabled });
@@ -292,20 +295,26 @@ internal sealed class DeviceWorker
             }
             case JobKind.DisableUser:
             {
-                if (_db.People.Get(no) is not { } p) return;
-                if (await hik.FindUserAsync(no, ct) is null) { Save(no, s => s with { UserPresent = false, UserEnabled = false }); return; }
+                if (_db.People.Get(no) is not { } p) return null;
+                if (await hik.FindUserAsync(no, ct) is null) { Save(no, s => s with { UserPresent = false, UserEnabled = false }); return null; }
                 await WriteUserAsync(hik, p, dev.DoorNo, false, ct);
                 Save(no, s => s with { UserPresent = true, UserEnabled = false });
                 break;
             }
             case JobKind.DeleteUser:
+            {
+                // A locked person still in the app (the Lock rule): check the device itself before deleting. Explicit
+                // deletes (people.delete, stranger "Gỡ khỏi máy") have no app person and are not affected.
+                if (_db.People.Get(no) is { Status: PersonStatus.Locked } locked && await KeepLockedAsync(dev, hik, locked, ct) is { } kept)
+                    return kept;
                 await hik.DeleteUserAsync(no, ct);
                 await VerifyAsync(async () => await hik.FindUserAsync(no, ct) is null, ct);
-                Save(no, s => s with { UserPresent = false, UserEnabled = false, FacePresent = false, Fingers = new HashSet<int>() });
+                Save(no, s => s with { UserPresent = false, UserEnabled = false, FacePresent = false, Fingers = new HashSet<int>(), FingersKnown = true });
                 break;
+            }
             case JobKind.SetFace:
             {
-                if (_db.Biometrics.GetFace(no) is not { } face || _db.People.Get(no) is null) return;
+                if (_db.Biometrics.GetFace(no) is not { } face || _db.People.Get(no) is null) return null;
                 await hik.SetFaceAsync(no, face.Jpeg, ct);
                 await VerifyAsync(() => hik.HasFaceAsync(no, ct), ct);
                 Save(no, s => s with { FacePresent = true });
@@ -320,11 +329,43 @@ internal sealed class DeviceWorker
                 await SetFingerAsync(dev, job, hik, ct);
                 break;
             case JobKind.DeleteFinger:
+            {
                 await hik.DeleteFingerprintAsync(no, job.FingerId, ct);
-                await VerifyAsync(async () => (await hik.ReadFingerprintsAsync(no, ct)).All(f => f.FingerId != job.FingerId), ct);
-                Save(no, s => s with { Fingers = Without(s.Fingers, job.FingerId), NeedsScan = Without(s.NeedsScan, job.FingerId) });
+                IReadOnlyList<HikFinger> seen = [];
+                await VerifyAsync(async () => (seen = await hik.ReadFingerprintsAsync(no, ct)).All(f => f.FingerId != job.FingerId), ct);
+                // The read-back is the device's complete list for this person.
+                Save(no, s => s with { Fingers = seen.Select(f => f.FingerId).ToHashSet(), FingersKnown = true, NeedsScan = Without(s.NeedsScan, job.FingerId) });
                 break;
+            }
         }
+        return null;
+    }
+
+    /// <summary>
+    /// Lock rule on the device: when it holds a face the app has no copy of, or a finger the app has no template for
+    /// in THIS device's sensor group, the person is only disabled (null = safe to delete). Spec 5.7: never lose the
+    /// only copy of a person's biometrics.
+    /// </summary>
+    private async Task<Note?> KeepLockedAsync(DeviceRecord dev, IHikDevice hik, PersonRecord p, CancellationToken ct)
+    {
+        var no = p.EmployeeNo;
+        var u = await hik.FindUserAsync(no, ct);
+        if (u is null) return null;   // already gone: the delete below is verified as usual
+        var own = _db.Biometrics.FingerGroups(no).Where(f => f.FpGroup == dev.FpGroup).Select(f => f.FingerId).ToHashSet();
+        IReadOnlyList<int>? onDevice = null;
+        try { onDevice = (await hik.ReadFingerprintsAsync(no, ct)).Select(f => f.FingerId).ToList(); }
+        catch (Exception e) when (e is HikRejectedException or HikNotSupportedException) { /* unknown: judge by the count */ }
+        var deviceOnly = (u.FaceCount > 0 && !_db.Biometrics.HasFace(no))
+            || u.FingerCount > own.Count
+            || (onDevice is not null && onDevice.Any(f => !own.Contains(f)));
+        if (!deviceOnly) return null;
+        if (u.Enabled) await WriteUserAsync(hik, p, dev.DoorNo, false, ct);
+        Save(no, s => s with
+        {
+            UserPresent = true, UserEnabled = false, FacePresent = u.FaceCount > 0,
+            Fingers = onDevice?.ToHashSet() ?? s.Fingers, FingersKnown = onDevice is not null,
+        });
+        return new Note(nameof(JobKind.DisableUser), JobRules.KeptOnDeviceMessage);
     }
 
     private async Task WriteUserAsync(IHikDevice hik, PersonRecord p, int doorNo, bool enabled, CancellationToken ct)
@@ -341,6 +382,7 @@ internal sealed class DeviceWorker
         if (_db.People.Get(no) is null) return;
         var rows = _db.Biometrics.GetFingers(no).Where(f => f.FingerId == job.FingerId).ToList();
         if (rows.Count == 0) return;
+        IReadOnlyList<HikFinger> seen = [];
 
         FingerRecord? copyFrom = null;
         var own = rows.FirstOrDefault(f => f.FpGroup == dev.FpGroup);
@@ -368,9 +410,10 @@ internal sealed class DeviceWorker
             }
             copyFrom = used;
         }
-        await VerifyAsync(async () => (await hik.ReadFingerprintsAsync(no, ct)).Any(f => f.FingerId == job.FingerId), ct);
+        await VerifyAsync(async () => (seen = await hik.ReadFingerprintsAsync(no, ct)).Any(f => f.FingerId == job.FingerId), ct);
         if (copyFrom is not null) _db.Biometrics.SetFinger(copyFrom with { FpGroup = dev.FpGroup });   // only once the device confirmed it
-        Save(no, s => s with { Fingers = With(s.Fingers, job.FingerId), NeedsScan = Without(s.NeedsScan, job.FingerId) });
+        // The read-back is the device's complete list for this person (device-only fingers included).
+        Save(no, s => s with { Fingers = seen.Select(f => f.FingerId).ToHashSet(), FingersKnown = true, NeedsScan = Without(s.NeedsScan, job.FingerId) });
     }
 
     private static IReadOnlySet<int> With(IReadOnlySet<int> s, int id) => new HashSet<int>(s) { id };

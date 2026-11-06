@@ -302,6 +302,81 @@ public sealed class SyncEngineTests : IAsyncDisposable
         Assert.Empty(s.Fingers);
     }
 
+    private async Task<FakeDevice> LockedOnDevice(int d, bool deviceFace, params int[] deviceFingers)
+    {
+        _h.AddPerson(status: PersonStatus.Locked);
+        var fake = _h.Factory.For(d);
+        await fake.UpsertUserAsync(new HikUserWrite("1001", "Nguyễn An", "2026-01-01T00:00:00", JobRules.NoEndDate, true, 1), default);
+        if (deviceFace) await fake.SetFaceAsync("1001", [0xFF, 0xD8, 0xFF, 0xD9], default);
+        foreach (var f in deviceFingers) await fake.SetFingerprintAsync("1001", f, SyncHarness.Tpl("ModelA", "D" + f), 1, default);
+        return fake;
+    }
+
+    [Fact]
+    public async Task DeleteUser_of_locked_person_only_disables_when_the_device_has_a_face_the_app_lacks()
+    {
+        var d = _h.AddDevice();
+        var fake = await LockedOnDevice(d, deviceFace: true);
+        _h.Enqueue(d, "1001", JobKind.DeleteUser);
+        _h.Engine.Start();
+        await _h.Until(() => _h.Db.Jobs.ListOpen(d).Count == 0, TimeSpan.FromSeconds(1));
+        var u = await fake.FindUserAsync("1001", default);
+        Assert.NotNull(u);
+        Assert.False(u.Enabled);
+        Assert.True(await fake.HasFaceAsync("1001", default));   // the only copy of the face is still there
+        Assert.DoesNotContain(nameof(IHikDevice.DeleteUserAsync), fake.Calls);
+        var s = _h.Db.Jobs.GetState("1001", d)!;
+        Assert.True(s.UserPresent && !s.UserEnabled && s.FacePresent);
+        Assert.Contains(_h.Db.Log.List("1001", d, 10), l => l.Ok && l.Message == JobRules.KeptOnDeviceMessage);
+    }
+
+    [Fact]
+    public async Task DeleteUser_of_locked_person_only_disables_when_a_finger_has_no_template_for_this_sensor()
+    {
+        var d = _h.AddDevice("Máy tầng 1", "ModelA");
+        var fake = await LockedOnDevice(d, false, 1, 2);
+        _h.AddFinger("1001", 1, "ModelA");
+        _h.AddFinger("1001", 2, "ModelB");   // another sensor's template: this device may refuse it later
+        _h.Enqueue(d, "1001", JobKind.DeleteUser);
+        _h.Engine.Start();
+        await _h.Until(() => _h.Db.Jobs.ListOpen(d).Count == 0, TimeSpan.FromSeconds(1));
+        Assert.Equal(2, (await fake.ReadFingerprintsAsync("1001", default)).Count);
+        Assert.False((await fake.FindUserAsync("1001", default))!.Enabled);
+        Assert.Equal(new HashSet<int> { 1, 2 }, _h.Db.Jobs.GetState("1001", d)!.Fingers);
+    }
+
+    [Fact]
+    public async Task DeleteUser_of_locked_person_with_a_full_copy_removes_the_user()
+    {
+        var d = _h.AddDevice("Máy tầng 1", "ModelA");
+        var fake = await LockedOnDevice(d, true, 3);
+        _h.AddFace();
+        _h.AddFinger("1001", 3, "ModelA");
+        _h.Enqueue(d, "1001", JobKind.DeleteUser);
+        _h.Engine.Start();
+        await _h.Until(() => _h.Db.Jobs.ListOpen(d).Count == 0, TimeSpan.FromSeconds(1));
+        Assert.Null(await fake.FindUserAsync("1001", default));
+        var s = _h.Db.Jobs.GetState("1001", d)!;
+        Assert.False(s.UserPresent);
+        Assert.True(s.FingersKnown);
+    }
+
+    [Fact]
+    public async Task DeleteUser_of_locked_person_with_unreadable_fingers_only_disables()
+    {
+        var fake = new FakeDevice();
+        await using var h = new SyncHarness(new SingleDeviceFactory(new UnreadableFingersDevice(fake, "1001")));
+        var d = h.AddDevice("Máy tầng 1", "ModelA");
+        h.AddPerson(status: PersonStatus.Locked);
+        await fake.UpsertUserAsync(new HikUserWrite("1001", "Nguyễn An", "2026-01-01T00:00:00", JobRules.NoEndDate, true, 1), default);
+        await fake.SetFingerprintAsync("1001", 4, SyncHarness.Tpl("ModelA"), 1, default);
+        h.Enqueue(d, "1001", JobKind.DeleteUser);
+        h.Engine.Start();
+        await h.Until(() => h.Db.Jobs.ListOpen(d).Count == 0, TimeSpan.FromSeconds(1));
+        Assert.NotNull(await fake.FindUserAsync("1001", default));
+        Assert.False(h.Db.Jobs.GetState("1001", d)!.FingersKnown);
+    }
+
     [Fact]
     public async Task Delete_face_and_finger_verify_absence()
     {

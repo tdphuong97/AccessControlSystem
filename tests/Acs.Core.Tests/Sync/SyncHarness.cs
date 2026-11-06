@@ -88,6 +88,36 @@ public sealed class StrictGroupDevice(FakeDevice inner, string group) : IHikDevi
     }
 }
 
+/// <summary>Passes every call to the inner device; test-local wrappers override only the calls they script.</summary>
+public class ForwardingDevice(IHikDevice inner) : IHikDevice
+{
+    public virtual Task<DeviceInfo> GetDeviceInfoAsync(CancellationToken ct) => inner.GetDeviceInfoAsync(ct);
+    public virtual Task<DeviceCapabilities> GetCapabilitiesAsync(CancellationToken ct) => inner.GetCapabilitiesAsync(ct);
+    public virtual IAsyncEnumerable<HikUser> ListUsersAsync(CancellationToken ct) => inner.ListUsersAsync(ct);
+    public virtual Task<HikUser?> FindUserAsync(string employeeNo, CancellationToken ct) => inner.FindUserAsync(employeeNo, ct);
+    public virtual Task UpsertUserAsync(HikUserWrite user, CancellationToken ct) => inner.UpsertUserAsync(user, ct);
+    public virtual Task DeleteUserAsync(string employeeNo, CancellationToken ct) => inner.DeleteUserAsync(employeeNo, ct);
+    public virtual Task<byte[]> CaptureFaceAsync(CancellationToken ct) => inner.CaptureFaceAsync(ct);
+    public virtual Task SetFaceAsync(string employeeNo, byte[] jpeg, CancellationToken ct) => inner.SetFaceAsync(employeeNo, jpeg, ct);
+    public virtual Task<bool> HasFaceAsync(string employeeNo, CancellationToken ct) => inner.HasFaceAsync(employeeNo, ct);
+    public virtual Task<byte[]?> DownloadFaceAsync(string employeeNo, CancellationToken ct) => inner.DownloadFaceAsync(employeeNo, ct);
+    public virtual Task DeleteFaceAsync(string employeeNo, CancellationToken ct) => inner.DeleteFaceAsync(employeeNo, ct);
+    public virtual Task<CapturedFinger> CaptureFingerprintAsync(int fingerId, CancellationToken ct) => inner.CaptureFingerprintAsync(fingerId, ct);
+    public virtual Task SetFingerprintAsync(string employeeNo, int fingerId, string templateBase64, int readerNo, CancellationToken ct) =>
+        inner.SetFingerprintAsync(employeeNo, fingerId, templateBase64, readerNo, ct);
+    public virtual Task<IReadOnlyList<HikFinger>> ReadFingerprintsAsync(string employeeNo, CancellationToken ct) => inner.ReadFingerprintsAsync(employeeNo, ct);
+    public virtual Task DeleteFingerprintAsync(string employeeNo, int fingerId, CancellationToken ct) => inner.DeleteFingerprintAsync(employeeNo, fingerId, ct);
+}
+
+/// <summary>A device whose finger list cannot be read for the given people (non-JSON answer).</summary>
+public sealed class UnreadableFingersDevice(IHikDevice inner, params string[] employeeNos) : ForwardingDevice(inner)
+{
+    public override Task<IReadOnlyList<HikFinger>> ReadFingerprintsAsync(string employeeNo, CancellationToken ct) =>
+        employeeNos.Contains(employeeNo)
+            ? throw new HikRejectedException("fpListUnreadable", HikClient.FpUnreadableMessage, "<html>")
+            : base.ReadFingerprintsAsync(employeeNo, ct);
+}
+
 public sealed class SingleDeviceFactory(IHikDevice device) : IHikDeviceFactory
 {
     public IHikDevice Create(DeviceRecord d) => device;

@@ -15,4 +15,9 @@ public sealed record FingerRecord(string EmployeeNo, int FingerId, string FpGrou
 public sealed record JobRecord(long Id, int DeviceId, string EmployeeNo, JobKind Kind, int FingerId, JobStatus Status,
     int Attempts, DateTime NextAt, string? ErrorKind, string? ErrorMessage, string? ErrorDetail);
 public sealed record DeviceStateRecord(string EmployeeNo, int DeviceId, bool UserPresent, bool UserEnabled,
-    bool FacePresent, IReadOnlySet<int> Fingers, IReadOnlySet<int> NeedsScan, DateTime? VerifiedAt);
+    bool FacePresent, IReadOnlySet<int> Fingers, IReadOnlySet<int> NeedsScan, DateTime? VerifiedAt)
+{
+    /// <summary>False when the device's finger list could not be read: <see cref="Fingers"/> then holds only the
+    /// fingers confirmed present, not the complete list, so nothing may be deleted on the strength of it.</summary>
+    public bool FingersKnown { get; init; } = true;
+}

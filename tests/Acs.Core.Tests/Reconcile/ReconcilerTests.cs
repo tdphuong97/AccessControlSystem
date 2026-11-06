@@ -213,6 +213,32 @@ public sealed class ReconcilerTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Unreadable_finger_list_is_unknown_not_empty_and_the_plan_goes_on()
+    {
+        var dev = new FakeDevice();
+        var factory = new SingleDeviceFactory(new UnreadableFingersDevice(dev, "1001"));
+        await using var h = new SyncHarness(factory);
+        var d = h.AddDevice("Máy tầng trệt", "ModelA");
+        var rec = new Reconciler(h.Db, factory, h.Engine, new DeviceImporter(h.Db, factory, h.Time), h.Time);
+        h.AddPerson("1001", "An", PersonStatus.Locked);
+        h.AddPerson("1002", "Bình");
+        await dev.UpsertUserAsync(W("1001", "An"), Ct);
+        await dev.SetFingerprintAsync("1001", 2, SyncHarness.Tpl("ModelA"), 1, Ct);
+        await dev.UpsertUserAsync(W("1002", "Bình"), Ct);
+
+        var plan = await rec.BuildAsync(null, Ct);   // one unreadable person does not abort the plan
+        var st = h.Db.Jobs.GetState("1001", d)!;
+        Assert.False(st.FingersKnown);
+        Assert.Empty(st.Fingers);
+        Assert.True(h.Db.Jobs.GetState("1002", d)!.FingersKnown);
+        Assert.Contains(plan.Devices.Single().Items, i => i.EmployeeNo == "1001" && i.Kind == DiffKind.LockedButEnabled);
+
+        await rec.ApplyAsync(plan, new Dictionary<string, StrangerChoice>(), Ct);   // the Lock rule cannot prove a full copy
+        Assert.Contains(h.Db.Jobs.ListOpen(d), j => j.EmployeeNo == "1001" && j.Kind == JobKind.DisableUser);
+        Assert.DoesNotContain(h.Db.Jobs.ListOpen(d), j => j.EmployeeNo == "1001" && j.Kind == JobKind.DeleteUser);
+    }
+
+    [Fact]
     public async Task Known_state_with_matching_count_is_not_read_again()
     {
         _h.AddPerson("1001", "An");

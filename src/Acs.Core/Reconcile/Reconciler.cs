@@ -92,24 +92,35 @@ public sealed class Reconciler(Database db, IHikDeviceFactory factory, SyncEngin
             else if (du.Enabled)
                 items.Add(new DiffItem(p.EmployeeNo, p.FullName, DiffKind.LockedButEnabled, []));
 
-            // Fingers are read when the counts differ or nothing was ever confirmed for this device (no state row);
-            // otherwise keep what was stored before.
+            // Fingers are read when the counts differ or the complete list was never confirmed for this device (no
+            // state row, or an earlier read failed); otherwise keep what was stored before.
             IReadOnlySet<int> fingers = prev?.Fingers ?? new HashSet<int>();
             IReadOnlySet<int> needScan = prev?.NeedsScan ?? new HashSet<int>();
-            if (prev is null || du.FingerCount != appFingers.Count)
+            var known = prev?.FingersKnown ?? false;
+            if (prev is null || !prev.FingersKnown || du.FingerCount != appFingers.Count)
             {
-                var devIds = (await hik.ReadFingerprintsAsync(p.EmployeeNo, ct)).Select(f => f.FingerId).ToHashSet();
-                if (p.Status == PersonStatus.Active)
+                HashSet<int>? devIds = null;
+                try { devIds = (await hik.ReadFingerprintsAsync(p.EmployeeNo, ct)).Select(f => f.FingerId).ToHashSet(); }
+                catch (Exception e) when (e is HikRejectedException or HikNotSupportedException)
                 {
-                    var missing = appFingers.Where(f => !devIds.Contains(f) && !needScan.Contains(f)).ToList();
-                    var extra = devIds.Where(f => !appFingers.Contains(f)).OrderBy(x => x).ToList();
-                    if (missing.Count > 0) items.Add(new DiffItem(p.EmployeeNo, p.FullName, DiffKind.MissingFingers, missing));
-                    if (extra.Count > 0) items.Add(new DiffItem(p.EmployeeNo, p.FullName, DiffKind.ExtraFingers, extra));
+                    // This person's list is unreadable: keep it unknown (never "no fingers") and carry on with the plan.
+                    known = false;
                 }
-                fingers = devIds;
-                needScan = needScan.Where(n => !devIds.Contains(n)).ToHashSet();
+                if (devIds is not null)
+                {
+                    if (p.Status == PersonStatus.Active)
+                    {
+                        var missing = appFingers.Where(f => !devIds.Contains(f) && !needScan.Contains(f)).ToList();
+                        var extra = devIds.Where(f => !appFingers.Contains(f)).OrderBy(x => x).ToList();
+                        if (missing.Count > 0) items.Add(new DiffItem(p.EmployeeNo, p.FullName, DiffKind.MissingFingers, missing));
+                        if (extra.Count > 0) items.Add(new DiffItem(p.EmployeeNo, p.FullName, DiffKind.ExtraFingers, extra));
+                    }
+                    fingers = devIds;
+                    known = true;
+                    needScan = needScan.Where(n => !devIds.Contains(n)).ToHashSet();
+                }
             }
-            states.Add(new DeviceStateRecord(p.EmployeeNo, dev.Id, true, du.Enabled, du.FaceCount > 0, fingers, needScan, Now));
+            states.Add(new DeviceStateRecord(p.EmployeeNo, dev.Id, true, du.Enabled, du.FaceCount > 0, fingers, needScan, Now) { FingersKnown = known });
         }
         db.Tx(() => { foreach (var s in states) db.Jobs.SetState(s); return 0; });
         return new DeviceDiff(dev.Id, dev.Name, items, strangers);

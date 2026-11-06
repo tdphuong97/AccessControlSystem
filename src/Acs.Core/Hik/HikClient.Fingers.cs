@@ -13,6 +13,7 @@ public sealed partial class HikClient
     private const int FpMaxPages = 20;
     private const string FpCaptureFailedMessage = "Máy chưa quét được vân tay. Đặt ngón tay lên cảm biến, giữ yên rồi bấm lại.";
     private const string FpUnconfirmedMessage = "Máy chưa xác nhận đã lưu vân tay. Bấm Thử lại; nếu vẫn không được, kiểm tra máy rồi gửi lại.";
+    public const string FpUnreadableMessage = "Máy trả về danh sách vân tay không đọc được. Bấm Thử lại; nếu vẫn lỗi, xem Chi tiết và báo lại cho người làm phần mềm.";
 
     /// <summary>Wait between FingerPrintProgress / DeleteProcess polls. Tests set it small.</summary>
     public TimeSpan PollInterval { get; set; } = TimeSpan.FromMilliseconds(500);
@@ -218,7 +219,8 @@ public sealed partial class HikClient
                 : new { searchID = "acs", searchResultPosition = pos, maxResults = FpPageSize, employeeNo };
             var text = await SendAsync(HttpMethod.Post, $"{FpBase}/FingerPrintUpload?format=json", JsonBody(payload), null, ct);
             using var doc = TryParseJson(text);
-            if (doc is null) break;
+            // Not JSON: the list is unknown, which must never read as "this person has no fingers".
+            if (doc is null) throw new HikRejectedException("fpListUnreadable", FpUnreadableMessage, HikErrorMap.Trim(text));
             var root = doc.RootElement;
             var info = root.TryGetProperty("FingerPrintInfo", out var fi) && fi.ValueKind == JsonValueKind.Object ? fi : root;
             var status = Pick(info, "status", "responseStatusStrg");

@@ -115,8 +115,16 @@ public sealed class JobStore
 
     private const string StateCols = "employee_no, device_id, user_present, user_enabled, face_present, fingers, needs_scan, verified_at";
 
-    private static DeviceStateRecord MapState(SqliteDataReader r) => new(r.GetString(0), r.GetInt32(1), r.GetInt32(2) != 0,
-        r.GetInt32(3) != 0, r.GetInt32(4) != 0, ParseSet(r.GetString(5)), ParseSet(r.GetString(6)), Database.NTs(r, "verified_at"));
+    // fingers column: "1,2" = the complete list; a leading "?" ("?" or "?1,2") = list unknown, those ids confirmed present.
+    private const char UnknownMark = '?';
+
+    private static DeviceStateRecord MapState(SqliteDataReader r)
+    {
+        var fingers = r.GetString(5);
+        var known = !fingers.StartsWith(UnknownMark);
+        return new DeviceStateRecord(r.GetString(0), r.GetInt32(1), r.GetInt32(2) != 0, r.GetInt32(3) != 0, r.GetInt32(4) != 0,
+            ParseSet(known ? fingers : fingers[1..]), ParseSet(r.GetString(6)), Database.NTs(r, "verified_at")) { FingersKnown = known };
+    }
 
     public DeviceStateRecord? GetState(string employeeNo, int deviceId) => _db.QueryOne(
         $"SELECT {StateCols} FROM device_state WHERE employee_no=$e AND device_id=$d", MapState,
@@ -133,7 +141,7 @@ public sealed class JobStore
         "INSERT INTO device_state(employee_no, device_id, user_present, user_enabled, face_present, fingers, needs_scan, verified_at) VALUES($e,$d,$up,$ue,$fp,$f,$n,$v) " +
         "ON CONFLICT(employee_no, device_id) DO UPDATE SET user_present=$up, user_enabled=$ue, face_present=$fp, fingers=$f, needs_scan=$n, verified_at=$v",
         ("$e", s.EmployeeNo), ("$d", s.DeviceId), ("$up", s.UserPresent ? 1 : 0), ("$ue", s.UserEnabled ? 1 : 0),
-        ("$fp", s.FacePresent ? 1 : 0), ("$f", FormatSet(s.Fingers)), ("$n", FormatSet(s.NeedsScan)),
+        ("$fp", s.FacePresent ? 1 : 0), ("$f", (s.FingersKnown ? "" : UnknownMark.ToString()) + FormatSet(s.Fingers)), ("$n", FormatSet(s.NeedsScan)),
         ("$v", s.VerifiedAt is { } v ? Database.Ts(v) : null));
 
     public void DeleteState(string employeeNo, int deviceId) =>

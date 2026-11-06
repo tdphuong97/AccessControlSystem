@@ -133,6 +133,31 @@ public sealed class EnrollServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public void Lock_disables_when_the_only_template_is_for_another_sensor_group()
+    {
+        _svc.CreatePerson(new NewPerson("An", "2001", null, null));
+        _h.AddFinger("2001", 1, "ModelB");   // d1 is ModelA: its sensor may refuse this template
+        Settle("2001", _d1, false, 1);
+        Settle("2001", _d2, false, 1);
+        _svc.Lock("2001");
+        Assert.Contains(Jobs(_d1), j => j.Kind == JobKind.DisableUser);
+        Assert.DoesNotContain(Jobs(_d1), j => j.Kind == JobKind.DeleteUser);
+        Assert.Contains(Jobs(_d2), j => j.Kind == JobKind.DeleteUser);   // own group (ModelB) copy exists
+    }
+
+    [Fact]
+    public void Lock_disables_when_the_device_finger_list_is_unknown()
+    {
+        _svc.CreatePerson(new NewPerson("An", "2001", null, null));
+        Settle("2001", _d1, false);
+        _h.Db.Jobs.SetState(_h.Db.Jobs.GetState("2001", _d1)! with { FingersKnown = false });
+        Assert.False(_h.Db.Jobs.GetState("2001", _d1)!.FingersKnown);   // stored, not just in memory
+        _svc.Lock("2001");
+        Assert.Contains(Jobs(_d1), j => j.Kind == JobKind.DisableUser);
+        Assert.DoesNotContain(Jobs(_d1), j => j.Kind == JobKind.DeleteUser);
+    }
+
+    [Fact]
     public void Lock_disables_when_device_face_not_in_app()
     {
         _svc.CreatePerson(new NewPerson("An", "2001", null, null));

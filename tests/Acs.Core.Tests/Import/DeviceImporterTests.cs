@@ -108,6 +108,20 @@ public sealed class DeviceImporterTests : IAsyncDisposable
         Assert.Equal(new ImportSummary(2, 0, 2, 0), s);
     }
 
+    [Fact]
+    public async Task Unreadable_fingers_are_recorded_as_unknown_not_as_none()
+    {
+        await Seed("1001", "An", true, true, 1, 2);
+        var imp = new DeviceImporter(_h.Db, new SingleDeviceFactory(new UnreadableFingersDevice(_dev, "1001")), _h.Time);
+        var s = await imp.ImportAllAsync(_d1, null, Ct);
+        Assert.Equal(1, s.People);
+        Assert.Equal(0, s.Fingers);
+        Assert.Empty(_h.Db.Biometrics.GetFingers("1001"));
+        var st = _h.Db.Jobs.GetState("1001", _d1)!;
+        Assert.False(st.FingersKnown);
+        Assert.Empty(st.Fingers);
+    }
+
     private sealed class Collect(List<ImportProgress> l) : IProgress<ImportProgress>
     {
         public void Report(ImportProgress v) => l.Add(v);

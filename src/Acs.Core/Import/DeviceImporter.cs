@@ -62,7 +62,16 @@ public sealed class DeviceImporter(Database db, IHikDeviceFactory factory, TimeP
             if (bytes is not null && bytes.Length <= EnrollService.MaxFaceBytes && bytes.AsSpan().StartsWith(JpegMagic)) face = bytes;
             else faceMissing = true;
         }
-        IReadOnlyList<HikFinger> devFingers = u.FingerCount > 0 ? await hik.ReadFingerprintsAsync(no, ct) : [];
+        IReadOnlyList<HikFinger> devFingers = [];
+        var fingersKnown = true;
+        if (u.FingerCount > 0)
+        {
+            try { devFingers = await hik.ReadFingerprintsAsync(no, ct); }
+            catch (Exception e) when (e is HikRejectedException or HikNotSupportedException)
+            {
+                fingersKnown = false;   // unknown, never "no fingers": the Lock rule must not delete on the strength of it
+            }
+        }
 
         var now = time.GetUtcNow().UtcDateTime;
         return db.Tx(() =>
@@ -93,7 +102,7 @@ public sealed class DeviceImporter(Database db, IHikDeviceFactory factory, TimeP
             var prev = db.Jobs.GetState(no, dev.Id);
             var ids = devFingers.Select(f => f.FingerId).ToHashSet();
             db.Jobs.SetState(new DeviceStateRecord(no, dev.Id, true, u.Enabled, u.FaceCount > 0, ids,
-                prev?.NeedsScan.Where(n => !ids.Contains(n)).ToHashSet() ?? new HashSet<int>(), now));
+                prev?.NeedsScan.Where(n => !ids.Contains(n)).ToHashSet() ?? new HashSet<int>(), now) { FingersKnown = fingersKnown });
             return new One(isNew, stored, faceMissing, added);
         });
     }

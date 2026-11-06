@@ -13,6 +13,8 @@ public static class JobRules
     public const string AuthMessage = "Sai mật khẩu hoặc máy đang khoá tạm (khoảng 30 phút). Kiểm tra mật khẩu trong Thiết lập.";
     public const string OfflineMessage = "Đang chờ — tự gửi khi máy có mạng.";
     public const string NoEndDate = "2035-12-31T23:59:59";
+    /// <summary>Logged when a DeleteUser of a locked person only disabled them (the device holds biometrics the app lacks).</summary>
+    public const string KeptOnDeviceMessage = "Chỉ tắt (không gỡ) vì máy có sinh trắc mà app chưa có.";
 
     /// <summary>Times compare equal when the first 19 characters (yyyy-MM-ddTHH:mm:ss) match; a zone suffix is ignored.</summary>
     public static string NormTime(string t) => t.Length >= 19 ? t[..19] : t;

@@ -166,6 +166,23 @@ public class HikFingersTests
     }
 
     [Fact]
+    public async Task ReadFingers_non_json_answer_is_rejected_not_an_empty_list()
+    {
+        var h = new FakeIsapiHandler().On(HttpMethod.Post, Upload, "<html>busy</html>", HttpStatusCode.OK, "text/html");
+        var e = await Assert.ThrowsAsync<HikRejectedException>(() => Make(h).ReadFingerprintsAsync("1001", default));
+        Assert.Equal("fpListUnreadable", e.Code);
+        Assert.Equal(HikClient.FpUnreadableMessage, e.Message);
+        Assert.Contains("<html>busy</html>", e.Detail);
+        Assert.Equal(2, h.Requests.Count);   // nested form, then the flat form
+
+        var n = 0;   // a later page that is not JSON: the list is incomplete, so unknown too
+        var h2 = new FakeIsapiHandler().On(HttpMethod.Post, Upload, _ => ++n % 2 == 1
+            ? new(HttpStatusCode.OK, "{\"FingerPrintInfo\":{\"status\":\"MORE\",\"FingerPrintList\":[{\"fingerPrintID\":" + n + ",\"fingerData\":\"AAA=\"}]}}")
+            : new(HttpStatusCode.OK, "", "text/plain"));
+        await Assert.ThrowsAsync<HikRejectedException>(() => Make(h2).ReadFingerprintsAsync("1001", default));
+    }
+
+    [Fact]
     public async Task ReadFingers_skips_fingers_of_another_employee()
     {
         var h = new FakeIsapiHandler().On(HttpMethod.Post, Upload, _ => new(HttpStatusCode.OK,
