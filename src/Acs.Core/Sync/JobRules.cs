@@ -14,14 +14,8 @@ public static class JobRules
     public const string OfflineMessage = "Đang chờ — tự gửi khi máy có mạng.";
     public const string NoEndDate = "2035-12-31T23:59:59";
 
-    /// <summary>0 delete user, 1 upsert/disable user, 2 face, 3 fingers.</summary>
-    public static int Rank(JobKind k) => k switch
-    {
-        JobKind.DeleteUser => 0,
-        JobKind.UpsertUser or JobKind.DisableUser => 1,
-        JobKind.SetFace or JobKind.DeleteFace => 2,
-        _ => 3,
-    };
+    /// <summary>Times compare equal when the first 19 characters (yyyy-MM-ddTHH:mm:ss) match; a zone suffix is ignored.</summary>
+    public static string NormTime(string t) => t.Length >= 19 ? t[..19] : t;
 
     public static HikUserWrite ToWrite(PersonRecord p, int doorNo, bool enabled) => new(
         p.EmployeeNo, p.FullName,

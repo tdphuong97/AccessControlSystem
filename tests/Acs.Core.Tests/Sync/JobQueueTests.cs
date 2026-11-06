@@ -21,7 +21,7 @@ public sealed class JobQueueTests : IAsyncDisposable
         var d = _h.AddDevice();
         _h.Enqueue(d, "1001", JobKind.SetFace);
         var j = _h.Job(d, "1001", JobKind.SetFace);
-        _h.Db.Jobs.MarkRunning(j.Id, _h.Now);
+        _h.Db.Jobs.MarkRunning(j, _h.Now);
         _h.Db.Jobs.Fail(j.Id, "rejected", "x", "y", _h.Now);
         _h.Time.Advance(TimeSpan.FromMinutes(5));
         _h.Enqueue(d, "1001", JobKind.SetFace);
@@ -79,7 +79,7 @@ public sealed class JobQueueTests : IAsyncDisposable
         while (_h.Db.Jobs.NextDue(d, _h.Now) is { } j)
         {
             order.Add((j.EmployeeNo, j.Kind));
-            _h.Db.Jobs.MarkRunning(j.Id, _h.Now);
+            _h.Db.Jobs.MarkRunning(j, _h.Now);
             _h.Db.Jobs.MarkDone(j.Id, _h.Now);
         }
         Assert.Equal([("1003", JobKind.DeleteUser), ("1001", JobKind.UpsertUser), ("1001", JobKind.SetFace), ("1002", JobKind.DeleteFace), ("1001", JobKind.SetFinger)], order);
@@ -92,12 +92,12 @@ public sealed class JobQueueTests : IAsyncDisposable
         _h.Enqueue(d, "1001", JobKind.UpsertUser);
         _h.Enqueue(d, "1001", JobKind.SetFace);
         var up = _h.Job(d, "1001", JobKind.UpsertUser);
-        _h.Db.Jobs.MarkRunning(up.Id, _h.Now);
+        _h.Db.Jobs.MarkRunning(up, _h.Now);
         _h.Db.Jobs.Retry(up.Id, _h.Now.AddSeconds(30), "transient", "m", null, _h.Now);
         Assert.Null(_h.Db.Jobs.NextDue(d, _h.Now));
         Assert.Equal(_h.Now.AddSeconds(30), _h.Db.Jobs.NextFuture(d, _h.Now));
         Assert.Equal(1, _h.Job(d, "1001", JobKind.UpsertUser).Attempts);
-        _h.Db.Jobs.MarkRunning(up.Id, _h.Now);
+        _h.Db.Jobs.MarkRunning(up, _h.Now);
         _h.Db.Jobs.Fail(up.Id, "rejected", "m", null, _h.Now);
         _h.Time.Advance(TimeSpan.FromHours(1));
         Assert.Null(_h.Db.Jobs.NextDue(d, _h.Now));
@@ -111,7 +111,7 @@ public sealed class JobQueueTests : IAsyncDisposable
         var d = _h.AddDevice();
         _h.Enqueue(d, "1001", JobKind.SetFace);
         var j = _h.Job(d, "1001", JobKind.SetFace);
-        _h.Db.Jobs.MarkRunning(j.Id, _h.Now);
+        _h.Db.Jobs.MarkRunning(j, _h.Now);
         _h.Enqueue(d, "1001", JobKind.SetFace);
         Assert.False(_h.Db.Jobs.MarkDone(j.Id, _h.Now));
         Assert.Equal(JobStatus.Pending, _h.Db.Jobs.Get(j.Id)!.Status);

@@ -37,6 +37,7 @@ public sealed class SyncEngineTests : IAsyncDisposable
         await _h.Until(() => _h.Job(d, "1001", JobKind.UpsertUser).Attempts == 3);
         Assert.Equal(SyncHarness.T0.AddSeconds(30 + 60 + 120), _h.Job(d, "1001", JobKind.UpsertUser).NextAt);
 
+        await _h.Until(() => _h.Engine.Status().Single().Message != null);
         var st = Assert.Single(_h.Engine.Status());
         Assert.False(st.Online);
         Assert.Equal(1, st.Pending);
@@ -57,7 +58,7 @@ public sealed class SyncEngineTests : IAsyncDisposable
         _h.Time.Advance(TimeSpan.FromSeconds(30));   // the 30 s ping finds the device (job was due too)
         await _h.WaitDone(d);
         Assert.NotNull(await fake.FindUserAsync("1001", default));
-        Assert.True(_h.Engine.Status().Single().Online);
+        await _h.Until(() => _h.Engine.Status().Single().Online);
         Assert.NotNull(_h.Db.Devices.Get(d)!.LastSeen);
     }
 
@@ -143,6 +144,109 @@ public sealed class SyncEngineTests : IAsyncDisposable
         Assert.Equal("Cần quét ngón cái trái trực tiếp ở Máy tầng 1.", j.ErrorMessage);
         Assert.Contains(6, h.Db.Jobs.GetState("1001", d)!.NeedsScan);
         Assert.Empty(await fake.ReadFingerprintsAsync("1001", default));
+        Assert.Equal("ModelB", Assert.Single(h.Db.Biometrics.GetFingers("1001")).FpGroup);   // no copy stored
+    }
+
+    [Fact]
+    public async Task Cross_group_copy_is_not_stored_when_verify_fails()
+    {
+        var d = _h.AddDevice("Máy tầng 1", "ModelA");
+        _h.AddPerson();
+        _h.AddFinger("1001", 1, "ModelB");
+        _h.Factory.For(d).ForgetWrites = true;
+        _h.Enqueue(d, "1001", JobKind.SetFinger, 1);
+        _h.Engine.Start();
+        await _h.Until(() => _h.Db.Jobs.ListOpen(d).Any(j => j.Status == JobStatus.Failed), TimeSpan.FromSeconds(1));
+        Assert.Equal("not_saved", Assert.Single(_h.Db.Jobs.ListOpen(d)).ErrorKind);
+        Assert.Equal("ModelB", Assert.Single(_h.Db.Biometrics.GetFingers("1001")).FpGroup);
+    }
+
+    [Fact]
+    public async Task Transient_write_errors_on_a_reachable_device_follow_backoff_and_stay_online()
+    {
+        var scripted = new ScriptedDevice(new FakeDevice()) { TransientOnWrites = true };
+        await using var h = new SyncHarness(new SingleDeviceFactory(scripted));
+        var d = h.AddDevice();
+        h.AddPerson();
+        h.Enqueue(d, "1001", JobKind.UpsertUser);
+        h.Engine.Start();
+        JobRecord J() => h.Job(d, "1001", JobKind.UpsertUser);
+
+        await h.Until(() => J().Attempts == 1 && h.Engine.Status().Single().Online);
+        Assert.Equal(SyncHarness.T0.AddSeconds(30), J().NextAt);
+        h.Time.Advance(TimeSpan.FromSeconds(30));
+        await h.Until(() => J().Attempts == 2);
+        Assert.Equal(SyncHarness.T0.AddSeconds(90), J().NextAt);
+        h.Time.Advance(TimeSpan.FromSeconds(30));   // pings succeed, but the job must keep its backoff
+        await Task.Delay(50);
+        Assert.Equal(2, J().Attempts);
+        h.Time.Advance(TimeSpan.FromSeconds(30));
+        await h.Until(() => J().Attempts == 3);
+        Assert.Equal(SyncHarness.T0.AddSeconds(90 + 120), J().NextAt);
+        Assert.True(h.Engine.Status().Single().Online);
+        Assert.DoesNotContain(h.Db.Log.List(null, d, 100), e => e.Action == "Ping");
+    }
+
+    [Fact]
+    public async Task Plain_exception_on_ping_does_not_kill_the_worker()
+    {
+        var scripted = new ScriptedDevice(new FakeDevice()) { ThrowPlainOnPing = true };
+        await using var h = new SyncHarness(new SingleDeviceFactory(scripted));
+        var d = h.AddDevice();
+        h.Engine.Start();
+        await h.Until(() => h.Db.Log.List(null, d, 10).Any(e => e.Action == "Ping" && !e.Ok));
+        Assert.False(h.Engine.Status().Single().Online);
+        Assert.Single(h.Db.Log.List(null, d, 10));
+
+        scripted.ThrowPlainOnPing = false;
+        h.Time.Advance(TimeSpan.FromSeconds(30));
+        await h.Until(() => h.Engine.Status().Single().Online);
+        Assert.Single(h.Db.Log.List(null, d, 10));   // no extra log rows
+        await h.Engine.StopAsync();                  // does not throw
+    }
+
+    [Fact]
+    public async Task Faulting_factory_is_logged_and_retried()
+    {
+        var factory = new ThrowingFactory { Fail = true };
+        await using var h = new SyncHarness(factory);
+        var d = h.AddDevice();
+        h.Engine.Start();
+        await h.Until(() => h.Db.Log.List(null, d, 10).Any(e => e.Action is "Worker" or "Ping"));
+        factory.Fail = false;
+        h.Time.Advance(TimeSpan.FromSeconds(30));
+        await h.Until(() => h.Engine.Status().Single().Online);
+        await h.Engine.StopAsync();
+    }
+
+    [Fact]
+    public async Task Upsert_verify_compares_valid_dates()
+    {
+        var scripted = new ScriptedDevice(new FakeDevice());
+        await using var h = new SyncHarness(new SingleDeviceFactory(scripted));
+        var d = h.AddDevice();
+        h.AddPerson();
+        h.Enqueue(d, "1001", JobKind.UpsertUser);
+        h.Engine.Start();
+        await h.WaitDone(d);
+
+        scripted.KeepOldEndTime = true;
+        var p = h.Db.People.Get("1001")!;
+        h.Db.People.Update(p with { ValidTo = new DateOnly(2026, 6, 30) });
+        h.Enqueue(d, "1001", JobKind.UpsertUser);
+        h.Engine.Wake(d);
+        await h.Until(() => h.Db.Jobs.ListOpen(d).Any(j => j.Status == JobStatus.Failed), TimeSpan.FromSeconds(1));
+        Assert.Equal("not_saved", Assert.Single(h.Db.Jobs.ListOpen(d)).ErrorKind);
+    }
+
+    [Fact]
+    public void Job_superseded_before_running_is_not_started()
+    {
+        var d = _h.AddDevice();
+        _h.Enqueue(d, "1001", JobKind.SetFace);
+        var j = _h.Job(d, "1001", JobKind.SetFace);
+        _h.Enqueue(d, "1001", JobKind.DeleteUser);   // removes the SetFace row
+        Assert.False(_h.Db.Jobs.MarkRunning(j, _h.Now));
     }
 
     [Fact]

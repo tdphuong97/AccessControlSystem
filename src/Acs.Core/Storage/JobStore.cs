@@ -70,8 +70,11 @@ public sealed class JobStore
         return s is null ? null : Database.ParseTs(s);
     }
 
-    public void MarkRunning(long id, DateTime now) =>
-        _db.Exec("UPDATE jobs SET status='running', updated_at=$u WHERE id=$i", ("$u", Database.Ts(now)), ("$i", id));
+    /// <summary>False when the job is no longer pending (superseded or removed since NextDue): it must not be sent.</summary>
+    public bool MarkRunning(JobRecord j, DateTime now) =>
+        // kind/person/finger are checked too: SQLite reuses the rowid of a deleted job for the next insert.
+        _db.Exec("UPDATE jobs SET status='running', updated_at=$u WHERE id=$i AND status='pending' AND employee_no=$e AND kind=$k AND finger_id=$f",
+            ("$u", Database.Ts(now)), ("$i", j.Id), ("$e", j.EmployeeNo), ("$k", j.Kind.ToString()), ("$f", j.FingerId)) > 0;
 
     /// <summary>False when the job was re-enqueued or removed while running (it then stays pending).</summary>
     public bool MarkDone(long id, DateTime now) =>

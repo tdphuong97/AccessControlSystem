@@ -32,6 +32,8 @@ internal sealed class DeviceWorker
     private IHikDevice? _client;
     private DateTime _nextPing;
 
+    private bool _pingFailLogged;
+    private bool _lostConnection;   // set only when connectivity was really lost
     private volatile bool _online;
     private volatile string? _message;
 
@@ -52,29 +54,50 @@ internal sealed class DeviceWorker
     public async Task RunAsync(CancellationToken ct)
     {
         _nextPing = Now;
-        try
+        string? lastFault = null;
+        while (!ct.IsCancellationRequested)
         {
-            while (!ct.IsCancellationRequested)
+            try
             {
-                var dev = _db.Devices.Get(_id);
-                if (dev is null) return;
-                if (dev.AuthPaused)
+                if (!await StepAsync(ct)) return;
+                lastFault = null;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
+            catch (Exception ex)
+            {
+                // Never let the worker fault: log once per distinct fault, wait, carry on.
+                var fault = ex.GetType().Name + ": " + ex.Message;
+                if (fault != lastFault)
                 {
-                    SetStatus(false, JobRules.AuthMessage);
-                    await WaitAsync(null, ct);
-                    continue;
+                    lastFault = fault;
+                    try { _db.Log.Add(null, _id, "Worker", false, "Có lỗi không rõ ở luồng gửi của máy này. App sẽ tự thử lại sau 30 giây. Chi tiết: " + fault); } catch { /* the database itself may be failing */ }
                 }
-                if (_message == JobRules.AuthMessage) SetStatus(_online, null);   // pause was cleared from outside
-
-                if (_db.Jobs.NextDue(_id, Now) is { } job) { await ProcessAsync(dev, job, ct); continue; }
-                if (Now >= _nextPing) { await PingAsync(dev, ct); continue; }
-
-                var until = _nextPing;
-                if (_db.Jobs.NextFuture(_id, Now) is { } f && f < until) until = f;
-                await WaitAsync(until, ct);
+                try { await WaitAsync(Now + JobRules.PingEvery, ct); }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
             }
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+    }
+
+    /// <summary>One pass of the loop; false when the device no longer exists.</summary>
+    private async Task<bool> StepAsync(CancellationToken ct)
+    {
+        var dev = _db.Devices.Get(_id);
+        if (dev is null) return false;
+        if (dev.AuthPaused)
+        {
+            SetStatus(false, JobRules.AuthMessage);
+            await WaitAsync(null, ct);
+            return true;
+        }
+        if (_message == JobRules.AuthMessage) SetStatus(_online, null);   // pause was cleared from outside
+
+        if (_db.Jobs.NextDue(_id, Now) is { } job) { await ProcessAsync(dev, job, ct); return true; }
+        if (Now >= _nextPing) { await PingAsync(dev, ct); return true; }
+
+        var until = _nextPing;
+        if (_db.Jobs.NextFuture(_id, Now) is { } f && f < until) until = f;
+        await WaitAsync(until, ct);
+        return true;
     }
 
     // ---- waiting ----
@@ -119,34 +142,56 @@ internal sealed class DeviceWorker
         {
             var info = await Client(dev).GetDeviceInfoAsync(ct);
             _db.Devices.SetSeen(_id, info, Now);
-            var wasOnline = _online;
+            var cameBack = _lostConnection;
+            _lostConnection = false;
+            _pingFailLogged = false;
             SetStatus(true, null);
-            if (!wasOnline) _db.Jobs.ExpediteRetries(_id, Now);
+            if (cameBack) _db.Jobs.ExpediteRetries(_id, Now);   // connectivity really came back
             _deviceChanged(_id);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (HikAuthException ex) { PauseForAuth(ex, null); }
-        catch (HikException ex)
+        catch (Exception ex)
         {
+            _lostConnection = true;
             SetStatus(false, JobRules.OfflineMessage);
-            _db.Log.Add(null, _id, "Ping", false, ex.Message);
+            if (!_pingFailLogged)   // log only the online -> offline transition, not every 30 s
+            {
+                _pingFailLogged = true;
+                var msg = ex is HikException ? ex.Message : "Không kết nối được máy. Kiểm tra nguồn và mạng; app sẽ tự thử lại.";
+                _db.Log.Add(null, _id, "Ping", false, msg);
+            }
             _deviceChanged(_id);
         }
+    }
+
+    /// <summary>A network-level failure (not a 5xx or "busy" answer from a device that is reachable).</summary>
+    private static bool IsConnectionLoss(Exception ex)
+    {
+        for (var e = ex.InnerException; e is not null; e = e.InnerException)
+            if (e is HttpRequestException or System.Net.Sockets.SocketException or TimeoutException or TaskCanceledException or IOException)
+                return true;
+        return false;
     }
 
     // ---- jobs ----
 
     private async Task ProcessAsync(DeviceRecord dev, JobRecord job, CancellationToken ct)
     {
-        _db.Jobs.MarkRunning(job.Id, Now);
-        string? action = job.Kind.ToString();
+        if (!_db.Jobs.MarkRunning(job, Now)) return;   // superseded since NextDue: do not send
+        string action = job.Kind.ToString();
         try
         {
             await ExecuteAsync(dev, job, Client(dev), ct);
-            _db.Jobs.MarkDone(job.Id, Now);
-            _db.Devices.SetSeen(_id, null, Now);
+            _db.Tx(() =>
+            {
+                _db.Jobs.MarkDone(job.Id, Now);
+                _db.Devices.SetSeen(_id, null, Now);
+                _db.Log.Add(job.EmployeeNo, _id, action, true);
+                return 0;
+            });
             _nextPing = Now + JobRules.PingEvery;
             SetStatus(true, null);
-            _db.Log.Add(job.EmployeeNo, _id, action, true);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -155,15 +200,20 @@ internal sealed class DeviceWorker
         }
         catch (JobFailure f)
         {
-            _db.Jobs.Fail(job.Id, f.Kind, f.Message, f.Detail, Now);
-            _db.Log.Add(job.EmployeeNo, _id, action, false, f.Message);
+            FailJob(job, action, f.Kind, f.Message, f.Detail);
         }
         catch (HikTransientException ex)
         {
-            _db.Jobs.Retry(job.Id, Now + Backoff.After(job.Attempts), "transient", ex.Message, ex.Detail, Now);
-            _nextPing = Now + JobRules.PingEvery;
-            SetStatus(false, JobRules.OfflineMessage);
-            _db.Log.Add(job.EmployeeNo, _id, action, false, ex.Message);
+            _db.Tx(() =>
+            {
+                _db.Jobs.Retry(job.Id, Now + Backoff.After(job.Attempts), "transient", ex.Message, ex.Detail, Now);
+                _db.Log.Add(job.EmployeeNo, _id, action, false, ex.Message);
+                return 0;
+            });
+            // A 5xx/busy answer does not mean the device is offline; only a lost connection does.
+            // Otherwise probe with a ping right away: if it fails the device is marked offline there.
+            _nextPing = Now;
+            if (IsConnectionLoss(ex)) { _lostConnection = true; SetStatus(false, JobRules.OfflineMessage); }
         }
         catch (HikAuthException ex)
         {
@@ -174,17 +224,23 @@ internal sealed class DeviceWorker
         }
         catch (HikException ex)   // rejected, not supported
         {
-            _db.Jobs.Fail(job.Id, "rejected", ex.Message, ex.Detail, Now);
-            _db.Log.Add(job.EmployeeNo, _id, action, false, ex.Message);
+            FailJob(job, action, "rejected", ex.Message, ex.Detail);
         }
         catch (Exception ex)
         {
-            _db.Jobs.Fail(job.Id, "unexpected", "Có lỗi không rõ khi gửi lên máy. Bấm Thử lại; nếu vẫn lỗi, xem Chi tiết.", ex.Message, Now);
-            _db.Log.Add(job.EmployeeNo, _id, action, false, ex.Message);
+            FailJob(job, action, "unexpected", "Có lỗi không rõ khi gửi lên máy. Bấm Thử lại; nếu vẫn lỗi, xem Chi tiết.",
+                ex.GetType().Name + ": " + ex.Message);
         }
         _deviceChanged(_id);
         _personChanged(job.EmployeeNo);
     }
+
+    private void FailJob(JobRecord job, string action, string kind, string message, string? detail) => _db.Tx(() =>
+    {
+        _db.Jobs.Fail(job.Id, kind, message, detail, Now);
+        _db.Log.Add(job.EmployeeNo, _id, action, false, message);
+        return 0;
+    });
 
     private void PauseForAuth(HikAuthException ex, string? employeeNo)
     {
@@ -274,7 +330,9 @@ internal sealed class DeviceWorker
     private async Task WriteUserAsync(IHikDevice hik, PersonRecord p, int doorNo, bool enabled, CancellationToken ct)
     {
         await hik.UpsertUserAsync(JobRules.ToWrite(p, doorNo, enabled), ct);
-        await VerifyAsync(async () => await hik.FindUserAsync(p.EmployeeNo, ct) is { } u && u.Name == p.FullName && u.Enabled == enabled, ct);
+        var w = JobRules.ToWrite(p, doorNo, enabled);
+        await VerifyAsync(async () => await hik.FindUserAsync(p.EmployeeNo, ct) is { } u && u.Name == p.FullName && u.Enabled == enabled
+            && JobRules.NormTime(u.BeginTime) == JobRules.NormTime(w.BeginTime) && JobRules.NormTime(u.EndTime) == JobRules.NormTime(w.EndTime), ct);
     }
 
     private async Task SetFingerAsync(DeviceRecord dev, JobRecord job, IHikDevice hik, CancellationToken ct)
@@ -284,6 +342,7 @@ internal sealed class DeviceWorker
         var rows = _db.Biometrics.GetFingers(no).Where(f => f.FingerId == job.FingerId).ToList();
         if (rows.Count == 0) return;
 
+        FingerRecord? copyFrom = null;
         var own = rows.FirstOrDefault(f => f.FpGroup == dev.FpGroup);
         if (own is not null)
             await hik.SetFingerprintAsync(no, job.FingerId, own.TemplateBase64, 1, ct);
@@ -307,9 +366,10 @@ internal sealed class DeviceWorker
                 throw new JobFailure("needs_scan",
                     $"Cần quét {JobRules.FingerLabel(job.FingerId)} trực tiếp ở {dev.Name}.", last?.Detail ?? last?.Message);
             }
-            _db.Biometrics.SetFinger(used with { FpGroup = dev.FpGroup });
+            copyFrom = used;
         }
         await VerifyAsync(async () => (await hik.ReadFingerprintsAsync(no, ct)).Any(f => f.FingerId == job.FingerId), ct);
+        if (copyFrom is not null) _db.Biometrics.SetFinger(copyFrom with { FpGroup = dev.FpGroup });   // only once the device confirmed it
         Save(no, s => s with { Fingers = With(s.Fingers, job.FingerId), NeedsScan = Without(s.NeedsScan, job.FingerId) });
     }
 

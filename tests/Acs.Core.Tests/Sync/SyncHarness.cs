@@ -92,3 +92,41 @@ public sealed class SingleDeviceFactory(IHikDevice device) : IHikDeviceFactory
 {
     public IHikDevice Create(DeviceRecord d) => device;
 }
+
+/// <summary>Wraps a FakeDevice with failure knobs the fake does not have.</summary>
+public sealed class ScriptedDevice(FakeDevice inner) : IHikDevice
+{
+    public volatile bool TransientOnWrites;   // reachable device answering 5xx/busy to writes
+    public volatile bool ThrowPlainOnPing;    // an unwrapped exception on GetDeviceInfo
+    public volatile bool KeepOldEndTime;      // device ignores a changed valid-to date
+
+    public Task<DeviceInfo> GetDeviceInfoAsync(CancellationToken ct) =>
+        ThrowPlainOnPing ? throw new InvalidOperationException("boom") : inner.GetDeviceInfoAsync(ct);
+    public Task<DeviceCapabilities> GetCapabilitiesAsync(CancellationToken ct) => inner.GetCapabilitiesAsync(ct);
+    public IAsyncEnumerable<HikUser> ListUsersAsync(CancellationToken ct) => inner.ListUsersAsync(ct);
+    public Task<HikUser?> FindUserAsync(string employeeNo, CancellationToken ct) => inner.FindUserAsync(employeeNo, ct);
+    public async Task UpsertUserAsync(HikUserWrite user, CancellationToken ct)
+    {
+        if (TransientOnWrites) throw new HikTransientException("Thiết bị đang bận. Thử lại sau.");
+        if (KeepOldEndTime && await inner.FindUserAsync(user.EmployeeNo, ct) is { } old) user = user with { EndTime = old.EndTime };
+        await inner.UpsertUserAsync(user, ct);
+    }
+    public Task DeleteUserAsync(string employeeNo, CancellationToken ct) => inner.DeleteUserAsync(employeeNo, ct);
+    public Task<byte[]> CaptureFaceAsync(CancellationToken ct) => inner.CaptureFaceAsync(ct);
+    public Task SetFaceAsync(string employeeNo, byte[] jpeg, CancellationToken ct) => inner.SetFaceAsync(employeeNo, jpeg, ct);
+    public Task<bool> HasFaceAsync(string employeeNo, CancellationToken ct) => inner.HasFaceAsync(employeeNo, ct);
+    public Task<byte[]?> DownloadFaceAsync(string employeeNo, CancellationToken ct) => inner.DownloadFaceAsync(employeeNo, ct);
+    public Task DeleteFaceAsync(string employeeNo, CancellationToken ct) => inner.DeleteFaceAsync(employeeNo, ct);
+    public Task<CapturedFinger> CaptureFingerprintAsync(int fingerId, CancellationToken ct) => inner.CaptureFingerprintAsync(fingerId, ct);
+    public Task SetFingerprintAsync(string employeeNo, int fingerId, string templateBase64, int readerNo, CancellationToken ct) =>
+        inner.SetFingerprintAsync(employeeNo, fingerId, templateBase64, readerNo, ct);
+    public Task<IReadOnlyList<HikFinger>> ReadFingerprintsAsync(string employeeNo, CancellationToken ct) => inner.ReadFingerprintsAsync(employeeNo, ct);
+    public Task DeleteFingerprintAsync(string employeeNo, int fingerId, CancellationToken ct) => inner.DeleteFingerprintAsync(employeeNo, fingerId, ct);
+}
+
+public sealed class ThrowingFactory : IHikDeviceFactory
+{
+    public volatile bool Fail;
+    private readonly FakeDevice _device = new();
+    public IHikDevice Create(DeviceRecord d) => Fail ? throw new InvalidOperationException("factory boom") : _device;
+}

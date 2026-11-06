@@ -39,7 +39,7 @@ public sealed class SyncEngine(Database db, IHikDeviceFactory factory, TimeProvi
         }
         if (cts is null) return;
         await cts.CancelAsync();
-        try { await Task.WhenAll(runs); } catch (OperationCanceledException) { }
+        try { await Task.WhenAll(runs); } catch (Exception) { /* workers log their own faults; stopping must not throw */ }
         cts.Dispose();
     }
 
