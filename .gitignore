@@ -12,3 +12,6 @@ extension/dist/
 *.db*
 *.acsbak
 probe-report-*
+
+# Plan workspace, never commit
+.superpowers/
