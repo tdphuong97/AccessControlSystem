@@ -22,10 +22,13 @@
   function deviceBlock(d, choices) {
     const items = d.items || [], strangers = d.strangers || [];
     const clean = !items.length && !strangers.length;
+    const parts = R.splitItems(items);
+    const section = (title, list, ic) => (list.length ? '<h3 class="rsub">' + title + '</h3><ul class="rlist">' + list.map((i) => '<li class="rli">' + icon(ic, 16) + '<span>' + esc(R.describeItem(i)) + '</span></li>').join('') + '</ul>' : '');
     return '<section class="card rdev"><div class="rdev-h"><span class="devic ' + (clean ? 'devic-ok' : 'devic-wait') + '">' + icon('device', 22) + '</span>' +
       '<h2 class="h2 grow">' + esc(d.deviceName) + '</h2><span class="pill ' + (clean ? 'pill-ok' : 'pill-wait') + '">' + esc(R.summarizeDevice(d)) + '</span></div>' +
-      (items.length ? '<h3 class="rsub">App sẽ bổ sung</h3><ul class="rlist">' + items.map((i) => '<li class="rli">' + icon('check', 16) + '<span>' + esc(R.describeItem(i)) + '</span></li>').join('') + '</ul>' : '') +
-      (strangers.length ? '<h3 class="rsub">Người lạ trên máy</h3><p class="small muted" style="margin:0 0 8px">Mặc định là "Bỏ qua": không đổi gì. Chỉ khi bạn chọn "Gỡ khỏi máy" thì người đó mới bị xoá khỏi máy này.</p>' +
+      section('App sẽ bổ sung', parts.todo, 'check') + section('Người đã khoá vẫn vào được', parts.locked, 'alertCircle') +
+      section('Chỉ để bạn biết (app không đổi gì)', parts.info, 'clock') +
+      (strangers.length ? '<h3 class="rsub">Người lạ trên máy</h3><p class="small muted" style="margin:0 0 8px">Mặc định là "Bỏ qua": không đổi gì. Chỉ khi bạn chọn "Gỡ khỏi máy" thì người đó mới bị xoá khỏi máy này.</p><p class="small muted" style="margin:0 0 8px">' + R.IMPORT_EXPLAIN + '</p>' +
         '<ul class="rlist rlist-st">' + strangers.map((s) => strangerRow(s, choices)).join('') + '</ul>' : '') +
       (clean ? '<p class="muted" style="margin:0">Máy này đã khớp với app, không cần làm gì.</p>' : '') + '</section>';
   }
@@ -73,10 +76,12 @@
     }
 
     async function apply() {
-      const rem = R.removals(s.plan, s.choices);
-      if (rem.length) {
+      const rem = R.removals(s.plan, s.choices), lk = R.lockedCount(s.plan);
+      if (rem.length || lk) {
+        const parts = rem.map((r) => r.n + ' người lạ sẽ bị gỡ khỏi ' + r.deviceName + ' (không có trong app nên không khôi phục lại được)');
+        if (lk) parts.push(lk + ' người đã khoá trong app sẽ bị gỡ hoặc tắt trên máy (dữ liệu vẫn giữ trong app)');
         const yes = await ACS.ui.confirm({ title: 'Gỡ người khỏi máy?',
-          body: rem.map((r) => r.n + ' người sẽ bị gỡ khỏi ' + r.deviceName).join('; ') + '. Gỡ xong người đó không còn ra vào được bằng máy này, và không có trong app nên không khôi phục lại được. Bạn chắc chắn chứ?',
+          body: parts.join('; ') + '. Bạn chắc chắn chứ?',
           okText: 'Gỡ khỏi máy', cancelText: 'Quay lại', danger: true });
         if (!yes || !ctx.alive()) return;
       }
@@ -112,7 +117,7 @@
 
   function render(host, params, ctx) {
     host.innerHTML = '<div class="pad stack"><div class="pagehead"><div><h1 class="h1">So khớp 2 máy</h1>' +
-      '<p class="sub">App là bản gốc. So khớp chỉ bổ sung phần còn thiếu cho máy; không bao giờ tự xoá.</p></div>' +
+      '<p class="sub">App là bản gốc. So khớp chỉ bổ sung phần còn thiếu cho máy; chỉ gỡ khi bạn chọn "Gỡ khỏi máy", hoặc với người đã khoá trong app.</p></div>' +
       '<a class="btn" href="#/settings">' + icon('chevronLeft', 18) + 'Về thiết lập</a></div><div id="rc"></div></div>';
     const v = view(host.querySelector('#rc'), ctx, {});
     v.start();

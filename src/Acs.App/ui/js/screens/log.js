@@ -1,7 +1,7 @@
 // Nhật ký: list of operations and errors, filtered by device, errors only, and free text.
 (function () {
   const ACS = window.ACS;
-  const { esc, on } = ACS.ui;
+  const { esc } = ACS.ui;
   const icon = ACS.icons.icon;
   const R = ACS.recon;
 

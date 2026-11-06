@@ -19,7 +19,7 @@ test('describeItem covers every DiffKind in plain words', () => {
   assert.match(s('MissingFace'), /thiếu khuôn mặt/);
   assert.equal(s('MissingFingers', [7, 2]), 'Trần Thị Bình (mã 1136) thiếu vân tay trỏ trái, trỏ phải. App sẽ gửi lại.');
   assert.match(s('ExtraFingers', [3]), /giữa phải mà app chưa có\. App chỉ báo, không tự xoá\./);
-  assert.match(s('LockedButEnabled'), /khoá lại trên máy \(không xoá người\)/);
+  assert.match(s('LockedButEnabled'), /gỡ hoặc tắt người này trên máy \(dữ liệu vẫn giữ trong app\)/);
   assert.match(s('missingFace'), /thiếu khuôn mặt/, 'camelCase accepted');
   assert.match(s('Whatever'), /chưa khớp/);
 });
@@ -80,5 +80,21 @@ test('deviceArgs / deviceProblem', () => {
   assert.match(R.deviceProblem(a, true), /mật khẩu/);
   assert.match(R.deviceProblem({ ...a, host: 'http://x' }, false), /không có "http/);
   assert.match(R.deviceProblem({ ...a, name: '' }, false), /đặt tên/);
-  assert.equal(R.deviceArgs({ name: 'a', host: 'h', username: 'u', doorNo: 'x' }).doorNo, 1);
+  const bad = R.deviceArgs({ name: 'a', host: 'h', username: 'u', password: 'p', doorNo: 'x' });
+  assert.match(R.deviceProblem(bad, true), /Số cửa/);
+  assert.match(R.deviceProblem(R.deviceArgs({ name: 'a', host: 'h', username: 'u', password: 'p', doorNo: '0' }), true), /Số cửa/);
+  assert.match(R.deviceProblem(R.deviceArgs({ name: 'a', host: 'h', username: 'u', password: 'p', doorNo: '1.5' }), true), /Số cửa/);
+  assert.equal(R.deviceProblem(R.deviceArgs({ name: 'a', host: 'h', username: 'u', password: 'p', doorNo: '2' }), true), '');
+});
+
+test('splitItems / lockedCount / ExtraFingers does not count as work', () => {
+  const items = [{ employeeNo: '1', fullName: 'A', kind: 'MissingFace', fingers: [] }, { employeeNo: '2', fullName: 'B', kind: 'LockedButEnabled', fingers: [] },
+    { employeeNo: '3', fullName: 'C', kind: 'ExtraFingers', fingers: [1] }];
+  const sp = R.splitItems(items);
+  assert.deepEqual([sp.todo.length, sp.locked.length, sp.info.length], [1, 1, 1]);
+  const p = { devices: [{ deviceId: 1, deviceName: 'x', items, strangers: [] }, { deviceId: 2, deviceName: 'y', items: [items[1]], strangers: [] }] };
+  assert.equal(R.lockedCount(p), 2);
+  const onlyExtra = { devices: [{ deviceId: 1, deviceName: 'x', items: [items[2]], strangers: [] }] };
+  assert.equal(R.nothingToDo(onlyExtra, {}), true);
+  assert.equal(R.nothingToDo({ devices: [{ deviceId: 1, deviceName: 'x', items: [items[1]], strangers: [] }] }, {}), false);
 });

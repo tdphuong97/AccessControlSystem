@@ -7,6 +7,7 @@
 })(typeof self !== 'undefined' ? self : this, function (F) {
   const CHOICES = ['skip', 'import', 'remove'];
   const CHOICE_LABEL = { skip: 'Bỏ qua', import: 'Nhập vào app', remove: 'Gỡ khỏi máy' };
+  const IMPORT_EXPLAIN = 'Nhập vào app: đọc khuôn mặt và vân tay từ máy về app, rồi gửi cho các máy còn lại.';
   const kindOf = (k) => String(k == null ? '' : k).replace(/[^a-z]/gi, '').toLowerCase();
   const fingerList = (ids) => (ids || []).map((i) => F.fingerLabel(i).toLocaleLowerCase('vi')).join(', ');
 
@@ -19,7 +20,7 @@
       case 'missingface': return who + ' thiếu khuôn mặt trên máy. App sẽ gửi lại khuôn mặt.';
       case 'missingfingers': return who + ' thiếu vân tay ' + (fingerList(item.fingers) || 'trên máy') + '. App sẽ gửi lại.';
       case 'extrafingers': return who + ' có thêm vân tay ' + (fingerList(item.fingers) || 'trên máy') + ' mà app chưa có. App chỉ báo, không tự xoá.';
-      case 'lockedbutenabled': return who + ' đã khoá trong app nhưng máy vẫn cho ra vào. App sẽ khoá lại trên máy (không xoá người).';
+      case 'lockedbutenabled': return who + ' đã khoá trong app nhưng máy vẫn cho ra vào. App sẽ gỡ hoặc tắt người này trên máy (dữ liệu vẫn giữ trong app).';
       default: return who + ': có điểm chưa khớp với app.';
     }
   }
@@ -70,8 +71,20 @@
   // True when applying would do nothing (no diff items and every stranger skipped).
   function nothingToDo(plan, choices) {
     const c = choices || {};
-    return !((plan && plan.devices) || []).some((d) => (d.items || []).length ||
+    return !((plan && plan.devices) || []).some((d) => (d.items || []).some((i) => kindOf(i.kind) !== 'extrafingers') ||
       (d.strangers || []).some((s) => c[strangerKey(s)] && c[strangerKey(s)] !== 'skip'));
+  }
+
+  // Items of one device split by what the app will do: todo (add/fix), locked (locked but still enabled), info (report only).
+  function splitItems(items) {
+    const out = { todo: [], locked: [], info: [] };
+    (items || []).forEach((i) => { const k = kindOf(i.kind); (k === 'lockedbutenabled' ? out.locked : (k === 'extrafingers' ? out.info : out.todo)).push(i); });
+    return out;
+  }
+
+  // Locked-but-enabled people the apply will remove or switch off, for the confirm summary.
+  function lockedCount(plan) {
+    return ((plan && plan.devices) || []).reduce((n, d) => n + splitItems(d.items).locked.length, 0);
   }
 
   function planTotals(plan) {
@@ -119,7 +132,7 @@
   // Device form values -> devices.save args. Empty password is sent as '' (the host keeps the stored one).
   function deviceArgs(v, id) {
     const a = { name: String(v.name || '').trim(), host: String(v.host || '').trim(), username: String(v.username || '').trim(),
-      password: v.password || '', doorNo: parseInt(v.doorNo, 10) || 1, isCaptureDefault: !!v.isCaptureDefault, isFingerReader: !!v.isFingerReader };
+      password: v.password || '', doorNo: /^\s*\d+\s*$/.test(String(v.doorNo)) ? parseInt(v.doorNo, 10) : 0, isCaptureDefault: !!v.isCaptureDefault, isFingerReader: !!v.isFingerReader };
     if (id != null) a.id = id;
     return a;
   }
@@ -129,11 +142,12 @@
     if (!a.name) return 'Hãy đặt tên cho máy, ví dụ "Máy tầng trệt".';
     if (!a.host) return 'Hãy nhập địa chỉ của máy, ví dụ 192.168.1.201.';
     if (/[\s/]/.test(a.host) || /^https?:/i.test(a.host)) return 'Địa chỉ máy chỉ gồm số IP hoặc tên máy, không có "http://" hay dấu cách.';
+    if (!Number.isInteger(a.doorNo) || a.doorNo < 1) return 'Số cửa phải là số nguyên từ 1 trở lên, thường là 1.';
     if (!a.username) return 'Hãy nhập tên tài khoản của máy (thường là admin).';
     if (isNew && !a.password) return 'Hãy nhập mật khẩu của máy.';
     return '';
   }
 
-  return { CHOICES, CHOICE_LABEL, describeItem, summarizeDevice, strangerKey, buildStrangers, removals, nothingToDo, planTotals,
-    backupPasswordProblem, fmtSize, fmtDateTime, filterLog, deviceArgs, deviceProblem };
+  return { CHOICES, CHOICE_LABEL, IMPORT_EXPLAIN, describeItem, summarizeDevice, strangerKey, buildStrangers, removals, nothingToDo, planTotals,
+    splitItems, lockedCount, backupPasswordProblem, fmtSize, fmtDateTime, filterLog, deviceArgs, deviceProblem };
 });

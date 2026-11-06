@@ -60,7 +60,7 @@
       try {
         const u = await ACS.bridge.call('update.check');
         if (!alive()) return;
-        ACS.state = Object.assign({}, ACS.state, { update: u }); s.checked = true;
+        s.checked = true; ACS.setUpdate(u);
       } catch (e) { if (!alive()) return; s.updErr = ACS.ui.errMessage(e); }
       s.upd = 'idle'; drawUpd();
     });
@@ -167,7 +167,7 @@
 
     // ---------- reconcile entry ----------
     $('s-rec').innerHTML = '<div class="card recentry"><span class="devic devic-ok">' + icon('refresh', 22) + '</span><div class="grow"><div class="fw6">So khớp người, khuôn mặt và vân tay giữa 2 máy</div>' +
-      '<div class="small muted">Dùng khi thay máy, máy bị reset, hoặc có người thêm thẳng trên máy. Xem trước bằng lời trước khi làm; app không tự xoá gì.</div></div>' +
+      '<div class="small muted">Dùng khi thay máy, máy bị reset, hoặc có người thêm thẳng trên máy. Xem trước bằng lời trước khi làm; app chỉ gỡ khi bạn chọn "Gỡ khỏi máy", hoặc với người đã khoá trong app.</div></div>' +
       '<a class="btn btn-primary" href="#/reconcile">So khớp 2 máy</a></div>';
 
     // ---------- backup ----------
@@ -245,16 +245,19 @@
         '<div class="hint">Mật khẩu bạn đã đặt lúc tạo bản sao lưu này.</div><div data-err></div>' +
         '<div class="dlg-actions"><button type="button" class="btn" data-no>Thôi</button><button type="button" class="btn btn-danger" data-yes>Khôi phục</button></div></div>', {
         onOpen(d) {
+          let running = false;
+          d.addEventListener('cancel', (ev) => { if (running) ev.preventDefault(); });
+          d.addEventListener('click', (ev) => { if (running && ev.target === d) ev.stopImmediatePropagation(); }, true);
           const err = d.querySelector('[data-err]'), yes = d.querySelector('[data-yes]'), no = d.querySelector('[data-no]'), pw = d.querySelector('#rs-pw');
           pw.focus();
           no.addEventListener('click', () => d.finish(false));
           const go = async () => {
             if (!pw.value) { err.innerHTML = errBox('Hãy nhập mật khẩu sao lưu.'); return; }
-            yes.disabled = no.disabled = pw.disabled = true; yes.textContent = 'Đang khôi phục…'; err.innerHTML = '';
+            running = true; yes.disabled = no.disabled = pw.disabled = true; yes.textContent = 'Đang khôi phục…'; err.innerHTML = '';
             try {
               await ACS.bridge.call('backup.restore', { name, password: pw.value });
               err.innerHTML = '<div class="notice-ok" role="status">' + icon('checkCircle', 18) + '<div>Đã khôi phục. App đang tự khởi động lại…</div></div>';
-            } catch (e) { yes.disabled = no.disabled = pw.disabled = false; yes.textContent = 'Khôi phục'; err.innerHTML = errBox(ACS.ui.errMessage(e)); }
+            } catch (e) { running = false; yes.disabled = no.disabled = pw.disabled = false; yes.textContent = 'Khôi phục'; err.innerHTML = errBox(ACS.ui.errMessage(e)); }
           };
           yes.addEventListener('click', go);
           pw.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') go(); });

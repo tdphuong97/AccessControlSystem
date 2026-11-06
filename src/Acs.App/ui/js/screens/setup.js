@@ -33,9 +33,9 @@
 
     function body() {
       if (s.step === 0) {
-        const showForm = s.adding || !s.devs.length;
+        const showForm = s.adding || (!s.devs.length && !s.formClosed);
         return '<div><h1 class="h1 h1-md">Chào mừng! Hãy thêm máy chấm công</h1><p class="sub">Làm một lần khi mới cài, khoảng 5 phút. Nên thêm đủ cả 2 máy; thêm máy thứ hai sau cũng được.</p></div>' +
-          savedList() + (showForm ? D.formHtml(null, { title: s.devs.length ? 'Thêm máy tiếp theo' : 'Máy chấm công đầu tiên' }) : '<div><button type="button" class="btn" data-act="su-add">' + icon('plus', 18) + 'Thêm máy khác</button></div>') +
+          savedList() + (!showForm && !s.devs.length ? '<div class="card empty"><p class="muted">Chưa có máy nào. Bấm "Thêm máy" để nhập máy đầu tiên.</p></div>' : '') + (showForm ? D.formHtml(null, { title: s.devs.length ? 'Thêm máy tiếp theo' : 'Máy chấm công đầu tiên' }) : '<div><button type="button" class="btn" data-act="su-add">' + icon('plus', 18) + (s.devs.length ? 'Thêm máy khác' : 'Thêm máy') + '</button></div>') +
           foot('', nextBtn('Tiếp: Kiểm tra kết nối', s.devs.length > 0));
       }
       if (s.step === 1) {
@@ -114,8 +114,8 @@
     }
     function go(n) { s.step = n; if (n === 2) pickSource(); draw(); window.scrollTo(0, 0); }
 
-    on(host, 'click', '[data-act="su-add"]', () => { s.adding = true; s.formErr = ''; draw(); });
-    on(host, 'click', '[data-act="form-cancel"]', () => { s.adding = false; s.formErr = ''; draw(); });
+    on(host, 'click', '[data-act="su-add"]', () => { s.adding = true; s.formClosed = false; s.formErr = ''; draw(); });
+    on(host, 'click', '[data-act="form-cancel"]', () => { s.adding = false; s.formClosed = true; s.formErr = ''; draw(); });
     on(host, 'click', '[data-act="su-back"]', () => go(Math.max(0, s.step - 1)));
     on(host, 'click', '[data-act="su-next"]', () => go(Math.min(4, s.step + 1)));
     on(host, 'click', '[data-act="su-test"]', (el) => runTest(+el.dataset.id));
