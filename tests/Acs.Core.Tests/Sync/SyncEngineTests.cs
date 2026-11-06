@@ -1,0 +1,305 @@
+using Acs.Core.Hik;
+using Acs.Core.Model;
+using Acs.Core.Sync;
+using Acs.Core.Tests.Fakes;
+
+namespace Acs.Core.Tests.Sync;
+
+public sealed class SyncEngineTests : IAsyncDisposable
+{
+    private readonly SyncHarness _h = new();
+    public ValueTask DisposeAsync() => _h.DisposeAsync();
+
+    [Fact]
+    public void Running_jobs_reset_to_pending_on_start()
+    {
+        var d = _h.AddDevice(authPaused: true);   // paused so the worker leaves the job alone
+        _h.Db.Jobs.Insert(new JobRecord(0, d, "1001", JobKind.SetFace, 0, JobStatus.Running, 2, _h.Now, null, null, null));
+        _h.Engine.Start();
+        Assert.Equal(JobStatus.Pending, Assert.Single(_h.Db.Jobs.ListOpen(d)).Status);
+    }
+
+    [Fact]
+    public async Task Offline_device_retries_with_backoff_30_60_120()
+    {
+        var d = _h.AddDevice();
+        _h.AddPerson();
+        _h.Factory.For(d).Offline = true;
+        _h.Enqueue(d, "1001", JobKind.UpsertUser);
+        _h.Engine.Start();
+
+        await _h.Until(() => _h.Job(d, "1001", JobKind.UpsertUser).Attempts == 1);
+        Assert.Equal(SyncHarness.T0.AddSeconds(30), _h.Job(d, "1001", JobKind.UpsertUser).NextAt);
+        _h.Time.Advance(TimeSpan.FromSeconds(30));
+        await _h.Until(() => _h.Job(d, "1001", JobKind.UpsertUser).Attempts == 2);
+        Assert.Equal(SyncHarness.T0.AddSeconds(30 + 60), _h.Job(d, "1001", JobKind.UpsertUser).NextAt);
+        _h.Time.Advance(TimeSpan.FromSeconds(60));
+        await _h.Until(() => _h.Job(d, "1001", JobKind.UpsertUser).Attempts == 3);
+        Assert.Equal(SyncHarness.T0.AddSeconds(30 + 60 + 120), _h.Job(d, "1001", JobKind.UpsertUser).NextAt);
+
+        var st = Assert.Single(_h.Engine.Status());
+        Assert.False(st.Online);
+        Assert.Equal(1, st.Pending);
+        Assert.NotNull(st.Message);
+    }
+
+    [Fact]
+    public async Task Device_coming_back_online_runs_waiting_retries_at_once()
+    {
+        var d = _h.AddDevice();
+        _h.AddPerson();
+        var fake = _h.Factory.For(d);
+        fake.Offline = true;
+        _h.Enqueue(d, "1001", JobKind.UpsertUser);
+        _h.Engine.Start();
+        await _h.Until(() => _h.Job(d, "1001", JobKind.UpsertUser).Attempts == 1);
+        fake.Offline = false;
+        _h.Time.Advance(TimeSpan.FromSeconds(30));   // the 30 s ping finds the device (job was due too)
+        await _h.WaitDone(d);
+        Assert.NotNull(await fake.FindUserAsync("1001", default));
+        Assert.True(_h.Engine.Status().Single().Online);
+        Assert.NotNull(_h.Db.Devices.Get(d)!.LastSeen);
+    }
+
+    [Fact]
+    public async Task Auth_error_pauses_device_without_retry()
+    {
+        var d = _h.AddDevice();
+        _h.AddPerson();
+        var fake = _h.Factory.For(d);
+        fake.WrongPassword = true;
+        _h.Enqueue(d, "1001", JobKind.UpsertUser);
+        _h.Engine.Start();
+        await _h.Until(() => _h.Db.Devices.Get(d)!.AuthPaused);
+        _h.Time.Advance(TimeSpan.FromMinutes(10));
+        await Task.Delay(50);
+        Assert.Single(fake.Calls);
+        var j = Assert.Single(_h.Db.Jobs.ListOpen(d));
+        Assert.Equal(JobStatus.Pending, j.Status);
+        Assert.Equal(0, j.Attempts);
+        Assert.True(_h.Engine.Status().Single().AuthPaused);
+
+        // user fixes the password, clears the pause and wakes the worker
+        fake.WrongPassword = false;
+        _h.Db.Devices.SetAuthPaused(d, false);
+        _h.Engine.Wake(d);
+        await _h.WaitDone(d);
+        Assert.NotNull(await fake.FindUserAsync("1001", default));
+    }
+
+    [Fact]
+    public async Task Verify_failure_marks_not_saved()
+    {
+        var d = _h.AddDevice();
+        _h.AddPerson();
+        _h.Factory.For(d).ForgetWrites = true;
+        _h.Enqueue(d, "1001", JobKind.UpsertUser);
+        _h.Engine.Start();
+        await _h.Until(() => _h.Db.Jobs.ListOpen(d).Any(j => j.Status == JobStatus.Failed), TimeSpan.FromSeconds(1));
+        var j = Assert.Single(_h.Db.Jobs.ListOpen(d));
+        Assert.Equal("not_saved", j.ErrorKind);
+        Assert.Equal(JobRules.NotSavedMessage, j.ErrorMessage);
+        Assert.Equal(3, _h.Factory.For(d).Calls.Count(c => c == nameof(IHikDevice.FindUserAsync)));
+        Assert.Null(_h.Db.Jobs.GetState("1001", d)?.VerifiedAt);
+        Assert.Contains(_h.Db.Log.List("1001", d, 10), e => !e.Ok);
+    }
+
+    [Fact]
+    public async Task Upsert_runs_before_face_and_fingers()
+    {
+        var d = _h.AddDevice();
+        _h.AddPerson();
+        _h.AddFace();
+        _h.AddFinger("1001", 2, "ModelA");
+        _h.Enqueue(d, "1001", JobKind.SetFinger, 2);
+        _h.Enqueue(d, "1001", JobKind.SetFace);
+        _h.Enqueue(d, "1001", JobKind.UpsertUser);
+        _h.Engine.Start();
+        await _h.WaitDone(d);
+        var calls = _h.Factory.For(d).Calls.ToList();
+        var up = calls.IndexOf(nameof(IHikDevice.UpsertUserAsync));
+        var face = calls.IndexOf(nameof(IHikDevice.SetFaceAsync));
+        var fp = calls.IndexOf(nameof(IHikDevice.SetFingerprintAsync));
+        Assert.True(up >= 0 && up < face && face < fp, string.Join(",", calls));
+        var s = _h.Db.Jobs.GetState("1001", d)!;
+        Assert.True(s.UserPresent && s.UserEnabled && s.FacePresent);
+        Assert.Equal(new[] { 2 }, s.Fingers);
+        Assert.NotNull(s.VerifiedAt);
+    }
+
+    [Fact]
+    public async Task Cross_group_template_rejected_sets_needs_scan()
+    {
+        var fake = new FakeDevice();
+        await using var h = new SyncHarness(new SingleDeviceFactory(new StrictGroupDevice(fake, "ModelA")));
+        var d = h.AddDevice("Máy tầng 1", "ModelA");
+        h.AddPerson();
+        h.AddFinger("1001", 6, "ModelB");
+        h.Enqueue(d, "1001", JobKind.SetFinger, 6);
+        h.Engine.Start();
+        await h.Until(() => h.Db.Jobs.ListOpen(d).Any(j => j.Status == JobStatus.Failed));
+        var j = Assert.Single(h.Db.Jobs.ListOpen(d));
+        Assert.Equal("needs_scan", j.ErrorKind);
+        Assert.Equal("Cần quét ngón cái trái trực tiếp ở Máy tầng 1.", j.ErrorMessage);
+        Assert.Contains(6, h.Db.Jobs.GetState("1001", d)!.NeedsScan);
+        Assert.Empty(await fake.ReadFingerprintsAsync("1001", default));
+    }
+
+    [Fact]
+    public async Task Cross_group_success_copies_template()
+    {
+        var d = _h.AddDevice("Máy tầng 1", "ModelA");
+        _h.AddPerson();
+        _h.AddFinger("1001", 1, "ModelB", "ZZZZ");
+        _h.Enqueue(d, "1001", JobKind.SetFinger, 1);
+        _h.Engine.Start();
+        await _h.WaitDone(d);
+        var copy = _h.Db.Biometrics.GetFingers("1001").Single(f => f.FpGroup == "ModelA");
+        Assert.Equal(SyncHarness.Tpl("ModelB", "ZZZZ"), copy.TemplateBase64);
+        Assert.Equal(2, _h.Db.Biometrics.GetFingers("1001").Count);
+        Assert.Equal(new[] { 1 }, _h.Db.Jobs.GetState("1001", d)!.Fingers);
+        Assert.Empty(_h.Db.Jobs.GetState("1001", d)!.NeedsScan);
+    }
+
+    [Fact]
+    public async Task Own_group_template_is_preferred()
+    {
+        var d = _h.AddDevice("Máy tầng 1", "ModelA");
+        _h.AddPerson();
+        _h.AddFinger("1001", 1, "ModelB", "BBBB");
+        _h.AddFinger("1001", 1, "ModelA", "AAAA");
+        _h.Enqueue(d, "1001", JobKind.SetFinger, 1);
+        _h.Engine.Start();
+        await _h.WaitDone(d);
+        var sent = (await _h.Factory.For(d).ReadFingerprintsAsync("1001", default)).Single();
+        Assert.Equal(SyncHarness.Tpl("ModelA", "AAAA"), sent.TemplateBase64);
+    }
+
+    [Fact]
+    public async Task DeleteUser_removes_everything_and_clears_state()
+    {
+        var d = _h.AddDevice();
+        _h.AddPerson();
+        _h.AddFace();
+        _h.AddFinger("1001", 1, "ModelA");
+        foreach (var k in new[] { JobKind.UpsertUser, JobKind.SetFace }) _h.Enqueue(d, "1001", k);
+        _h.Enqueue(d, "1001", JobKind.SetFinger, 1);
+        _h.Engine.Start();
+        await _h.WaitDone(d);
+        Assert.True(_h.Db.Jobs.GetState("1001", d)!.UserPresent);
+
+        _h.Enqueue(d, "1001", JobKind.DeleteUser);
+        _h.Engine.Wake(d);
+        await _h.WaitDone(d);
+        var fake = _h.Factory.For(d);
+        Assert.Null(await fake.FindUserAsync("1001", default));
+        var s = _h.Db.Jobs.GetState("1001", d)!;
+        Assert.False(s.UserPresent || s.FacePresent);
+        Assert.Empty(s.Fingers);
+    }
+
+    [Fact]
+    public async Task Delete_face_and_finger_verify_absence()
+    {
+        var d = _h.AddDevice();
+        _h.AddPerson();
+        _h.AddFace();
+        _h.AddFinger("1001", 3, "ModelA");
+        foreach (var k in new[] { JobKind.UpsertUser, JobKind.SetFace }) _h.Enqueue(d, "1001", k);
+        _h.Enqueue(d, "1001", JobKind.SetFinger, 3);
+        _h.Engine.Start();
+        await _h.WaitDone(d);
+        _h.Enqueue(d, "1001", JobKind.DeleteFace);
+        _h.Enqueue(d, "1001", JobKind.DeleteFinger, 3);
+        _h.Engine.Wake(d);
+        await _h.WaitDone(d);
+        var s = _h.Db.Jobs.GetState("1001", d)!;
+        Assert.False(s.FacePresent);
+        Assert.Empty(s.Fingers);
+        Assert.Empty(await _h.Factory.For(d).ReadFingerprintsAsync("1001", default));
+    }
+
+    [Fact]
+    public async Task DisableUser_turns_off_the_user_on_the_device()
+    {
+        var d = _h.AddDevice();
+        _h.AddPerson();
+        _h.Enqueue(d, "1001", JobKind.UpsertUser);
+        _h.Engine.Start();
+        await _h.WaitDone(d);
+        _h.Enqueue(d, "1001", JobKind.DisableUser);
+        _h.Engine.Wake(d);
+        await _h.WaitDone(d);
+        Assert.False((await _h.Factory.For(d).FindUserAsync("1001", default))!.Enabled);
+        Assert.False(_h.Db.Jobs.GetState("1001", d)!.UserEnabled);
+    }
+
+    [Fact]
+    public async Task Locked_person_upsert_writes_disabled_user_and_verifies()
+    {
+        var d = _h.AddDevice();
+        _h.AddPerson(status: PersonStatus.Locked);
+        _h.Enqueue(d, "1001", JobKind.UpsertUser);
+        _h.Engine.Start();
+        await _h.WaitDone(d);
+        Assert.False((await _h.Factory.For(d).FindUserAsync("1001", default))!.Enabled);
+    }
+
+    [Fact]
+    public async Task Missing_data_is_a_noop_done()
+    {
+        var d = _h.AddDevice();
+        _h.AddPerson();   // no face stored
+        _h.Enqueue(d, "1001", JobKind.SetFace);
+        _h.Enqueue(d, "9999", JobKind.UpsertUser);   // person unknown
+        _h.Engine.Start();
+        await _h.WaitDone(d);
+        Assert.DoesNotContain(nameof(IHikDevice.SetFaceAsync), _h.Factory.For(d).Calls);
+        Assert.DoesNotContain(nameof(IHikDevice.UpsertUserAsync), _h.Factory.For(d).Calls);
+    }
+
+    [Fact]
+    public async Task Rejected_face_fails_with_rejected_and_events_fire()
+    {
+        var d = _h.AddDevice();
+        _h.AddPerson();
+        _h.AddFace();
+        _h.Factory.For(d).RejectFace = true;
+        var people = new List<string>();
+        _h.Engine.PersonChanged += p => { lock (people) people.Add(p); };
+        _h.Enqueue(d, "1001", JobKind.SetFace);
+        _h.Engine.Start();
+        await _h.Until(() => _h.Db.Jobs.ListOpen(d).Any(j => j.Status == JobStatus.Failed));
+        var j = Assert.Single(_h.Db.Jobs.ListOpen(d));
+        Assert.Equal("rejected", j.ErrorKind);
+        Assert.Contains("ảnh khuôn mặt", j.ErrorMessage);
+        await _h.Until(() => { lock (people) return people.Contains("1001"); });
+        Assert.Equal(1, _h.Engine.Status().Single().Failed);
+    }
+
+    [Fact]
+    public async Task Idle_device_is_pinged_every_30_seconds()
+    {
+        var d = _h.AddDevice();
+        _h.Engine.Start();
+        var fake = _h.Factory.For(d);
+        await _h.Until(() => fake.Calls.Count == 1);
+        Assert.NotNull(_h.Db.Devices.Get(d)!.LastSeen);
+        Assert.Equal("DS-K1T343", _h.Db.Devices.Get(d)!.Model);
+        _h.Time.Advance(TimeSpan.FromSeconds(30));
+        await _h.Until(() => fake.Calls.Count == 2);
+        _h.Time.Advance(TimeSpan.FromSeconds(30));
+        await _h.Until(() => fake.Calls.Count == 3);
+        Assert.All(fake.Calls, c => Assert.Equal(nameof(IHikDevice.GetDeviceInfoAsync), c));
+    }
+
+    [Fact]
+    public async Task Stop_then_start_again_is_clean()
+    {
+        _h.AddDevice();
+        _h.Engine.Start();
+        await _h.Engine.StopAsync();
+        _h.Engine.Start();
+        await _h.Engine.StopAsync();
+    }
+}
