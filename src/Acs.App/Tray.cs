@@ -11,6 +11,7 @@ sealed class Tray : IDisposable
 
     // State kept between devices.changed events so only changes produce a balloon.
     readonly Dictionary<int, bool> _online = new();
+    readonly Dictionary<int, bool> _paused = new();
     int? _pending;
     int? _failed;
 
@@ -55,9 +56,17 @@ sealed class Tray : IDisposable
         string? message = null;
         foreach (var d in list)
         {
-            if (_online.TryGetValue(d.Id, out var was) && was != d.Online)
+            var known = _online.TryGetValue(d.Id, out var was);
+            var wasPaused = _paused.TryGetValue(d.Id, out var p) && p;
+            // A wrong password also reads as "offline" (Online is false while paused): say what it really is.
+            if (d.AuthPaused)
+            {
+                if (known && !wasPaused) message = AuthPausedText(d.Name);
+            }
+            else if (known && was != d.Online)
                 message = d.Online ? $"{d.Name} đã kết nối lại." : $"{d.Name} mất kết nối. Dữ liệu sẽ được gửi khi máy online lại.";
             _online[d.Id] = d.Online;
+            _paused[d.Id] = d.AuthPaused;
         }
 
         var pending = list.Sum(d => d.Pending);
@@ -71,6 +80,9 @@ sealed class Tray : IDisposable
 
         if (message is not null) Balloon("Access Control System", message);
     }
+
+    internal static string AuthPausedText(string device) =>
+        $"{device}: sai mật khẩu hoặc máy đang khoá tạm. Đã dừng gửi; mở phần mềm, vào tab \"Máy chấm công & cập nhật\" để sửa mật khẩu.";
 
     public void Dispose()
     {

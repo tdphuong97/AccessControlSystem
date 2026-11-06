@@ -33,9 +33,22 @@
           (it.message ? '<div class="dres-m small">' + esc(it.message) + '</div>' : '') +
           (it.detail ? '<details class="det dres-m"><summary>Chi tiết</summary><pre>' + esc(it.detail) + '</pre></details>' : '') + '</li>';
       }).join('');
-      const note = d.state === 'pending'
-        ? '<p class="dc-note" style="background:#fff;border:0;padding:0;margin:0 18px 12px;color:var(--text-3);font-size:15px">Máy này đang mất kết nối nên chưa nhận được. App <strong>đã ghi nhớ</strong> và sẽ tự gửi khi máy có mạng lại — bạn không cần làm lại.</p>' +
-          '<div class="dc-note"><strong>Nếu chờ lâu:</strong> kiểm tra ' + esc(d.deviceName.toLocaleLowerCase('vi')) + ' có điện không và dây mạng có cắm chặt không.</div>'
+      // Say "mất kết nối" only when the device really is offline (devices.changed keeps ACS.state current).
+      const dev = ACS.state && (ACS.state.devices || []).find((x) => x.id === d.deviceId);
+      const lead = (html) => '<p class="dc-note" style="background:#fff;border:0;padding:0;margin:0 18px 12px;color:var(--text-3);font-size:15px">' + html + '</p>';
+      let pendingNote;
+      if (dev && dev.authPaused) {
+        pendingNote = lead('Máy này đang dừng vì sai mật khẩu nên chưa nhận được. App <strong>đã ghi nhớ</strong> và sẽ tự gửi khi mật khẩu đúng.') +
+          '<div class="dc-note"><strong>Cách xử lý:</strong> mở tab “Máy chấm công &amp; cập nhật”, bấm “Sửa mật khẩu” ở ' + esc(d.deviceName.toLocaleLowerCase('vi')) + '.</div>';
+      } else if (dev && dev.online) {
+        pendingNote = lead('Máy đang nhận dữ liệu. App sẽ đọc lại từ máy để kiểm tra rồi báo “Đã nhận” — bạn không cần làm lại.') +
+          ((d.items || []).some((i) => /chạy So khớp/.test(i.message || ''))
+            ? '<div class="dc-note"><strong>Chưa có việc gửi cho máy này:</strong> chạy <a href="#/reconcile">So khớp 2 máy</a> để gửi.</div>' : '');
+      } else {
+        pendingNote = lead('Máy này đang mất kết nối nên chưa nhận được. App <strong>đã ghi nhớ</strong> và sẽ tự gửi khi máy có mạng lại — bạn không cần làm lại.') +
+          '<div class="dc-note"><strong>Nếu chờ lâu:</strong> kiểm tra ' + esc(d.deviceName.toLocaleLowerCase('vi')) + ' có điện không và dây mạng có cắm chặt không.</div>';
+      }
+      const note = d.state === 'pending' ? pendingNote
         : (d.state === 'error' ? '<div class="dc-note"><strong>Cách xử lý:</strong> bấm “Thử lại ngay”. Nếu vẫn lỗi, mở trang người này để chụp lại hoặc xem chi tiết.</div>' : '');
       const busy = !!s.retrying[d.deviceId];
       const foot = d.state === 'ok'
@@ -89,8 +102,9 @@
     });
 
     const off = ACS.bridge.on('person.changed', (d) => { if (d && String(d.employeeNo) === String(emp)) load(); });
+    const offState = ACS.onState(() => { if (s.p && ctx.alive()) draw(); });   // online / offline changes the note
     load();
-    return off;
+    return () => { off(); offState(); };
   }
 
   ACS.screens = ACS.screens || {};

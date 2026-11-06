@@ -17,7 +17,7 @@
       message: 'Không kết nối được tới máy. Kiểm tra dây mạng và nguồn của máy.' },
   ];
   if (/authpause/.test(q)) {
-    Object.assign(devices[1], { authPaused: true, online: true, message: 'Sai mật khẩu. Vào "Máy chấm công & cập nhật" để nhập lại mật khẩu.' });
+    Object.assign(devices[1], { authPaused: true, online: true, message: 'Sai mật khẩu hoặc máy đang khoá tạm (khoảng 30 phút). Kiểm tra mật khẩu ở tab "Máy chấm công & cập nhật" (nút Sửa mật khẩu).' });
   }
 
   // fingers: [fingerId, quality]; wait: device names still waiting; created: days ago
@@ -176,7 +176,7 @@
     'devices.test': async (a) => {
       await wait(700);
       const d = devices.find((x) => x.id === a.id);
-      if (!d) throw new Error('Không tìm thấy máy này. Hãy tải lại trang Thiết lập.');
+      if (!d) throw new Error('Không tìm thấy máy này. Hãy mở lại tab "Máy chấm công & cập nhật".');
       if (d.authPaused) return { ok: false, model: null, firmware: null, users: 0, canCaptureFace: false, canCaptureFinger: false,
         message: 'Máy báo sai mật khẩu. Bấm "Sửa mật khẩu", nhập lại rồi kiểm tra lại. Nếu máy đã tự khoá địa chỉ này thì chờ khoảng 30 phút.' };
       return d.online

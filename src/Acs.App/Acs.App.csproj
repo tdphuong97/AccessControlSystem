@@ -28,7 +28,8 @@
 
   <ItemGroup>
     <Resource Include="Assets\acs.ico" />
-    <Content Include="ui\**\*" CopyToOutputDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <!-- ui\test holds the node tests of the page helpers: not shipped with the app. -->
+    <Content Include="ui\**\*" Exclude="ui\test\**" CopyToOutputDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
   </ItemGroup>
 
 </Project>

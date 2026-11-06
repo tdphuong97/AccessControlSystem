@@ -10,7 +10,7 @@
     const devs = (ACS.state && ACS.state.devices) || [];
     host.innerHTML = '<div class="pad stack"><div class="pagehead"><div><h1 class="h1">Nhật ký</h1>' +
       '<p class="sub">Các thao tác gửi lên máy và lỗi gần đây (tối đa 200 dòng mới nhất).</p></div>' +
-      '<a class="btn" href="#/settings">' + icon('chevronLeft', 18) + 'Về thiết lập</a></div>' +
+      '<a class="btn" href="#/settings">' + icon('chevronLeft', 18) + 'Quay lại</a></div>' +
       '<div class="toolbar"><div class="search"><label for="lg-q" class="lbl">Tìm trong nhật ký</label><div class="search-in"><span class="search-ic">' + icon('search', 18) + '</span>' +
       '<input id="lg-q" class="input" type="text" autocomplete="off" placeholder="Gõ mã nhân viên, tên máy hoặc nội dung…"></div></div>' +
       '<div class="logf"><div><label for="lg-dev" class="lbl">Máy</label><select id="lg-dev" class="input"><option value="">Tất cả máy</option>' +

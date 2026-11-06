@@ -120,7 +120,7 @@
   function render(host, params, ctx) {
     host.innerHTML = '<div class="pad stack"><div class="pagehead"><div><h1 class="h1">So khớp 2 máy</h1>' +
       '<p class="sub">App là bản gốc. So khớp chỉ bổ sung phần còn thiếu cho máy; chỉ gỡ khi bạn chọn "Gỡ khỏi máy", hoặc với người đã khoá trong app.</p></div>' +
-      '<a class="btn" href="#/settings">' + icon('chevronLeft', 18) + 'Về thiết lập</a></div><div id="rc"></div></div>';
+      '<a class="btn" href="#/settings">' + icon('chevronLeft', 18) + 'Quay lại</a></div><div id="rc"></div></div>';
     const v = view(host.querySelector('#rc'), ctx, {});
     v.start();
     return () => v.destroy();

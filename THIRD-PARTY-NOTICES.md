@@ -11,6 +11,7 @@ Access Control System dùng các thành phần sau. Cảm ơn các tác giả.
 | System.Security.Cryptography.ProtectedData | Bảo vệ khoá mã hoá bằng Windows DPAPI | MIT |
 | .NET (runtime, thư viện chuẩn, WPF) | Nền tảng chạy phần mềm | MIT |
 | Inno Setup | Tạo bộ cài (chỉ dùng khi xây dựng bộ cài) | Giấy phép Inno Setup (miễn phí, xem jrsoftware.org/files/is/license.txt) |
+| Bản dịch tiếng Việt của Inno Setup (`build/Vietnamese.isl`), do memecoder thực hiện | Chữ tiếng Việt trong bộ cài | Bản dịch cộng đồng (không chính thức) của Inno Setup, dùng theo điều khoản phân phối của Inno Setup |
 
 Văn bản đầy đủ của các giấy phép có trong gói của từng thành phần hoặc tại trang chủ của họ.
 
