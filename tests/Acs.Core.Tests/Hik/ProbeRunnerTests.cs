@@ -13,7 +13,6 @@ public class ProbeRunnerTests
     {
         var main = new FakeDevice(); var peer = new FakeDevice();
         await main.UpsertUserAsync(U1001, default); await peer.UpsertUserAsync(U1001, default);
-        main.Calls.ToList(); // snapshot not needed
         setup?.Invoke(main, peer);
         var report = new ProbeReport(["s3cret"]);
         var prompts = new List<string>();
@@ -75,6 +74,48 @@ public class ProbeRunnerTests
         var report = new ProbeReport();
         Assert.False(await new ProbeRunner(main, null, _ => Task.CompletedTask, report).RunAsync(default));
         Assert.Equal("Real Person", (await main.FindUserAsync("99999", default))!.Name);
+    }
+
+    [Fact]
+    public async Task Probe_fails_when_writes_are_silently_dropped_on_main()
+    {
+        var (main, _, report, ok, _) = await Run((m, _) => m.ForgetWrites = true, withPeer: false);
+        Assert.False(ok);
+        foreach (var step in new[] { "đọc lại người thử", "kiểm tra có khuôn mặt", "đọc lại vân tay" })
+            Assert.Contains(report.Text.Split('\n'), l => l.Contains(step) && l.StartsWith("[LỖI]"));
+        Assert.Null(await main.FindUserAsync("99999", default));
+    }
+
+    [Fact]
+    public async Task Probe_fails_when_peer_drops_the_template()
+    {
+        var (_, _, report, ok, _) = await Run((_, p) => p.ForgetWrites = true);
+        Assert.False(ok);
+        Assert.Contains(report.Text.Split('\n'), l => l.Contains("Máy phụ: kiểm tra lại") && l.StartsWith("[LỖI]"));
+        Assert.DoesNotContain(report.Text.Split('\n'), l => l.Contains("Máy chính: đọc lại") && l.StartsWith("[LỖI]"));
+    }
+
+    [Fact]
+    public async Task Probe_cancelled_in_precheck_reports_and_writes_nothing()
+    {
+        var main = new FakeDevice();
+        var report = new ProbeReport();
+        using var cts = new CancellationTokenSource(); cts.Cancel();
+        var ok = await new ProbeRunner(main, null, _ => Task.CompletedTask, report).RunAsync(cts.Token);
+        Assert.False(ok);
+        Assert.Contains("Huỷ", report.Text);
+        Assert.DoesNotContain(main.Calls, c => c == nameof(IHikDevice.UpsertUserAsync));
+    }
+
+    [Fact]
+    public async Task Probe_abort_line_does_not_leak_the_other_persons_name()
+    {
+        var main = new FakeDevice();
+        await main.UpsertUserAsync(new("99999", "Real Person", "a", "b", true, 1), default);
+        var report = new ProbeReport();
+        await new ProbeRunner(main, null, _ => Task.CompletedTask, report).RunAsync(default);
+        Assert.DoesNotContain("Real Person", report.Text);
+        Assert.Contains("thuộc về một người khác", report.Text);
     }
 
     [Fact]

@@ -27,13 +27,19 @@ public sealed class ProbeRunner(IHikDevice main, IHikDevice? peer, Func<string, 
             {
                 try
                 {
+                    ct.ThrowIfCancellationRequested();
                     var existing = await dev.FindUserAsync(TestNo, ct);
                     if (existing is not null && existing.Name != TestName)
                     {
                         report.Step($"{label}: kiểm tra mã 99999 còn trống", false, 0,
-                            $"Mã 99999 đã được dùng cho người khác (\"{existing.Name}\"). Dừng để không ghi đè.");
+                            $"mã 99999 đang thuộc về một người khác trên {label} — dừng lại, không thay đổi gì");
                         return false;
                     }
+                }
+                catch (OperationCanceledException)
+                {
+                    report.Step("Huỷ bởi người dùng (Ctrl+C)", false, 0, "Huỷ trong lúc kiểm tra ban đầu; chưa ghi gì lên máy nên không cần dọn dẹp.");
+                    return false;
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
@@ -55,7 +61,11 @@ public sealed class ProbeRunner(IHikDevice main, IHikDevice? peer, Func<string, 
         {
             if (started)
                 foreach (var (label, dev) in Devices())
+                {
                     await TimedVoid($"{label}: xoá người thử 99999 (dọn dẹp)", () => dev.DeleteUserAsync(TestNo, CancellationToken.None), "đã xoá");
+                    await Verify($"{label}: xác nhận 99999 đã biến mất", () => dev.FindUserAsync(TestNo, CancellationToken.None),
+                        u => u is null ? (true, "đã xoá hẳn") : (false, "99999 VẪN CÒN trên máy sau khi xoá — cần xoá tay"));
+                }
         }
         return report.Failed == 0;
     }
@@ -87,8 +97,9 @@ public sealed class ProbeRunner(IHikDevice main, IHikDevice? peer, Func<string, 
         // 3. create test user
         var created = await TimedVoid("Máy chính: tạo người thử 99999 \"TEST ACS\"", () => main.UpsertUserAsync(TestUser, ct), "đã gửi");
         if (!created) { report.Note("Bỏ qua các bước sau vì không tạo được người thử."); return; }
-        await Timed("Máy chính: đọc lại người thử", () => main.FindUserAsync(TestNo, ct),
-            u => u is null ? "KHÔNG thấy người 99999 sau khi tạo" : $"thấy: {u.Name}, enabled={u.Enabled}, mặt={u.FaceCount}, vân tay={u.FingerCount}");
+        await Verify("Máy chính: đọc lại người thử", () => main.FindUserAsync(TestNo, ct),
+            u => u is null ? (false, "KHÔNG thấy người 99999 sau khi tạo")
+                           : (true, $"thấy: {u.Name}, enabled={u.Enabled}, mặt={u.FaceCount}, vân tay={u.FingerCount}"));
 
         // 4. face
         await waitForPerson("Mời người thử đứng trước máy rồi bấm Enter để chụp khuôn mặt.");
@@ -97,7 +108,7 @@ public sealed class ProbeRunner(IHikDevice main, IHikDevice? peer, Func<string, 
         {
             _face = face;
             await TimedVoid("Máy chính: ghi khuôn mặt", () => main.SetFaceAsync(TestNo, face, ct), $"đã gửi {face.Length} byte");
-            await Timed("Máy chính: kiểm tra có khuôn mặt", () => main.HasFaceAsync(TestNo, ct), h => h ? "có" : "KHÔNG có sau khi ghi");
+            await Verify("Máy chính: kiểm tra có khuôn mặt", () => main.HasFaceAsync(TestNo, ct), h => (h, h ? "có" : "KHÔNG có sau khi ghi"));
             await Timed("Máy chính: tải khuôn mặt về", () => main.DownloadFaceAsync(TestNo, ct), b => b is null ? "thiết bị không giữ ảnh (null)" : FaceSummary(b));
         }
 
@@ -109,9 +120,7 @@ public sealed class ProbeRunner(IHikDevice main, IHikDevice? peer, Func<string, 
         {
             _template = finger.TemplateBase64;
             await TimedVoid("Máy chính: ghi vân tay ngón 1", () => main.SetFingerprintAsync(TestNo, 1, finger.TemplateBase64, 1, ct), "đã gửi");
-            await Timed("Máy chính: đọc lại vân tay", () => main.ReadFingerprintsAsync(TestNo, ct),
-                l => $"{l.Count} vân tay: " + string.Join(", ", l.Select(x => $"ngón {x.FingerId} độ dài {x.TemplateBase64.Length}"))
-                     + (l.Any(x => x.FingerId == 1 && x.TemplateBase64 == finger.TemplateBase64) ? " (khớp mẫu đã ghi)" : " (KHÔNG khớp mẫu đã ghi)"));
+            await Verify("Máy chính: đọc lại vân tay", () => main.ReadFingerprintsAsync(TestNo, ct), l => FingerVerdict(l, finger.TemplateBase64));
         }
 
         // 6. peer
@@ -125,33 +134,53 @@ public sealed class ProbeRunner(IHikDevice main, IHikDevice? peer, Func<string, 
             if (_template is not null)
                 await TimedVoid("Máy phụ: ghi mẫu vân tay (từ máy chính)", () => peer.SetFingerprintAsync(TestNo, 1, _template, 1, ct), "đã gửi");
             else report.Note("Máy phụ: bỏ qua ghi vân tay vì máy chính chưa có mẫu.");
-            await Timed("Máy phụ: kiểm tra lại", async () =>
+            await Verify("Máy phụ: kiểm tra lại", async () =>
             {
                 var u = await peer.FindUserAsync(TestNo, ct);
                 var f = await peer.ReadFingerprintsAsync(TestNo, ct);
                 var h = await peer.HasFaceAsync(TestNo, ct);
                 return (u, f, h);
-            }, r => r.u is null ? "KHÔNG thấy người 99999" : $"thấy {r.u.Name}; mặt={(r.h ? "có" : "không")}; vân tay={r.f.Count}");
+            }, r =>
+            {
+                if (r.u is null) return (false, "KHÔNG thấy người 99999 trên máy phụ");
+                var problems = new List<string>();
+                if (_face is not null && !r.h) problems.Add("KHÔNG có khuôn mặt");
+                var (fok, ftext) = _template is null ? (true, $"{r.f.Count} vân tay") : FingerVerdict(r.f, _template);
+                if (!fok) problems.Add(ftext);
+                return (problems.Count == 0, $"thấy {r.u.Name}; mặt={(r.h ? "có" : "không")}; {ftext}" + (problems.Count == 0 ? "" : " | " + string.Join("; ", problems)));
+            });
         }
+    }
+
+    private static (bool, string) FingerVerdict(IReadOnlyList<HikFinger> l, string written)
+    {
+        var match = l.Any(x => x.FingerId == 1 && x.TemplateBase64 == written);
+        return (match, $"{l.Count} vân tay: " + string.Join(", ", l.Select(x => $"ngón {x.FingerId} độ dài {x.TemplateBase64.Length}"))
+                       + (match ? " (khớp mẫu đã ghi)" : " (KHÔNG khớp mẫu đã ghi)"));
     }
 
     private static string FaceSummary(byte[] b) =>
         $"{b.Length} byte, đầu={Convert.ToHexString(b.AsSpan(0, Math.Min(8, b.Length)))}";
 
     private Task<bool> TimedVoid(string name, Func<Task> action, string okText) =>
-        RunStep(name, async () => { await action(); return true; }, _ => okText).ContinueWith(t => t.Result.ok);
+        RunStep(name, async () => { await action(); return true; }, _ => (true, okText)).ContinueWith(t => t.Result.ok);
 
     private async Task<T?> Timed<T>(string name, Func<Task<T>> action, Func<T, string> summary) =>
-        (await RunStep(name, action, summary)).value;
+        (await RunStep(name, action, r => (true, summary(r)))).value;
 
-    private async Task<(bool ok, T? value)> RunStep<T>(string name, Func<Task<T>> action, Func<T, string> summary)
+    /// <summary>A verification step: the verdict decides OK or LỖI.</summary>
+    private async Task<T?> Verify<T>(string name, Func<Task<T>> action, Func<T, (bool ok, string text)> verdict) =>
+        (await RunStep(name, action, verdict)).value;
+
+    private async Task<(bool ok, T? value)> RunStep<T>(string name, Func<Task<T>> action, Func<T, (bool ok, string text)> summary)
     {
         var sw = Stopwatch.StartNew();
         try
         {
             var r = await action();
-            report.Step(name, true, sw.ElapsedMilliseconds, summary(r));
-            return (true, r);
+            var (ok, text) = summary(r);
+            report.Step(name, ok, sw.ElapsedMilliseconds, text);
+            return (ok, r);
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)
