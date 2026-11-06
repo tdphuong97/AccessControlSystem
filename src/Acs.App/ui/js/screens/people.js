@@ -105,12 +105,13 @@
       $('p-table').innerHTML = '<div class="thead"><div>Người</div><div>Khuôn mặt</div><div>Vân tay</div><div>Có trên ' + n + ' máy</div><div></div></div>' +
         (shown.length ? shown.map((r) => rowHtml(r, n)).join('')
           : '<div class="empty-row">' + (query || filter !== 'all' ? 'Không có ai khớp. Thử bỏ bớt bộ lọc hoặc gõ tên khác.' : 'Chưa có ai. Bấm "Thêm người mới" để bắt đầu.') + '</div>');
+      // The list is sorted by name (vi-VN), so the first page is not "the newest people".
       $('p-note').textContent = !shown.length ? '' : (filter === 'all' && !query
-        ? 'Đang hiện ' + shown.length + (limited ? ' người mới thêm gần nhất' : ' người')
+        ? 'Đang hiện ' + shown.length + ' người' + (limited ? ' (trong ' + rows.length + ' người, theo tên)' : '')
         : 'Đang hiện ' + shown.length + ' người' + (filter === 'all' ? ' khớp tìm kiếm' : ' cần bổ sung'));
       const btn = $('p-all');
       btn.hidden = !(filter === 'all' && !query && rows.length > LIMIT);
-      btn.textContent = showAll ? 'Chỉ hiện người mới nhất' : 'Xem tất cả ' + rows.length + ' người';
+      btn.textContent = showAll ? 'Thu gọn danh sách' : 'Xem tất cả ' + rows.length + ' người';
     }
 
     async function loadCounts() {
