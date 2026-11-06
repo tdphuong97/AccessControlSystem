@@ -135,7 +135,7 @@ public class HikFacesTests
     public async Task HasFace_reads_numOfMatches()
     {
         var h = new FakeIsapiHandler().On(HttpMethod.Post, FdSearch, s => new FakeIsapiHandler.Reply(HttpStatusCode.OK,
-            s.Body.Contains("\"FPID\":\"1\"") ? "{\"numOfMatches\":1,\"totalMatches\":1}" : "{\"numOfMatches\":0,\"totalMatches\":0}"));
+            s.Body.Contains("\"FPID\":\"1\"") ? "{\"numOfMatches\":1,\"MatchList\":[{\"FPID\":\"1\"}]}" : "{\"numOfMatches\":0,\"totalMatches\":0}"));
         var c = Make(h);
         Assert.True(await c.HasFaceAsync("1", default));
         Assert.False(await c.HasFaceAsync("2", default));
@@ -159,7 +159,7 @@ public class HikFacesTests
         Assert.Equal(Jpeg, await Make(h).DownloadFaceAsync("1", default));
 
         var h2 = new FakeIsapiHandler()
-            .On(HttpMethod.Post, FdSearch, "{\"numOfMatches\":1,\"MatchList\":[{\"faceURL\":\"/LOCALS/pic/b.jpg\"}]}")
+            .On(HttpMethod.Post, FdSearch, "{\"numOfMatches\":1,\"MatchList\":[{\"FPID\":\"1\",\"faceURL\":\"/LOCALS/pic/b.jpg\"}]}")
             .On(HttpMethod.Get, "/LOCALS/pic/b.jpg", _ => Bin(Jpeg));
         Assert.Equal(Jpeg, await Make(h2).DownloadFaceAsync("1", default));
     }
@@ -183,5 +183,52 @@ public class HikFacesTests
         Assert.Contains("FDID=1", r.PathAndQuery);
         Assert.Contains("faceLibType=blackFD", r.PathAndQuery);
         Assert.Contains("\"FPID\":[{\"value\":\"00123\"}]", r.Body);
+    }
+
+    [Fact]
+    public async Task Face_search_requires_exact_FPID()
+    {
+        var h = new FakeIsapiHandler().On(HttpMethod.Post, FdSearch,
+            "{\"numOfMatches\":1,\"MatchList\":[{\"FPID\":\"001234\",\"faceURL\":\"/pic/x.jpg\"}]}")
+            .On(HttpMethod.Post, UserSearch, "{\"UserInfoSearch\":{\"UserInfo\":[]}}");
+        var c = Make(h);
+        Assert.False(await c.HasFaceAsync("00123", default));
+        Assert.Null(await c.DownloadFaceAsync("00123", default));
+        Assert.DoesNotContain(h.Requests, r => r.Method == HttpMethod.Get);
+    }
+
+    [Fact]
+    public async Task Face_search_finds_exact_FPID_when_listed_second()
+    {
+        var h = new FakeIsapiHandler().On(HttpMethod.Post, FdSearch,
+            "{\"numOfMatches\":2,\"MatchList\":[{\"FPID\":\"001234\",\"faceURL\":\"/pic/x.jpg\"},{\"FPID\":\"00123\",\"faceURL\":\"/pic/ok.jpg\"}]}")
+            .On(HttpMethod.Get, "/pic/ok.jpg", _ => Bin(Jpeg));
+        var c = Make(h);
+        Assert.True(await c.HasFaceAsync("00123", default));
+        Assert.Equal(Jpeg, await c.DownloadFaceAsync("00123", default));
+    }
+
+    [Fact]
+    public async Task DownloadFace_never_requests_another_host()
+    {
+        var h = new FakeIsapiHandler().On(HttpMethod.Post, UserSearch, "{\"UserInfoSearch\":{\"UserInfo\":[]}}")
+            .On(HttpMethod.Post, FdSearch,
+            "{\"MatchList\":[{\"FPID\":\"1\",\"faceURL\":\"http://other-host/pic.jpg\"}]}")
+            .On(HttpMethod.Get, "/pic.jpg", _ => Bin(Jpeg));
+        Assert.Equal(Jpeg, await Make(h).DownloadFaceAsync("1", default));   // fetched from the device host, path only
+
+        var h2 = new FakeIsapiHandler().On(HttpMethod.Post, UserSearch, "{\"UserInfoSearch\":{\"UserInfo\":[]}}")
+            .On(HttpMethod.Post, FdSearch,
+            "{\"MatchList\":[{\"FPID\":\"1\",\"faceURL\":\"//evil/x\"}]}");
+        Assert.Null(await Make(h2).DownloadFaceAsync("1", default));
+        Assert.DoesNotContain(h2.Requests, r => r.Method == HttpMethod.Get);
+    }
+
+    [Fact]
+    public async Task Capture_empty_200_body_is_a_failure()
+    {
+        var h = new FakeIsapiHandler().On(HttpMethod.Post, Capture, "", HttpStatusCode.OK, "application/xml");
+        var e = await Assert.ThrowsAsync<HikRejectedException>(() => Make(h).CaptureFaceAsync(default));
+        Assert.Equal("captureFailed", e.Code);
     }
 }

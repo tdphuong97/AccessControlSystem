@@ -69,7 +69,10 @@ public sealed partial class HikClient
         }
         ReadOnlySpan<byte> magic = [0xFF, 0xD8, 0xFF];
         var idx = bytes.AsSpan().IndexOf(magic);
-        return idx >= 0 ? bytes[idx..] : null;
+        if (idx < 0) return null;
+        var tail = bytes.AsSpan(idx);
+        var end = tail.LastIndexOf<byte>([0xFF, 0xD9]);
+        return end >= 0 ? tail[..(end + 2)].ToArray() : tail.ToArray();
     }
 
     private static MultipartFormDataContent FaceMultipart(string employeeNo, byte[] jpeg)
@@ -104,30 +107,33 @@ public sealed partial class HikClient
         await SendAsync(HttpMethod.Post, "/ISAPI/Intelligent/FDLib/FaceDataRecord?format=json", form2, CaptureTimeout, ct);
     }
 
+    /// <summary>FDSearch for one FPID. Returns the MatchList item whose FPID equals employeeNo exactly (the device may filter loosely), or null.</summary>
     private async Task<JsonElement?> FaceSearchAsync(string employeeNo, CancellationToken ct)
     {
         var text = await SendUtf8JsonAsync(HttpMethod.Post, FdSearchPath, new
         {
-            searchResultPosition = 0, maxResults = 1, faceLibType = "blackFD", FDID = "1", FPID = employeeNo,
+            searchResultPosition = 0, maxResults = 30, faceLibType = "blackFD", FDID = "1", FPID = employeeNo,
         }, ct);
         var t = StripBom(text);
         if (!t.StartsWith('{')) return null;
-        return JsonDocument.Parse(t).RootElement.Clone();
+        using var doc = JsonDocument.Parse(t);
+        if (doc.RootElement.ValueKind == JsonValueKind.Object
+            && doc.RootElement.TryGetProperty("MatchList", out var list) && list.ValueKind == JsonValueKind.Array)
+            foreach (var m in list.EnumerateArray())
+                if (m.ValueKind == JsonValueKind.Object && m.TryGetProperty("FPID", out var f)
+                    && string.Equals(f.ToString(), employeeNo, StringComparison.Ordinal))
+                    return m.Clone();
+        return null;
     }
 
     public async Task<bool> HasFaceAsync(string employeeNo, CancellationToken ct)
-    {
-        var r = await FaceSearchAsync(employeeNo, ct);
-        return r is { } e && e.TryGetProperty("numOfMatches", out var n) && n.ValueKind == JsonValueKind.Number && n.GetInt32() > 0;
-    }
+        => await FaceSearchAsync(employeeNo, ct) is not null;
 
     public async Task<byte[]?> DownloadFaceAsync(string employeeNo, CancellationToken ct)
     {
         string? url = null;
         var r = await FaceSearchAsync(employeeNo, ct);
-        if (r is { } e && e.TryGetProperty("MatchList", out var list) && list.ValueKind == JsonValueKind.Array)
-            foreach (var m in list.EnumerateArray())
-                if (m.ValueKind == JsonValueKind.Object && m.TryGetProperty("faceURL", out var f) && !string.IsNullOrWhiteSpace(f.ToString())) { url = f.ToString(); break; }
+        if (r is { } m && m.TryGetProperty("faceURL", out var f) && !string.IsNullOrWhiteSpace(f.ToString())) url = f.ToString();
 
         if (url is null)
         {
@@ -150,8 +156,10 @@ public sealed partial class HikClient
         }
         if (url is null) return null;
 
-        // Always go to the device we are configured for, even when the URL carries another (internal) host.
-        var path = Uri.TryCreate(url, UriKind.Absolute, out var abs) ? abs.PathAndQuery : url;
+        // Credentials must only ever go to the configured device: keep path+query, reject scheme-relative URLs,
+        // and verify the final URI host before sending.
+        var path = SafeDevicePath(url);
+        if (path is null) return null;
         var bytes = await SendRawAsync(HttpMethod.Get, path, null, null, ct);
         return bytes.Length == 0 ? null : bytes;
     }
@@ -159,4 +167,22 @@ public sealed partial class HikClient
     public async Task DeleteFaceAsync(string employeeNo, CancellationToken ct)
         => await SendUtf8JsonAsync(HttpMethod.Put, "/ISAPI/Intelligent/FDLib/FDSearch/Delete?format=json&FDID=1&faceLibType=blackFD",
             new { FPID = new[] { new { value = employeeNo } } }, ct);
+
+    private string? SafeDevicePath(string url)
+    {
+        url = url.Trim();
+        if (url.StartsWith("//") || url.StartsWith("\\") || url.StartsWith("/\\")) return null;
+        string path;
+        if (Uri.TryCreate(url, UriKind.Absolute, out var abs))
+        {
+            if (abs.Scheme != Uri.UriSchemeHttp && abs.Scheme != Uri.UriSchemeHttps) return null;
+            path = abs.PathAndQuery;
+        }
+        else path = url.StartsWith('/') ? url : "/" + url;
+        if (path.StartsWith("//")) return null;
+        var baseUri = _http.BaseAddress!;
+        if (!Uri.TryCreate(baseUri, path, out var final)
+            || !string.Equals(final.Host, baseUri.Host, StringComparison.OrdinalIgnoreCase) || final.Port != baseUri.Port) return null;
+        return path;
+    }
 }
