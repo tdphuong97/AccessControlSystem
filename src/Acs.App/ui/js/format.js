@@ -6,15 +6,13 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   const FINGERS = ['Cái', 'Trỏ', 'Giữa', 'Áp út', 'Út'];
 
-  // First letter of the first and last word. "Nguyễn Văn An" is shown as "AN" (given name first), as in the
-  // approved mockup; the host sends its own `initials` for list rows, this is the fallback.
+  // First letter of the first word + first letter of the last word, uppercase, diacritics kept.
   function initials(name) {
     const words = String(name || '').trim().split(/\s+/).filter(Boolean);
     if (!words.length) return '';
     const up = (w) => Array.from(w)[0].toLocaleUpperCase('vi');
     if (words.length === 1) return up(words[0]);
     const first = words[0], last = words[words.length - 1];
-    if (first.toLocaleLowerCase('vi') === 'nguyễn') return up(last) + up(first);
     return up(first) + up(last);
   }
 

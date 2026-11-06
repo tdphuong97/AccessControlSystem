@@ -9,7 +9,9 @@
 
   // "#/person/1137" -> { name: 'person', params: { emp: '1137' } }. Unknown paths go to the people list.
   function parse(hash) {
-    const parts = String(hash || '').replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
+    let parts;
+    try { parts = String(hash || '').replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent); }
+    catch (e) { return { name: 'people', params: {} }; }
     const [a, b, c] = parts;
     if (a === 'person' && b) return { name: 'person', params: { emp: b } };
     if (a === 'new' && STEPS.includes(b)) return { name: 'new/' + b, params: c ? { emp: c } : {} };

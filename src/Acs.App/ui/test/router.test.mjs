@@ -18,3 +18,16 @@ test('parse falls back to people', () => {
 });
 test('employeeNo stays a string', () => assert.equal(typeof R.parse('#/person/0012').params.emp, 'string'));
 test('href round trip', () => assert.equal(R.href('person', '1137'), '#/person/1137'));
+
+test('employeeNo with special characters round-trips', () => {
+  for (const emp of ['A/B', 'Nguyễn 01', '5%2', 'x?y#z']) {
+    assert.equal(R.parse(R.href('person', emp)).params.emp, emp);
+  }
+  assert.equal(R.parse('#/person/a%2Fb').params.emp, 'a/b');
+  assert.equal(R.parse('#/person/a%20b').params.emp, 'a b');
+});
+test('malformed percent escape falls back to people without throwing', () => {
+  assert.deepEqual(R.parse('#/person/%E0%A4%A'), { name: 'people', params: {} });
+  assert.doesNotThrow(() => R.parse('#/person/%'));
+  assert.equal(R.parse('#/person/%').name, 'people');
+});

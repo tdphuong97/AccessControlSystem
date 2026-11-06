@@ -54,7 +54,7 @@
       '<div class="devsub">' + esc(people) + '</div></div></div>';
   }
 
-  function render(host) {
+  function render(host, params, ctx) {
     let filter = 'all', query = '', showAll = false, rows = [], counts = null, seq = 0, timer = 0;
     host.innerHTML = '<div class="pad stack">' +
       '<div id="p-upd"></div><div id="p-stale"></div>' +
@@ -120,10 +120,11 @@
       const my = ++seq;
       try {
         const [list] = await Promise.all([ACS.bridge.call('people.list', { filter, query }), loadCounts()]);
-        if (my !== seq) return;
+        if (my !== seq || !ctx.alive()) return;
         rows = list;
         drawTop(); drawChips(); drawTable();
       } catch (e) {
+        if (my !== seq || !ctx.alive()) return;
         $('p-table').innerHTML = '<div class="empty-row">' + esc(ACS.ui.errMessage(e)) + '</div>';
       }
     }
@@ -139,11 +140,11 @@
     $('p-all').addEventListener('click', () => { showAll = !showAll; drawTable(); });
     $('tim').addEventListener('input', (ev) => { clearTimeout(timer); timer = setTimeout(() => { query = ev.target.value.trim(); load(); }, 200); });
 
-    const offState = ACS.onState(() => { if (counts) drawTop(); });
+    const offState = ACS.onState(() => { if (counts && ctx.alive()) drawTop(); });
     const offPerson = ACS.bridge.on('person.changed', () => load());
     const offDev = ACS.bridge.on('devices.changed', () => load());
     load();
-    return () => { clearTimeout(timer); offState(); offPerson(); offDev(); };
+    return () => { seq++; clearTimeout(timer); offState(); offPerson(); offDev(); };
   }
 
   ACS.screens = ACS.screens || {};

@@ -29,11 +29,12 @@
       '</section>';
   }
 
-  function render(host, params) {
+  function render(host, params, ctx) {
     const emp = params.emp;
     let p = null;
     host.innerHTML = '<div class="pad stack" id="pp"><p class="muted">Đang tải…</p></div>';
-    const root = () => host.querySelector('#pp');
+    const nDev = () => (p && p.devices ? p.devices.length : 2);
+    const root = () => host.querySelector('#pp') || host;
 
     function draw() {
       const validTo = p.validTo ? 'đến ' + F.fmtDate(p.validTo) : 'không thời hạn';
@@ -47,7 +48,7 @@
         : '<p class="muted small">Chưa có vân tay nào. Bấm "Thêm vân tay" để quét.</p>';
       root().innerHTML =
         '<a class="back" href="#/people">' + icon('chevronLeft', 18) + 'Người dùng</a>' +
-        (p.locked ? '<div class="alert alert-wait">' + icon('lock', 18) + '<span>Người này đã bị khoá ra vào. Bấm "Mở lại" để gửi lại cho 2 máy, không cần chụp lại.</span></div>' : '') +
+        (p.locked ? '<div class="alert alert-wait">' + icon('lock', 18) + '<span>Người này đã bị khoá ra vào. Bấm "Mở lại" để gửi lại cho ' + nDev() + ' máy, không cần chụp lại.</span></div>' : '') +
         '<section class="card prof"><div class="prof-photo">' + face + '</div><div class="prof-body">' +
         '<h1 class="h1">' + esc(p.fullName) + '</h1>' +
         '<div class="meta"><span class="mono">Mã NV ' + esc(p.employeeNo) + '</span>' + (p.groupName ? '<span>' + esc(p.groupName) + '</span>' : '') +
@@ -65,10 +66,10 @@
     }
 
     async function load() {
-      try { p = await ACS.bridge.call('people.get', { employeeNo: emp }); draw(); }
-      catch (e) { root().innerHTML = '<a class="back" href="#/people">' + icon('chevronLeft', 18) + 'Người dùng</a><div class="alert alert-err">' + esc(ACS.ui.errMessage(e)) + '</div>'; }
+      try { const r = await ACS.bridge.call('people.get', { employeeNo: emp }); if (!ctx.alive()) return; p = r; draw(); }
+      catch (e) { if (!ctx.alive()) return; root().innerHTML = '<a class="back" href="#/people">' + icon('chevronLeft', 18) + 'Người dùng</a><div class="alert alert-err">' + esc(ACS.ui.errMessage(e)) + '</div>'; }
     }
-    const guard = async (fn) => { try { await fn(); } catch (e) { ACS.ui.toast(ACS.ui.errMessage(e), 'error'); } };
+    const guard = async (fn) => { try { await fn(); } catch (e) { if (ctx.alive()) ACS.ui.toast(ACS.ui.errMessage(e), 'error'); } };
 
     function editDialog() {
       const noEnd = !p.validTo;
@@ -109,16 +110,16 @@
           body: 'Người này sẽ không ra vào được nữa. App vẫn giữ mặt và vân tay, bấm "Mở lại" bất cứ lúc nào để dùng tiếp.', okText: 'Khoá ra vào' });
         if (ok) { p = await ACS.bridge.call('people.lock', { employeeNo: emp }); draw(); }
       });
-      else if (act === 'unlock') guard(async () => { p = await ACS.bridge.call('people.unlock', { employeeNo: emp }); draw(); ACS.ui.toast('Đã mở lại. App đang gửi cho 2 máy.'); });
+      else if (act === 'unlock') guard(async () => { p = await ACS.bridge.call('people.unlock', { employeeNo: emp }); draw(); ACS.ui.toast('Đã mở lại. App đang gửi cho ' + nDev() + ' máy.'); });
       else if (act === 'delete') guard(async () => {
         const ok = await ACS.ui.confirm({ title: 'Xoá hẳn ' + p.fullName + '?',
-          body: 'App sẽ gỡ người này khỏi cả 2 máy và xoá luôn mặt, vân tay trong app. Không khôi phục lại được.', okText: 'Xoá hẳn', danger: true });
+          body: 'App sẽ gỡ người này khỏi cả ' + nDev() + ' máy và xoá luôn mặt, vân tay trong app. Không khôi phục lại được.', okText: 'Xoá hẳn', danger: true });
         if (ok) { await ACS.bridge.call('people.delete', { employeeNo: emp }); ACS.router.go('people'); }
       });
       else if (act === 'del-finger') guard(async () => {
         const fid = +el.dataset.fid;
         const f = p.fingers.find((x) => x.fingerId === fid);
-        const ok = await ACS.ui.confirm({ title: 'Xoá vân tay ' + (f ? f.label : '') + '?', body: 'Vân tay này sẽ được gỡ khỏi cả 2 máy.', okText: 'Xoá vân tay', danger: true });
+        const ok = await ACS.ui.confirm({ title: 'Xoá vân tay ' + (f ? f.label : '') + '?', body: 'Vân tay này sẽ được gỡ khỏi cả ' + nDev() + ' máy.', okText: 'Xoá vân tay', danger: true });
         if (ok) { p = await ACS.bridge.call('finger.delete', { employeeNo: emp, fingerId: fid }); draw(); }
       });
       else if (act === 'retry') guard(async () => {

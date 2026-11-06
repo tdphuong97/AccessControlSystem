@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const F = createRequire(import.meta.url)('../js/format.js');
 
-test('initials: brief example', () => assert.equal(F.initials('Nguyễn Văn An'), 'AN'));
+test('initials: first letter of first + last word', () => assert.equal(F.initials('Nguyễn Văn An'), 'NA'));
 test('initials: first + last word, keeps diacritics', () => {
   assert.equal(F.initials('Hoàng Minh Đức'), 'HĐ');
   assert.equal(F.initials('Trần Thị Bình'), 'TB');

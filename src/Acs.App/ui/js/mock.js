@@ -22,7 +22,7 @@
 
   // fingers: [fingerId, quality]; wait: device names still waiting; created: days ago
   const people = [
-    { employeeNo: '1137', fullName: 'Nguyễn Văn An', initials: 'AN', groupName: 'Kỹ thuật', hasFace: true, fingers: [[7, 86], [2, 79]], wait: [], created: 1 },
+    { employeeNo: '1137', fullName: 'Nguyễn Văn An', initials: 'NA', groupName: 'Kỹ thuật', hasFace: true, fingers: [[7, 86], [2, 79]], wait: [], created: 1 },
     { employeeNo: '1136', fullName: 'Trần Thị Bình', initials: 'TB', groupName: 'Kế toán', hasFace: true, fingers: [[7, 91], [2, 74]], wait: ['Máy tầng 1'], created: 3 },
     { employeeNo: '1135', fullName: 'Lê Hoàng Cường', initials: 'LC', groupName: 'Kinh doanh', hasFace: true, fingers: [[3, 68]], wait: [], created: 40 },
     { employeeNo: '1134', fullName: 'Phạm Thu Dung', initials: 'PD', groupName: 'Kế toán', hasFace: false, fingers: [[6, 83], [1, 88]], wait: [], created: 52 },

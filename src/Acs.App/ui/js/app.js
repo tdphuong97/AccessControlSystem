@@ -9,7 +9,7 @@
   const listeners = [];
   ACS.onState = (fn) => { listeners.push(fn); return () => { const i = listeners.indexOf(fn); if (i >= 0) listeners.splice(i, 1); }; };
   let updateDismissed = false;
-  let cleanup = null;
+  let mounter = null;
   let current = { name: 'people', params: {} };
 
   const MAIN_TAB = ['people', 'person', 'new/info', 'new/face', 'new/finger', 'new/done'];
@@ -64,19 +64,18 @@
   ACS.dismissUpdate = () => { updateDismissed = true; };
 
   function mountScreen(route) {
-    if (cleanup) { try { cleanup(); } catch (e) { console.error(e); } cleanup = null; }
     current = route;
     drawChrome();
-    const host = document.getElementById('screen');
-    host.innerHTML = '';
+    const screenEl = document.getElementById('screen');
+    if (!mounter) mounter = ACS.mount.createMounter(screenEl, () => document.createElement('div'));
     window.scrollTo(0, 0);
     const screen = ACS.screens[route.name];
     if (!screen) {
-      host.innerHTML = '<div class="pad"><div class="card empty"><h1 class="h1">Màn hình này sẽ có ở bước sau</h1>' +
-        '<p class="muted">Bạn có thể quay lại danh sách người dùng.</p><a class="btn btn-primary" href="#/people">Về danh sách</a></div></div>';
+      mounter.mount((host) => { host.innerHTML = '<div class="pad"><div class="card empty"><h1 class="h1">Màn hình này sẽ có ở bước sau</h1>' +
+        '<p class="muted">Bạn có thể quay lại danh sách người dùng.</p><a class="btn btn-primary" href="#/people">Về danh sách</a></div></div>'; });
       return;
     }
-    cleanup = screen.render(host, route.params) || null;
+    mounter.mount((host, ctx) => screen.render(host, route.params, ctx));
   }
 
   function setState(st) {
