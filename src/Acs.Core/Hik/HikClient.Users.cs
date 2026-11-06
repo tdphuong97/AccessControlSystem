@@ -1,6 +1,5 @@
 using System.Runtime.CompilerServices;
 using System.Text;
-using System.Text.Encodings.Web;
 using System.Text.Json;
 
 namespace Acs.Core.Hik;
@@ -12,14 +11,11 @@ public sealed partial class HikClient
     public const string NoEndTime = "2035-12-31T23:59:59";
     private const string NoBeginTime = "2000-01-01T00:00:00";
 
-    /// <summary>Writes names as real UTF-8 (the default serializer would escape them as \uXXXX).</summary>
-    private static readonly JsonSerializerOptions Utf8Json = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
-
     /// <summary>Pause between UserInfo/Search pages (the device locks the IP if hammered). Tests set it to zero.</summary>
     public TimeSpan PagePause { get; set; } = TimeSpan.FromMilliseconds(150);
 
     private Task<string> SendUtf8JsonAsync(HttpMethod method, string path, object payload, CancellationToken ct)
-        => SendAsync(method, path, new StringContent(JsonSerializer.Serialize(payload, Utf8Json), Encoding.UTF8, "application/json"), null, ct);
+        => SendAsync(method, path, new StringContent(JsonSerializer.Serialize(payload, HikJson.Options), Encoding.UTF8, "application/json"), null, ct);
 
     public async IAsyncEnumerable<HikUser> ListUsersAsync([EnumeratorCancellation] CancellationToken ct)
     {

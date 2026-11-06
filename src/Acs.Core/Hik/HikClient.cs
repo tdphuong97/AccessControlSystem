@@ -42,7 +42,7 @@ public sealed partial class HikClient : IHikDevice, IDisposable
         => SendAsync(method, path, JsonBody(payload), timeout, ct);
 
     internal static StringContent JsonBody(object payload)
-        => new(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+        => new(JsonSerializer.Serialize(payload, HikJson.Options), Encoding.UTF8, "application/json");
 
     /// <summary>
     /// Core call. Network errors and timeouts become HikTransientException; a cancelled caller token propagates as

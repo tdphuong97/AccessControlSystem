@@ -7,8 +7,8 @@ namespace Acs.Core.Tests.Hik;
 /// <summary>In-process fake of a Hikvision ISAPI endpoint. Routes by method + path (query ignored); can require Digest.</summary>
 public sealed class FakeIsapiHandler : HttpMessageHandler
 {
-    public sealed record Seen(HttpMethod Method, string PathAndQuery, string? Authorization, string Body);
-    public sealed record Reply(HttpStatusCode Status, string Body, string ContentType = "application/json");
+    public sealed record Seen(HttpMethod Method, string PathAndQuery, string? Authorization, string Body, byte[]? BodyBytes = null);
+    public sealed record Reply(HttpStatusCode Status, string Body, string ContentType = "application/json", byte[]? Raw = null);
 
     public const string Realm = "DS-Fake";
     public const string Nonce = "abc";
@@ -47,8 +47,8 @@ public sealed class FakeIsapiHandler : HttpMessageHandler
     {
         if (Throw is not null) throw Throw;
         ct.ThrowIfCancellationRequested();
-        var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(ct);
-        var seen = new Seen(request.Method, request.RequestUri!.PathAndQuery, request.Headers.Authorization?.ToString(), body);
+        var bytes = request.Content is null ? Array.Empty<byte>() : await request.Content.ReadAsByteArrayAsync(ct);
+        var seen = new Seen(request.Method, request.RequestUri!.PathAndQuery, request.Headers.Authorization?.ToString(), Encoding.UTF8.GetString(bytes), bytes);
         Requests.Add(seen);
         if (RequireDigest && !DigestOk(seen))
         {
@@ -59,6 +59,12 @@ public sealed class FakeIsapiHandler : HttpMessageHandler
         if (!_routes.TryGetValue(request.Method.Method + " " + request.RequestUri.AbsolutePath, out var f))
             return new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("{}") };
         var rep = f(seen);
+        if (rep.Raw is not null)
+        {
+            var c = new ByteArrayContent(rep.Raw);
+            c.Headers.TryAddWithoutValidation("Content-Type", rep.ContentType);
+            return new HttpResponseMessage(rep.Status) { Content = c };
+        }
         return new HttpResponseMessage(rep.Status) { Content = new StringContent(rep.Body, Encoding.UTF8, rep.ContentType) };
     }
 }
