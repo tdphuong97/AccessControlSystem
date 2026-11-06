@@ -123,6 +123,64 @@ public class HikUsersTests
         Assert.Contains("\"UserInfoDelCond\":{\"EmployeeNoList\":[{\"employeeNo\":\"00123\"}]}", h.Requests[0].Body);
     }
 
+    private static string Page(string status, params string[] nos)
+        => "{\"UserInfoSearch\":{\"responseStatusStrg\":\"" + status + "\",\"UserInfo\":[" +
+           string.Join(",", nos.Select(n => "{\"employeeNo\":\"" + n + "\",\"name\":\"X\"}")) + "]}}";
+
+    [Fact]
+    public async Task ListUsers_repeated_page_without_totalMatches_terminates()
+    {
+        var h = new FakeIsapiHandler();
+        h.On(HttpMethod.Post, Search, Page("MORE", "00001", "00002"));
+        await Assert.ThrowsAsync<HikTransientException>(async () =>
+        {
+            await foreach (var _ in Make(h).ListUsersAsync(default)) { }
+        });
+        Assert.Equal(2, h.Requests.Count);
+    }
+
+    [Fact]
+    public async Task ListUsers_MORE_with_empty_batch_terminates()
+    {
+        var h = new FakeIsapiHandler();
+        h.On(HttpMethod.Post, Search, Page("MORE"));
+        var n = 0;
+        await foreach (var _ in Make(h).ListUsersAsync(default)) n++;
+        Assert.Equal(0, n);
+        Assert.Single(h.Requests);
+    }
+
+    [Fact]
+    public async Task ListUsers_cancel_during_pause_throws_OperationCanceled()
+    {
+        var h = new FakeIsapiHandler();
+        h.On(HttpMethod.Post, Search, Page("MORE", "00001"));
+        var c = new HikClient("192.168.1.201", "admin", "secret", h) { PagePause = TimeSpan.FromSeconds(30) };
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var _ in c.ListUsersAsync(cts.Token)) { }
+        });
+        Assert.Single(h.Requests);
+    }
+
+    [Fact]
+    public async Task FindUser_returns_exact_match()
+    {
+        var h = new FakeIsapiHandler();
+        h.On(HttpMethod.Post, Search, Page("OK", "00123"));
+        var u = await Make(h).FindUserAsync("00123", default);
+        Assert.Equal("00123", u!.EmployeeNo);
+    }
+
+    [Fact]
+    public async Task FindUser_returns_null_when_device_returns_a_different_user()
+    {
+        var h = new FakeIsapiHandler();
+        h.On(HttpMethod.Post, Search, Page("OK", "00999"));
+        Assert.Null(await Make(h).FindUserAsync("00123", default));
+    }
+
     private sealed class CapturingHandler(Action<byte[]> cap) : HttpMessageHandler
     {
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)

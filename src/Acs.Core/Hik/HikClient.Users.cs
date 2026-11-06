@@ -7,6 +7,7 @@ namespace Acs.Core.Hik;
 public sealed partial class HikClient
 {
     private const int PageSize = 30;
+    private const int MaxListedUsers = 100_000;
     private const string UserSearchPath = "/ISAPI/AccessControl/UserInfo/Search?format=json";
     public const string NoEndTime = "2035-12-31T23:59:59";
     private const string NoBeginTime = "2000-01-01T00:00:00";
@@ -20,9 +21,16 @@ public sealed partial class HikClient
     public async IAsyncEnumerable<HikUser> ListUsersAsync([EnumeratorCancellation] CancellationToken ct)
     {
         var pos = 0;
+        string? prevFirst = null;
         while (true)
         {
             var (users, status, total) = await SearchPageAsync(pos, null, ct);
+            // Guard against a device that keeps answering MORE with the same page (e.g. no totalMatches) or never ends.
+            if (users.Count > 0 && pos > 0 && users[0].EmployeeNo == prevFirst)
+                throw new HikTransientException("Máy trả về danh sách người bị lặp. Bấm Thử lại sau ít phút.", "paging repeated page at position " + pos);
+            if (pos > MaxListedUsers)
+                throw new HikTransientException("Máy trả về quá nhiều người bất thường. Bấm Thử lại sau ít phút.", "paging exceeded " + MaxListedUsers);
+            if (users.Count > 0) prevFirst = users[0].EmployeeNo;
             foreach (var u in users) yield return u;
             pos += users.Count;
             if (users.Count == 0 || status != "MORE" || (total > 0 && pos >= total)) yield break;
@@ -33,7 +41,7 @@ public sealed partial class HikClient
     public async Task<HikUser?> FindUserAsync(string employeeNo, CancellationToken ct)
     {
         var (users, _, _) = await SearchPageAsync(0, employeeNo, ct);
-        return users.FirstOrDefault(u => u.EmployeeNo == employeeNo) ?? users.FirstOrDefault();
+        return users.FirstOrDefault(u => string.Equals(u.EmployeeNo, employeeNo, StringComparison.Ordinal));
     }
 
     private async Task<(List<HikUser> Users, string? Status, int Total)> SearchPageAsync(int pos, string? employeeNo, CancellationToken ct)
@@ -118,12 +126,14 @@ public sealed partial class HikClient
         await SendUtf8JsonAsync(HttpMethod.Post, "/ISAPI/AccessControl/UserInfo/Record?format=json", body, ct);
     }
 
-    /// <summary>"User does not exist": subStatusCode employeeNoNotExist / userNotExist, or "not exist" text in code or detail.</summary>
+    /// <summary>
+    /// "User does not exist": a named subStatusCode containing "NotExist" (employeeNoNotExist, userNotExist...) wins;
+    /// the free-text Detail ("not exist") is consulted only when the code is a bare number.
+    /// </summary>
     private static bool IsNotExist(HikRejectedException e)
     {
-        static bool Has(string? s) => s is not null
-            && (s.Contains("NotExist", StringComparison.OrdinalIgnoreCase) || s.Contains("not exist", StringComparison.OrdinalIgnoreCase));
-        return Has(e.Code) || Has(e.Detail);
+        if (e.Code.Contains("NotExist", StringComparison.OrdinalIgnoreCase)) return true;
+        return int.TryParse(e.Code, out _) && e.Detail?.Contains("not exist", StringComparison.OrdinalIgnoreCase) == true;
     }
 
     public async Task DeleteUserAsync(string employeeNo, CancellationToken ct)
