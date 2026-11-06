@@ -147,6 +147,18 @@ public sealed class AppHostTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task import_progress_is_reported_in_order_before_the_result()
+    {
+        var h = NewHost();
+        var a = await AddDevice(h, "Máy A");
+        foreach (var no in new[] { "1001", "1002", "1003" }) await SeedOnDevice(_factory.For(a), no, "P" + no, false);
+        await h.HandleAsync("import.start", J($$"""{"deviceId":{{a}}}"""));
+        var done = Ev.Where(e => e.Name == "import.progress").Select(e => Out(e.Data).GetProperty("done").GetInt32()).ToList();
+        Assert.Equal(3, done.Last());   // already there when the command returned
+        Assert.Equal(done.OrderBy(x => x), done);
+    }
+
+    [Fact]
     public async Task a_device_added_later_is_pending_for_everyone_and_asks_for_reconcile()
     {
         var h = NewHost();

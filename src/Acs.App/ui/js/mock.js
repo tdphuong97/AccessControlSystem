@@ -1,6 +1,6 @@
 // Mock host used when the page is opened outside WebView2 (design checks, screenshots). Answers every C3
 // command with believable sample data. All people and devices are invented.
-// Query flags: ?err (one failed sync), ?locked (a stale locked person), ?noupdate, ?authpause, ?firstrun (no devices yet), ?empty, ?nobackup (no backup password), ?plansame (reconcile finds nothing), ?needrec (app.state.needsReconcile)
+// Query flags: ?err (one failed sync), ?locked (a stale locked person), ?noupdate, ?authpause, ?firstrun (no devices yet), ?empty, ?nobackup (no backup password), ?plansame (reconcile finds nothing), ?needrec (app.state.needsReconcile), ?importwarn (import could not read everyone)
 (function () {
   const ACS = (window.ACS = window.ACS || {});
   const F = () => ACS.fmt;
@@ -224,6 +224,8 @@
         await wait(350);
       }
       ACS.bridge.emit('import.progress', { done: total, total, currentName: '' });
+      if (/importwarn/.test(q)) ACS.bridge.emit('import.progress', { done: total, total, currentName: 'Không đọc được đủ dữ liệu của 2 người. Xem Nhật ký; chạy lại Lấy dữ liệu sau nếu cần.' });
+      if (devices.length > 1) needsReconcile = true;
       return { people: total, withFace: 21, facesMissing: 3, fingers: 38 };
     },
     'backup.status': () => ({ hasPassword: bak.hasPassword, lastAt: bak.lastAt, files: bak.files, extraFolder: extra }),

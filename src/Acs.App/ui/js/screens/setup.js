@@ -59,7 +59,8 @@
           const m = i.summary;
           main = '<div class="notice-ok" role="status">' + icon('checkCircle', 22) + '<div><div class="fw6" style="color:var(--ok-ink)">Đã lấy ' + m.people + ' người từ ' + esc(srcName()) + '</div>' +
             '<div class="small" style="color:#1F3A2C">' + m.withFace + ' người có khuôn mặt · ' + m.fingers + ' vân tay</div></div></div>' +
-            (m.facesMissing ? '<div class="alert alert-wait" role="note">' + icon('alertCircle', 18) + '<span>' + m.facesMissing + ' người đã có mặt trên ' + esc(srcName()) + ' nhưng app chưa có ảnh. Cần chụp lại 1 lần nếu muốn gửi sang máy khác; người đó vẫn vào được máy đang có mặt.</span></div>' : '');
+            (m.facesMissing ? '<div class="alert alert-wait" role="note">' + icon('alertCircle', 18) + '<span>' + m.facesMissing + ' người đã có mặt trên ' + esc(srcName()) + ' nhưng app chưa có ảnh. Cần chụp lại 1 lần nếu muốn gửi sang máy khác; người đó vẫn vào được máy đang có mặt.</span></div>' : '') +
+            (i.note ? '<div class="alert alert-wait" role="note">' + icon('alertCircle', 18) + '<span>' + esc(i.note) + ' <a href="#/log">Mở Nhật ký</a></span></div>' : '');
         } else {
           main = '<div class="card"><label class="field-lbl" for="su-src">Lấy dữ liệu từ máy nào?</label>' + W.deviceSelect('su-src', ok, s.source) +
             '<div class="hint">Chọn máy đang có đầy đủ người nhất (thường là máy tầng trệt). App chỉ đọc, không đổi gì trên máy.</div>' + errBox(i.err) +
@@ -177,6 +178,8 @@
     });
     const offImp = ACS.bridge.on('import.progress', (d) => {
       if (!alive() || s.imp.phase !== 'running') return;
+      // The host's last progress event may carry "Không đọc được đủ dữ liệu của N người…" (ImportSummary has no field for it).
+      if (d.total && d.done >= d.total && /^Không đọc được/.test(d.currentName || '')) { s.imp.note = d.currentName; return; }
       s.imp.done = d.done; s.imp.total = d.total; s.imp.name = d.currentName;
       if (s.step === 2) draw();
     });

@@ -12,6 +12,13 @@ public sealed partial class AppHost
 {
     private ReconcilePlan? _plan;
 
+    /// <summary>Reports synchronously, in order, before the command returns. Progress&lt;T&gt; posts to the thread pool,
+    /// so its events could arrive out of order or after the result (the page then ignores them).</summary>
+    private sealed class InOrder<T>(Action<T> act) : IProgress<T>
+    {
+        public void Report(T value) => act(value);
+    }
+
     /// <summary>Settings key behind app.state.needsReconcile ("1" = ask the admin to run So khớp).</summary>
     public const string NeedsReconcileKey = "reconcile.needed";
 
@@ -126,7 +133,7 @@ public sealed partial class AppHost
 
     private async Task<ReconcilePlan> ReconcilePlanAsync()
     {
-        var plan = await Reconciler.BuildAsync(new Progress<string>(m => Emit("reconcile.progress", new { message = m })), _cts.Token);
+        var plan = await Reconciler.BuildAsync(new InOrder<string>(m => Emit("reconcile.progress", new { message = m })), _cts.Token);
         _plan = plan;
         // Nothing to send anywhere (ExtraFingers is information only): the devices already match the app.
         if (!plan.Devices.Any(d => d.Items.Any(i => i.Kind != DiffKind.ExtraFingers))) SetNeedsReconcile(false);
@@ -153,7 +160,7 @@ public sealed partial class AppHost
         try
         {
             return await Importer.ImportAllAsync(id,
-                new Progress<ImportProgress>(p => Emit("import.progress", new { done = p.Done, total = p.Total, currentName = p.CurrentName })),
+                new InOrder<ImportProgress>(p => Emit("import.progress", new { done = p.Done, total = p.Total, currentName = p.CurrentName })),
                 _cts.Token);
         }
         finally

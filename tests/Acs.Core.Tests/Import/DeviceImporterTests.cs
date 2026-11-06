@@ -122,6 +122,77 @@ public sealed class DeviceImporterTests : IAsyncDisposable
         Assert.Empty(st.Fingers);
     }
 
+    /// <summary>Per-person scripted failures for photo downloads and finger reads; counts the calls.</summary>
+    private sealed class ScriptedReads(IHikDevice inner) : ForwardingDevice(inner)
+    {
+        public readonly Dictionary<string, Exception> Photo = new();
+        public readonly Dictionary<string, Exception> Fingers = new();
+        public readonly Dictionary<string, IReadOnlyList<HikFinger>> FingerList = new();
+        public readonly List<string> PhotoCalls = [];
+        public volatile bool Gone;   // the device itself is unreachable (every call times out)
+
+        public override Task<HikUser?> FindUserAsync(string employeeNo, CancellationToken ct) =>
+            Gone ? throw new HikTransientException("Máy không trả lời kịp.") : base.FindUserAsync(employeeNo, ct);
+        public override Task<byte[]?> DownloadFaceAsync(string employeeNo, CancellationToken ct)
+        {
+            PhotoCalls.Add(employeeNo);
+            return Photo.TryGetValue(employeeNo, out var e) ? throw e : base.DownloadFaceAsync(employeeNo, ct);
+        }
+        public override Task<IReadOnlyList<HikFinger>> ReadFingerprintsAsync(string employeeNo, CancellationToken ct) =>
+            Fingers.TryGetValue(employeeNo, out var e) ? throw e
+            : FingerList.TryGetValue(employeeNo, out var l) ? Task.FromResult(l) : base.ReadFingerprintsAsync(employeeNo, ct);
+    }
+
+    [Fact]
+    public async Task One_unreadable_photo_or_finger_list_never_stops_the_import()
+    {
+        await Seed("1001", "An", true, true);          // photo 404
+        await Seed("1002", "Bình", true, true);        // photo 403
+        await Seed("1003", "Cường", true, true);       // photo link refuses the login: photos stop for the run
+        await Seed("1004", "Dũng", true, true, 1);     // photo not even tried; finger read fine
+        await Seed("1005", "Em", true, false, 2);      // finger list unreadable
+        await Seed("1006", "Phúc", true, false, 3);    // one template is not base64
+        var dev = new ScriptedReads(_dev);
+        dev.Photo["1001"] = new HikNotSupportedException("Máy này không hỗ trợ chức năng đó.", "404");
+        dev.Photo["1002"] = new HikRejectedException("403", "Máy từ chối yêu cầu (mã 403).", "403");
+        dev.Photo["1003"] = new HikAuthException("Máy báo sai tài khoản hoặc mật khẩu.");
+        dev.Fingers["1005"] = new HikRejectedException("fpListUnreadable", HikClient.FpUnreadableMessage, "<html>");
+        dev.FingerList["1006"] = [new HikFinger(3, "not base64 !!")];
+        var progress = new List<ImportProgress>();
+
+        var s = await new DeviceImporter(_h.Db, new SingleDeviceFactory(dev), _h.Time).ImportAllAsync(_d1, new Collect(progress), Ct);
+
+        Assert.Equal(new ImportSummary(6, 0, 4, 1), s);
+        Assert.Equal(["1001", "1002", "1003"], dev.PhotoCalls);   // after the auth refusal: no more photo logins
+        Assert.All(new[] { "1001", "1002", "1003", "1004", "1005", "1006" }, no => Assert.NotNull(_h.Db.People.Get(no)));
+        Assert.Single(_h.Db.Biometrics.GetFingers("1004"));
+        Assert.False(_h.Db.Jobs.GetState("1005", _d1)!.FingersKnown);
+        Assert.Equal(new HashSet<int> { 3 }, _h.Db.Jobs.GetState("1006", _d1)!.Fingers);   // the device still has it
+        Assert.Empty(_h.Db.Biometrics.GetFingers("1006"));
+        Assert.Equal(DeviceImporter.NotReadText(2), progress.Last().CurrentName);
+        var log = _h.Db.Log.List(null, _d1, 50);
+        Assert.Contains(log, l => l.EmployeeNo is null && l.Message == DeviceImporter.NotReadText(2));
+        Assert.Contains(log, l => l.EmployeeNo == "1003" && l.Message!.Contains("bỏ qua ảnh"));
+        Assert.DoesNotContain(log, l => l.Message!.Contains("<html>"));   // no raw device text in messages
+        Assert.False(_h.Db.Devices.Get(_d1)!.AuthPaused);   // a refused photo link is not a wrong password
+    }
+
+    [Fact]
+    public async Task A_photo_timeout_on_a_reachable_device_is_a_missing_face_but_a_gone_device_stops_the_run()
+    {
+        await Seed("1001", "An", true, true);
+        await Seed("1002", "Bình", true, true);
+        var dev = new ScriptedReads(_dev);
+        dev.Photo["1001"] = new HikTransientException("Máy đang bận.");
+        var imp = new DeviceImporter(_h.Db, new SingleDeviceFactory(dev), _h.Time);
+        Assert.Equal(new ImportSummary(2, 1, 1, 0), await imp.ImportAllAsync(_d1, null, Ct));
+
+        await Seed("1003", "Cường", true, true);
+        dev.Photo["1003"] = new HikTransientException("Máy không trả lời kịp.");
+        dev.Gone = true;   // the probe after the timeout fails too: stop instead of timing out person after person
+        await Assert.ThrowsAsync<HikTransientException>(() => imp.ImportAllAsync(_d1, null, Ct));
+    }
+
     private sealed class Collect(List<ImportProgress> l) : IProgress<ImportProgress>
     {
         public void Report(ImportProgress v) => l.Add(v);
