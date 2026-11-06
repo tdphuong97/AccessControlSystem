@@ -77,6 +77,7 @@ public sealed class DeviceImporter(Database db, IHikDeviceFactory factory, TimeP
         return db.Tx(() =>
         {
             var added = 0;
+            db.People.BumpHighWater(no);
             var isNew = db.People.Get(no) is null;
             if (isNew)
             {

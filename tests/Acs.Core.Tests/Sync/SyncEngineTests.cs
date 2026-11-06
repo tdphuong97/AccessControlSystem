@@ -100,7 +100,8 @@ public sealed class SyncEngineTests : IAsyncDisposable
         var j = Assert.Single(_h.Db.Jobs.ListOpen(d));
         Assert.Equal("not_saved", j.ErrorKind);
         Assert.Equal(JobRules.NotSavedMessage, j.ErrorMessage);
-        Assert.Equal(3, _h.Factory.For(d).Calls.Count(c => c == nameof(IHikDevice.FindUserAsync)));
+        // one look-up before the first write (no state row yet: is the number free?) + 3 verify reads
+        Assert.Equal(1 + JobRules.VerifyReads, _h.Factory.For(d).Calls.Count(c => c == nameof(IHikDevice.FindUserAsync)));
         Assert.Null(_h.Db.Jobs.GetState("1001", d)?.VerifiedAt);
         Assert.Contains(_h.Db.Log.List("1001", d, 10), e => !e.Ok);
     }
@@ -300,6 +301,42 @@ public sealed class SyncEngineTests : IAsyncDisposable
         var s = _h.Db.Jobs.GetState("1001", d)!;
         Assert.False(s.UserPresent || s.FacePresent);
         Assert.Empty(s.Fingers);
+    }
+
+    [Fact]
+    public async Task Upsert_does_not_merge_into_another_device_user_with_the_same_number()
+    {
+        var d = _h.AddDevice("Máy tầng 1");
+        _h.AddPerson("1001", "Nguyễn An");
+        var fake = _h.Factory.For(d);
+        await fake.UpsertUserAsync(new HikUserWrite("1001", "Trần Cũ", "2020-01-01T00:00:00", JobRules.NoEndDate, true, 1), default);
+        _h.Enqueue(d, "1001", JobKind.UpsertUser);
+        _h.Engine.Start();
+        await _h.Until(() => _h.Db.Jobs.ListOpen(d).Any(j => j.Status == JobStatus.Failed));
+        var j = Assert.Single(_h.Db.Jobs.ListOpen(d));
+        Assert.Equal("conflict", j.ErrorKind);
+        Assert.Equal("Máy đang có người khác dùng mã này (Trần Cũ). Đổi mã hoặc xử lý bằng So khớp.", j.ErrorMessage);
+        Assert.Equal("Trần Cũ", (await fake.FindUserAsync("1001", default))!.Name);   // untouched
+        Assert.DoesNotContain(nameof(IHikDevice.UpsertUserAsync), fake.Calls.Skip(1));
+
+        // Once So khớp has confirmed the device user (state row), a retry updates it on purpose.
+        _h.Db.Jobs.SetState(new DeviceStateRecord("1001", d, true, true, false, new HashSet<int>(), new HashSet<int>(), _h.Now));
+        _h.Db.Jobs.ResetFailed(d, _h.Now);
+        _h.Engine.Wake(d);
+        await _h.WaitDone(d);
+        Assert.Equal("Nguyễn An", (await fake.FindUserAsync("1001", default))!.Name);
+    }
+
+    [Fact]
+    public async Task Upsert_with_no_state_row_and_the_same_name_on_the_device_proceeds()
+    {
+        var d = _h.AddDevice();
+        _h.AddPerson("1001", "Nguyễn An");
+        await _h.Factory.For(d).UpsertUserAsync(new HikUserWrite("1001", " Nguyễn An ", "2020-01-01T00:00:00", JobRules.NoEndDate, true, 1), default);
+        _h.Enqueue(d, "1001", JobKind.UpsertUser);
+        _h.Engine.Start();
+        await _h.WaitDone(d);
+        Assert.True(_h.Db.Jobs.GetState("1001", d)!.UserPresent);
     }
 
     private async Task<FakeDevice> LockedOnDevice(int d, bool deviceFace, params int[] deviceFingers)

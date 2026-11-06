@@ -111,6 +111,15 @@ public sealed class ReconcilerTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Stranger_numbers_are_never_suggested_for_new_people()
+    {
+        _h.AddPerson("1001", "An");
+        await _dev1.UpsertUserAsync(W("5000", "Người lạ"), Ct);
+        await _rec.BuildAsync(null, Ct);
+        Assert.Equal("5001", _h.Db.People.NextEmployeeNo());
+    }
+
+    [Fact]
     public async Task Remove_choice_enqueues_DeleteUser()
     {
         await _dev1.UpsertUserAsync(W("9001", "Người lạ"), Ct);

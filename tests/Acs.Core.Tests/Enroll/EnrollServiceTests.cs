@@ -50,6 +50,45 @@ public sealed class EnrollServiceTests : IAsyncDisposable
         Assert.Equal("Mã nhân viên đã có người dùng.", ex.Message);
     }
 
+    private void Drain(int dev)
+    {
+        foreach (var j in Jobs(dev).ToList()) { _h.Db.Jobs.MarkRunning(j, _h.Now); _h.Db.Jobs.MarkDone(j.Id, _h.Now); }
+    }
+
+    [Fact]
+    public void Number_still_waiting_to_be_removed_cannot_be_reused()
+    {
+        _svc.CreatePerson(new NewPerson("An", "2001", null, null));
+        _svc.Delete("2001");   // DeleteUser queued on both devices
+        var ex = Assert.Throws<EnrollException>(() => _svc.CreatePerson(new NewPerson("Bình", "2001", null, null)));
+        Assert.Equal(EnrollService.NumberBusyMessage, ex.Message);
+        Assert.All(new[] { _d1, _d2 }, d => Assert.Contains(Jobs(d), j => j.Kind == JobKind.DeleteUser));   // not cancelled
+
+        Drain(_d1); Drain(_d2);   // the devices removed the old user
+        Assert.Equal("Bình", _svc.CreatePerson(new NewPerson("Bình", "2001", null, null)).FullName);
+    }
+
+    [Fact]
+    public void Next_number_never_comes_back_after_a_delete()
+    {
+        _svc.CreatePerson(new NewPerson("An", "2001", null, null));
+        _svc.CreatePerson(new NewPerson("Bình", "2002", null, null));
+        _svc.Delete("2002");
+        Drain(_d1); Drain(_d2);
+        Assert.Equal("2003", _svc.NextEmployeeNo());
+    }
+
+    [Fact]
+    public void High_water_keeps_the_width_and_ignores_non_numbers()
+    {
+        _h.Db.People.BumpHighWater("0099");
+        _h.Db.People.BumpHighWater("ABC");
+        _h.Db.People.BumpHighWater("0012");   // lower: ignored
+        Assert.Equal("0100", _svc.NextEmployeeNo());
+        _svc.CreatePerson(new NewPerson("An", "0150", null, null));
+        Assert.Equal("0151", _svc.NextEmployeeNo());
+    }
+
     [Fact]
     public void Bad_employeeNo_refused()
     {

@@ -16,6 +16,7 @@ public sealed partial class EnrollService(Database db, IHikDeviceFactory factory
     public const int MinFingerQuality = 40;
     public const int MaxNameLength = 32;
     public const int MaxFaceBytes = 200 * 1024;
+    public const string NumberBusyMessage = "Mã này vừa xoá và đang chờ gỡ khỏi máy. Đợi máy gỡ xong hoặc dùng mã khác.";
 
     private readonly ConcurrentDictionary<int, SemaphoreSlim> _busy = new();
 
@@ -54,6 +55,10 @@ public sealed partial class EnrollService(Database db, IHikDeviceFactory factory
         var rec = db.Tx(() =>
         {
             if (db.People.Get(no) is not null) throw new EnrollException("Mã nhân viên đã có người dùng.");
+            // A queued DeleteUser for this number would be cancelled by the new UpsertUser and the old device user
+            // (face, fingers) would be merged into the new person.
+            if (db.Jobs.HasOpen(no)) throw new EnrollException(NumberBusyMessage);
+            db.People.BumpHighWater(no);
             var now = Now;
             var r = new PersonRecord(no, name, GroupId(p.GroupName), DateOnly.FromDateTime(time.GetLocalNow().DateTime), p.ValidTo,
                 PersonStatus.Active, now, now, null);

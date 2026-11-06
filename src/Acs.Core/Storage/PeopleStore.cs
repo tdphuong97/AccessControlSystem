@@ -52,19 +52,40 @@ public sealed class PeopleStore
 
     public void Delete(string employeeNo) => _db.Exec("DELETE FROM people WHERE employee_no=$e", ("$e", employeeNo));
 
-    /// <summary>Highest all-digit number + 1, keeping the width of leading zeros. No numeric id gives "1001".</summary>
+    /// <summary>Settings key: the highest all-digit employee number ever used here (created, imported or seen on a device).</summary>
+    public const string HighWaterKey = "employeeNo.highWater";
+
+    private static bool IsNumber(string? s) => !string.IsNullOrEmpty(s) && s.All(char.IsAsciiDigit);
+
+    /// <summary>The larger number wins; on a tie the wider one (more leading zeros) is kept.</summary>
+    private static bool Above(string a, string b)
+    {
+        var (x, y) = (BigInteger.Parse(a), BigInteger.Parse(b));
+        return x > y || (x == y && a.Length > b.Length);
+    }
+
+    /// <summary>
+    /// Remembers <paramref name="employeeNo"/> as used, so a deleted or device-only number is never suggested again
+    /// (a reused number would merge a new person into an old device user). Call inside the caller's transaction.
+    /// </summary>
+    public void BumpHighWater(string employeeNo)
+    {
+        if (!IsNumber(employeeNo)) return;
+        var cur = _db.Settings.Get(HighWaterKey);
+        if (!IsNumber(cur) || Above(employeeNo, cur!)) _db.Settings.Set(HighWaterKey, employeeNo);
+    }
+
+    /// <summary>max(highest all-digit number in the app, high-water mark) + 1, keeping the width of leading zeros.
+    /// No numeric id gives "1001".</summary>
     public string NextEmployeeNo()
     {
         var ids = _db.Query("SELECT employee_no FROM people", r => r.GetString(0));
-        string? best = null; BigInteger max = -1;
+        if (_db.Settings.Get(HighWaterKey) is { } hw) ids.Add(hw);
+        string? best = null;
         foreach (var id in ids)
-        {
-            if (id.Length == 0 || !id.All(char.IsAsciiDigit)) continue;
-            var n = BigInteger.Parse(id);
-            if (n > max || (n == max && id.Length > (best?.Length ?? 0))) { max = n; best = id; }
-        }
+            if (IsNumber(id) && (best is null || Above(id, best))) best = id;
         if (best is null) return "1001";
-        return (max + 1).ToString().PadLeft(best.Length, '0');
+        return (BigInteger.Parse(best) + 1).ToString().PadLeft(best.Length, '0');
     }
 
     public int GetOrCreateGroup(string name) => _db.Tx(() =>

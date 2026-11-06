@@ -122,7 +122,12 @@ public sealed class Reconciler(Database db, IHikDeviceFactory factory, SyncEngin
             }
             states.Add(new DeviceStateRecord(p.EmployeeNo, dev.Id, true, du.Enabled, du.FaceCount > 0, fingers, needScan, Now) { FingersKnown = known });
         }
-        db.Tx(() => { foreach (var s in states) db.Jobs.SetState(s); return 0; });
+        db.Tx(() =>
+        {
+            foreach (var s in states) db.Jobs.SetState(s);
+            foreach (var no in users.Keys) db.People.BumpHighWater(no);   // strangers' numbers are taken too
+            return 0;
+        });
         return new DeviceDiff(dev.Id, dev.Name, items, strangers);
     }
 

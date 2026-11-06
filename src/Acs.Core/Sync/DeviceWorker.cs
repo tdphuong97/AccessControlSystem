@@ -288,6 +288,11 @@ internal sealed class DeviceWorker
             case JobKind.UpsertUser:
             {
                 if (_db.People.Get(no) is not { } p) return null;
+                // Never confirmed here, and the device already has this number under another name: that is someone
+                // else (a reused or device-only number). Merging would hand them this person's access, or the other
+                // way round, so stop and let the admin decide (So khớp writes the state row once they have looked).
+                if (_db.Jobs.GetState(no, _id) is null && await hik.FindUserAsync(no, ct) is { } other && !SameName(other.Name, p.FullName))
+                    throw new JobFailure("conflict", JobRules.NumberTakenMessage(other.Name));
                 var enabled = p.Status == PersonStatus.Active;
                 await WriteUserAsync(hik, p, dev.DoorNo, enabled, ct);
                 Save(no, s => s with { UserPresent = true, UserEnabled = enabled });
@@ -415,6 +420,9 @@ internal sealed class DeviceWorker
         // The read-back is the device's complete list for this person (device-only fingers included).
         Save(no, s => s with { Fingers = seen.Select(f => f.FingerId).ToHashSet(), FingersKnown = true, NeedsScan = Without(s.NeedsScan, job.FingerId) });
     }
+
+    private static bool SameName(string a, string b) =>
+        string.Equals(a.Trim().Normalize(), b.Trim().Normalize(), StringComparison.OrdinalIgnoreCase);
 
     private static IReadOnlySet<int> With(IReadOnlySet<int> s, int id) => new HashSet<int>(s) { id };
     private static IReadOnlySet<int> Without(IReadOnlySet<int> s, int id) { var h = new HashSet<int>(s); h.Remove(id); return h; }

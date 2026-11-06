@@ -13,6 +13,14 @@ public static class JobRules
     public const string AuthMessage = "Sai mật khẩu hoặc máy đang khoá tạm (khoảng 30 phút). Kiểm tra mật khẩu trong Thiết lập.";
     public const string OfflineMessage = "Đang chờ — tự gửi khi máy có mạng.";
     public const string NoEndDate = "2035-12-31T23:59:59";
+    /// <summary>UpsertUser stopped: the device holds this employee number under another person's name.</summary>
+    public static string NumberTakenMessage(string nameOnDevice)
+    {
+        var n = (nameOnDevice ?? "").Trim();
+        if (n.Length > 32) n = n[..32];
+        return $"Máy đang có người khác dùng mã này ({(n.Length == 0 ? "không tên" : n)}). Đổi mã hoặc xử lý bằng So khớp.";
+    }
+
     /// <summary>Logged when a DeleteUser of a locked person only disabled them (the device holds biometrics the app lacks).</summary>
     public const string KeptOnDeviceMessage = "Chỉ tắt (không gỡ) vì máy có sinh trắc mà app chưa có.";
 
