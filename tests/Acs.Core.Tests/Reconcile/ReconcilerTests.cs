@@ -19,7 +19,7 @@ public sealed class ReconcilerTests : IAsyncDisposable
     {
         _d1 = _h.AddDevice("Máy tầng trệt", "ModelA");
         _dev1 = _h.Factory.For(_d1);
-        _rec = new Reconciler(_h.Db, _h.Factory, _h.Engine, new DeviceImporter(_h.Db, _h.Factory, _h.Time));
+        _rec = new Reconciler(_h.Db, _h.Factory, _h.Engine, new DeviceImporter(_h.Db, _h.Factory, _h.Time), _h.Time);
     }
 
     public ValueTask DisposeAsync() => _h.DisposeAsync();
@@ -139,6 +139,75 @@ public sealed class ReconcilerTests : IAsyncDisposable
         var msgs = new List<string>();
         await _rec.BuildAsync(new SyncProgress(msgs), Ct);
         Assert.Contains(msgs, m => m.StartsWith("Đang so khớp Máy tầng trệt (1/1)"));
+    }
+
+    [Fact]
+    public async Task Imported_stranger_is_sent_to_the_other_device()
+    {
+        var d2 = _h.AddDevice("Máy tầng 2", "ModelA");
+        await _dev1.UpsertUserAsync(W("9001", "Người lạ"), Ct);
+        await _dev1.SetFaceAsync("9001", [0xFF, 0xD8, 0xFF, 0xD9], Ct);
+        await _dev1.SetFingerprintAsync("9001", 3, SyncHarness.Tpl("ModelA"), 1, Ct);
+        var plan = await _rec.BuildAsync(null, Ct);
+        await _rec.ApplyAsync(plan, new Dictionary<string, StrangerChoice> { [Reconciler.StrangerKey(_d1, "9001")] = StrangerChoice.Import }, Ct);
+
+        Assert.NotNull(_h.Db.People.Get("9001"));
+        var jobs = _h.Db.Jobs.ListOpen(d2).Select(j => (j.Kind, j.FingerId)).ToHashSet();
+        Assert.Contains((JobKind.UpsertUser, 0), jobs);
+        Assert.Contains((JobKind.SetFace, 0), jobs);
+        Assert.Contains((JobKind.SetFinger, 3), jobs);
+        Assert.Empty(_h.Db.Jobs.ListOpen(_d1));
+    }
+
+    [Fact]
+    public async Task Unreadable_device_aborts_the_plan_with_a_clear_message()
+    {
+        _dev1.Offline = true;
+        var ex = await Record.ExceptionAsync(() => _rec.BuildAsync(null, Ct));
+        var hik = Assert.IsAssignableFrom<HikException>(ex);
+        Assert.StartsWith("Không đọc được Máy tầng trệt: ", hik.Message);
+        Assert.EndsWith("Kiểm tra máy có điện/mạng rồi so khớp lại.", hik.Message);
+    }
+
+    [Fact]
+    public async Task Name_whitespace_is_not_a_mismatch()
+    {
+        _h.AddPerson("1001", "An");
+        await _dev1.UpsertUserAsync(W("1001", "  An "), Ct);
+        var items = (await _rec.BuildAsync(null, Ct)).Devices.Single().Items;
+        Assert.DoesNotContain(items, i => i.Kind == DiffKind.InfoMismatch);
+    }
+
+    [Fact]
+    public async Task One_failed_stranger_import_does_not_stop_the_others()
+    {
+        var d2 = _h.AddDevice("Máy tầng 2", "ModelA");
+        await _dev1.UpsertUserAsync(W("9001", "Một"), Ct);
+        await _dev1.UpsertUserAsync(W("9002", "Hai"), Ct);
+        var plan = await _rec.BuildAsync(null, Ct);
+        await _dev1.DeleteUserAsync("9002", Ct); // vanishes before apply
+        var choice = new Dictionary<string, StrangerChoice>
+        {
+            [Reconciler.StrangerKey(_d1, "9001")] = StrangerChoice.Import,
+            [Reconciler.StrangerKey(_d1, "9002")] = StrangerChoice.Import,
+        };
+        var ex = await Assert.ThrowsAsync<HikException>(() => _rec.ApplyAsync(plan, choice, Ct));
+        Assert.Contains("9002", ex.Message);
+        Assert.DoesNotContain("9001", ex.Message);
+        Assert.NotNull(_h.Db.People.Get("9001"));
+        Assert.Null(_h.Db.People.Get("9002"));
+        Assert.Contains(_h.Db.Jobs.ListOpen(d2), j => j.EmployeeNo == "9001" && j.Kind == JobKind.UpsertUser);
+    }
+
+    [Fact]
+    public async Task Finger_ids_are_not_invented_when_counts_match()
+    {
+        _h.AddPerson("1001", "An");
+        _h.AddFinger("1001", 1, "ModelA");
+        await _dev1.UpsertUserAsync(W("1001", "An"), Ct);
+        await _dev1.SetFingerprintAsync("1001", 5, SyncHarness.Tpl("ModelA"), 1, Ct); // same count, different id
+        await _rec.BuildAsync(null, Ct);
+        Assert.Empty(_h.Db.Jobs.GetState("1001", _d1)!.Fingers);
     }
 
     private sealed class SyncProgress(List<string> sink) : IProgress<string>
