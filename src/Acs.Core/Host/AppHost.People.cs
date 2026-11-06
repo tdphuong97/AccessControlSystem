@@ -55,25 +55,27 @@ public sealed partial class AppHost
             people = people.Where(p => p.EmployeeNo.Contains(query, StringComparison.OrdinalIgnoreCase)
                 || Vi.IndexOf(Fold(p.FullName), q, Loose) >= 0).ToList();
         }
-        var open = Db.Jobs.ListOpen();
+        var open = Db.Jobs.ListOpen().ToLookup(j => j.EmployeeNo);
+        var faces = Db.Biometrics.FaceOwners();
+        var fingerCounts = Db.Biometrics.FingerCounts();
         var devices = Db.Devices.List().ToDictionary(d => d.Id, d => d.Name);
         var now = Now;
         var rows = new List<PersonRow>();
         foreach (var p in people.OrderBy(p => p.FullName, Comparer<string>.Create((x, y) => Vi.Compare(x, y, CompareOptions.IgnoreCase)))
                      .ThenBy(p => p.EmployeeNo, StringComparer.Ordinal))
         {
-            var mine = open.Where(j => j.EmployeeNo == p.EmployeeNo).ToList();
+            var mine = open[p.EmployeeNo].ToList();
             var sync = mine.Any(j => j.Status == JobStatus.Failed) ? "error" : mine.Count > 0 ? "pending" : "ok";
             var waiting = mine.Select(j => devices.GetValueOrDefault(j.DeviceId, "?")).Distinct().ToList();
-            var hasFace = Db.Biometrics.GetFace(p.EmployeeNo) is not null;
-            var fingers = Db.Biometrics.GetFingers(p.EmployeeNo).Select(f => f.FingerId).Distinct().Count();
+            var hasFace = faces.Contains(p.EmployeeNo);
+            var fingers = fingerCounts.GetValueOrDefault(p.EmployeeNo);
             var row = new PersonRow(p.EmployeeNo, p.FullName, Initials(p.FullName), Db.People.GroupName(p.GroupId), hasFace, fingers,
                 sync, waiting, now - p.CreatedAt < TimeSpan.FromDays(7), p.Status == PersonStatus.Locked);
             var keep = filter switch
             {
-                "noFace" => !hasFace,
-                "noFinger" => fingers == 0,
-                "notSynced" => sync != "ok",
+                "noFace" => !hasFace && !row.Locked,
+                "noFinger" => fingers == 0 && !row.Locked,
+                "notSynced" => sync != "ok" && !row.Locked,
                 "locked" => row.Locked,
                 _ => true,
             };
@@ -111,12 +113,12 @@ public sealed partial class AppHost
 
     private PersonDetail PersonDetailOf(string no)
     {
-        var p = Db.People.Get(no) ?? throw new EnrollException("Không tìm thấy nhân viên.");
+        var p = Db.People.Get(no) ?? throw new EnrollException("Không tìm thấy nhân viên, có thể đã bị xoá. Tải lại danh sách.");
         var face = Db.Biometrics.GetFace(no);
         var fingers = Db.Biometrics.GetFingers(no).GroupBy(f => f.FingerId).OrderBy(g => g.Key)
             .Select(g => new FingerView(g.Key, FingerLabel(g.Key), g.Max(f => f.Quality))).ToList();
-        return new PersonDetail(p.EmployeeNo, p.FullName, Db.People.GroupName(p.GroupId), p.ValidFrom.ToString("yyyy-MM-dd"),
-            p.ValidTo?.ToString("yyyy-MM-dd"), p.Status == PersonStatus.Locked,
+        return new PersonDetail(p.EmployeeNo, p.FullName, Db.People.GroupName(p.GroupId), p.ValidFrom.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            p.ValidTo?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), p.Status == PersonStatus.Locked,
             face is null ? null : DataUrl(face.Jpeg), fingers, SyncPerson(no));
     }
 

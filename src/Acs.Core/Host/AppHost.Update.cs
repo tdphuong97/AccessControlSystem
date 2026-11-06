@@ -18,15 +18,30 @@ public sealed partial class AppHost
 
     private bool AutoCheckOn => Db.Settings.Get(AutoCheckKey) != "false";
 
-    private void StartUpdateTimer() =>
-        _updateTimer = _time.CreateTimer(_ => _ = AutoCheckAsync(), null, FirstUpdateCheck, UpdateCheckEvery);
+    private void StartUpdateTimer()
+    {
+        lock (_gate)
+        {
+            if (_stopped || _closed) return;   // StopAsync already ran: no timer to leak
+            _updateTimer = _time.CreateTimer(_ => _ = AutoCheckAsync(), null, FirstUpdateCheck, UpdateCheckEvery);
+        }
+    }
+
+    /// <summary>Feed check with its own short limit; a timeout surfaces as OperationCanceledException (mapped by HandleAsync).</summary>
+    private async Task<UpdateInfo?> CheckFeed()
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+        cts.CancelAfter(FeedTimeout);
+        return await _updater.CheckAsync(_version, UpdatePlatform, cts.Token);
+    }
 
     private async Task AutoCheckAsync()
     {
         try
         {
-            if (_closed || !AutoCheckOn) return;
-            var info = await _updater.CheckAsync(_version, UpdatePlatform, _cts.Token);
+            lock (_gate) if (_closed || _restoring) return;
+            if (!AutoCheckOn) return;
+            var info = await CheckFeed();
             if (info is null) return;
             var isNew = _foundUpdate?.Version != info.Version;
             _foundUpdate = info;
@@ -37,7 +52,7 @@ public sealed partial class AppHost
 
     private async Task<UpdateView?> UpdateCheck()
     {
-        var info = await _updater.CheckAsync(_version, UpdatePlatform, _cts.Token);
+        var info = await CheckFeed();
         _foundUpdate = info;
         return info is null ? null : ToView(info);
     }
@@ -45,14 +60,18 @@ public sealed partial class AppHost
     private async Task<object?> UpdateInstall()
     {
         var run = RunInstaller ?? throw new HostException("Chưa sẵn sàng cập nhật");
-        var info = _foundUpdate ?? await _updater.CheckAsync(_version, UpdatePlatform, _cts.Token)
-            ?? throw new HostException("Đang dùng bản mới nhất rồi.");
-        _foundUpdate = info;
-        var path = await _updater.DownloadAsync(info, _updatesFolder, f => Emit("update.progress", new { fraction = f }), _cts.Token);
-        if (Backup.HasPassword) Backup.Create("truoc-cap-nhat");
-        else Db.Log.Add(null, null, "Cập nhật", true, "Chưa đặt mật khẩu sao lưu nên không sao lưu trước khi cập nhật.");
-        await run(path);
-        return null;
+        if (Interlocked.Exchange(ref _installing, 1) == 1) throw new HostException("Đang cập nhật…");
+        try
+        {
+            var info = _foundUpdate ?? await CheckFeed() ?? throw new HostException("Đang dùng bản mới nhất rồi.");
+            _foundUpdate = info;
+            var path = await _updater.DownloadAsync(info, _updatesFolder, f => Emit("update.progress", new { fraction = f }), _cts.Token);
+            if (Backup.HasPassword) Backup.Create("truoc-cap-nhat");
+            else Db.Log.Add(null, null, "Cập nhật", true, "Chưa đặt mật khẩu sao lưu nên không sao lưu trước khi cập nhật.");
+            await run(path);
+            return null;
+        }
+        finally { Interlocked.Exchange(ref _installing, 0); }
     }
 
     private SettingsView SettingsGet() =>
@@ -64,8 +83,8 @@ public sealed partial class AppHost
         if (Has(a, "startWithWindows"))
         {
             var on = Bool(a, "startWithWindows");
+            ApplyStartWithWindows?.Invoke(on);   // apply first: if it fails, the stored setting stays truthful
             Db.Settings.Set(StartWithWindowsKey, on ? "true" : "false");
-            ApplyStartWithWindows?.Invoke(on);
         }
         return SettingsGet();
     }

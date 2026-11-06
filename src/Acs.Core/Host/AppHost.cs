@@ -38,14 +38,38 @@ public sealed partial class AppHost
     private readonly HttpClient? _ownHttp;
     private readonly Updater _updater;
     private readonly CancellationTokenSource _cts = new();
-    private bool _started, _closed, _stopped;
+    private readonly IKeyProtector _protector;
+    private readonly object _gate = new();
+    private bool _started, _closed, _stopped, _restoring;
+    private int _inflight;
+    private int _installing;
+    private bool _broken;
+    public static readonly TimeSpan DrainLimit = TimeSpan.FromSeconds(60);
+    public const string BusyMessage = "Còn việc đang chạy (lấy dữ liệu, so khớp hoặc cập nhật). Đợi xong rồi khôi phục lại.";
+    public const string BrokenMessage = "Dữ liệu đang lỗi, hãy khởi động lại phần mềm.";
 
-    public Database Db { get; private set; } = null!;
-    public SyncEngine Sync { get; private set; } = null!;
-    public EnrollService Enroll { get; private set; } = null!;
-    public DeviceImporter Importer { get; private set; } = null!;
-    public Reconciler Reconciler { get; private set; } = null!;
-    public BackupService Backup { get; private set; } = null!;
+    /// <summary>Test hook: replaces reopening the database after a failed restore swap.</summary>
+    public Func<Database>? ReopenDb { get; set; }
+
+    public const string RestoringMessage = "Đang khôi phục dữ liệu, đợi xong rồi thử lại.";
+    public const string SlowNetworkMessage = "Mạng chậm hoặc mất kết nối. Hãy thử lại sau.";
+    private const string UnknownPrefix = "Lệnh không có: ";
+
+    /// <summary>Everything built on one Database; replaced as a whole (one reference assignment) after a restore.</summary>
+    private sealed record Graph(Database Db, SyncEngine Sync, EnrollService Enroll, DeviceImporter Importer,
+        Reconciler Reconciler, BackupService Backup);
+
+    private volatile Graph _g = null!;
+
+    public Database Db => _g.Db;
+    public SyncEngine Sync => _g.Sync;
+    public EnrollService Enroll => _g.Enroll;
+    public DeviceImporter Importer => _g.Importer;
+    public Reconciler Reconciler => _g.Reconciler;
+    public BackupService Backup => _g.Backup;
+
+    /// <summary>How long a feed check may take before it is given up (the installer download has its own, longer limit).</summary>
+    public TimeSpan FeedTimeout { get; set; } = TimeSpan.FromSeconds(15);
 
     /// <summary>Events for the page: devices.changed, person.changed, import.progress, reconcile.progress, update.available, update.progress, app.restart.</summary>
     public event Action<string, object?>? Emitted;
@@ -74,7 +98,8 @@ public sealed partial class AppHost
             updater = new Updater(_ownHttp, Updater.ResolveFeed(), time);
         }
         _updater = updater;
-        Build(OpenDb());
+        _protector = protector;
+        _g = Build(OpenDb());
     }
 
     /// <param name="updater">Tests pass one that talks to a local server; the App leaves it null.</param>
@@ -88,18 +113,18 @@ public sealed partial class AppHost
 
     private Database OpenDb() => new(_dbFile, new DataProtector(_keys.GetOrCreateDataKey()));
 
-    private void Build(Database db)
+    private Graph Build(Database db)
     {
-        Db = db;
-        Sync = new SyncEngine(db, _factory, _time);
-        Enroll = new EnrollService(db, _factory, Sync, _time);
-        Importer = new DeviceImporter(db, _factory, _time);
-        Reconciler = new Reconciler(db, _factory, Sync, Importer, _time);
-        Backup = _backupIterations is { } n
+        var sync = new SyncEngine(db, _factory, _time);
+        var enroll = new EnrollService(db, _factory, sync, _time);
+        var importer = new DeviceImporter(db, _factory, _time);
+        var reconciler = new Reconciler(db, _factory, sync, importer, _time);
+        var backup = _backupIterations is { } n
             ? new BackupService(db, _keys, _backupFolder, _time, n)
             : new BackupService(db, _keys, _backupFolder, _time);
-        Sync.DeviceChanged += _ => Emit("devices.changed", DeviceViews());
-        Sync.PersonChanged += no => Emit("person.changed", new { employeeNo = no });
+        sync.DeviceChanged += _ => Emit("devices.changed", DeviceViews());
+        sync.PersonChanged += no => Emit("person.changed", new { employeeNo = no });
+        return new Graph(db, sync, enroll, importer, reconciler, backup);
     }
 
     private DateTime Now => _time.GetUtcNow().UtcDateTime;
@@ -120,39 +145,41 @@ public sealed partial class AppHost
 
     public async Task StopAsync()
     {
-        if (_stopped) return;
-        _stopped = true;
-        _closed = true;
+        lock (_gate)
+        {
+            if (_stopped) return;
+            _stopped = true;
+            _closed = true;
+            _updateTimer?.Dispose();
+        }
         _cts.Cancel();
-        _updateTimer?.Dispose();
-        await Sync.StopAsync();
-        Db.Dispose();
+        var g = _g;
+        await g.Sync.StopAsync();
+        g.Db.Dispose();
         _ownHttp?.Dispose();
     }
 
     public async Task<object?> HandleAsync(string cmd, JsonElement args)
     {
-        if (!Known.Contains(cmd)) throw new InvalidOperationException("Lệnh không có: " + cmd);
-        if (_closed) throw new HostException("Phần mềm đang đóng hoặc khởi động lại. Hãy đợi một chút.");
+        lock (_gate)
+        {
+            if (_closed) throw new HostException("Phần mềm đang đóng hoặc khởi động lại. Hãy đợi một chút.");
+            if (_restoring) throw new HostException(_broken ? BrokenMessage : RestoringMessage);
+            _inflight++;
+        }
         try { return await Dispatch(cmd, args); }
-        catch (Exception ex) when (ex is EnrollException or HikException or BackupException or HostException or UpdateException
-                                       or OperationCanceledException)
+        catch (Exception ex) when (ex is EnrollException or HikException or BackupException or HostException or UpdateException)
         { throw; }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested) { throw; }   // shutdown
+        catch (OperationCanceledException) { throw new HostException(SlowNetworkMessage); }   // timeout
+        catch (InvalidOperationException ex) when (ex.Message.StartsWith(UnknownPrefix, StringComparison.Ordinal)) { throw; }
         catch (Exception ex)
         {
             try { Db.Log.Add(null, null, "Lỗi", false, $"{cmd}: {ex.GetType().Name}: {ex.Message}"); } catch { /* the log itself may be failing */ }
             throw new HostException(GenericError);
         }
+        finally { lock (_gate) _inflight--; }
     }
-
-    private static readonly HashSet<string> Known =
-    [
-        "app.state", "people.list", "people.nextNo", "people.create", "people.get", "people.update", "people.lock",
-        "people.unlock", "people.delete", "face.capture", "face.save", "finger.capture", "finger.delete", "sync.person",
-        "sync.retry", "devices.list", "devices.save", "devices.test", "devices.delete", "reconcile.plan", "reconcile.apply",
-        "import.start", "backup.status", "backup.setPassword", "backup.now", "backup.setExtraFolder", "backup.restore",
-        "update.check", "update.install", "settings.get", "settings.set", "log.list",
-    ];
 
     private async Task<object?> Dispatch(string cmd, JsonElement a) => cmd switch
     {
@@ -188,7 +215,7 @@ public sealed partial class AppHost
         "settings.get" => SettingsGet(),
         "settings.set" => SettingsSet(a),
         "log.list" => LogList(a),
-        _ => throw new InvalidOperationException("Lệnh không có: " + cmd),
+        _ => throw new InvalidOperationException(UnknownPrefix + cmd),
     };
 
     // ---- argument helpers ----

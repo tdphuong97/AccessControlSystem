@@ -33,4 +33,12 @@ public sealed class BiometricStore
     /// <summary>Removes the finger for every fp_group.</summary>
     public void DeleteFinger(string employeeNo, int fingerId) =>
         _db.Exec("DELETE FROM fingerprints WHERE employee_no=$e AND finger_id=$i", ("$e", employeeNo), ("$i", fingerId));
+
+    /// <summary>Employee numbers that have a face, without reading or decrypting the photos.</summary>
+    public HashSet<string> FaceOwners() => _db.Query("SELECT employee_no FROM faces", r => r.GetString(0)).ToHashSet();
+
+    /// <summary>Distinct finger ids per employee, without reading or decrypting the templates.</summary>
+    public Dictionary<string, int> FingerCounts() => _db.Query(
+        "SELECT employee_no, COUNT(DISTINCT finger_id) FROM fingerprints GROUP BY employee_no",
+        r => (r.GetString(0), r.GetInt32(1))).ToDictionary(x => x.Item1, x => x.Item2);
 }

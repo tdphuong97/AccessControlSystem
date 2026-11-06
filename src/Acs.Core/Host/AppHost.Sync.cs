@@ -9,14 +9,29 @@ public sealed partial class AppHost
 {
     private const string FailedMessage = "Có việc gửi sang máy bị lỗi. Mở Đồng bộ và bấm Thử lại.";
 
-    private static string JobLabel(JobRecord j) => j.Kind switch
+    private static string KindLabel(JobKind kind, int? finger)
     {
-        JobKind.UpsertUser or JobKind.DisableUser => "Thông tin",
-        JobKind.DeleteUser => "Xoá khỏi máy",
-        JobKind.SetFace => "Khuôn mặt",
-        JobKind.DeleteFace => "Xoá khuôn mặt",
-        JobKind.SetFinger => "Vân tay " + FingerLabel(j.FingerId),
-        _ => "Xoá vân tay " + FingerLabel(j.FingerId),
+        var f = finger is > 0 ? " " + FingerLabel(finger.Value) : "";
+        return kind switch
+        {
+            JobKind.UpsertUser or JobKind.DisableUser => "Thông tin",
+            JobKind.DeleteUser => "Xoá khỏi máy",
+            JobKind.SetFace => "Khuôn mặt",
+            JobKind.DeleteFace => "Xoá khuôn mặt",
+            JobKind.SetFinger => "Vân tay" + f,
+            _ => "Xoá vân tay" + f,
+        };
+    }
+
+    private static string JobLabel(JobRecord j) => KindLabel(j.Kind, j.FingerId);
+
+    /// <summary>The worker logs job kinds and a few fixed codes; the log screen shows them in Vietnamese. Unknown codes stay as they are.</summary>
+    private static string LogAction(string code) => code switch
+    {
+        "Ping" => "Kiểm tra kết nối",
+        "Auth" => "Đăng nhập máy",
+        "Worker" => "Luồng gửi dữ liệu",
+        _ => Enum.TryParse<JobKind>(code, out var k) ? KindLabel(k, null) : code,
     };
 
     private static SyncItem ItemOf(string label, JobRecord j) => j.Status == JobStatus.Failed
