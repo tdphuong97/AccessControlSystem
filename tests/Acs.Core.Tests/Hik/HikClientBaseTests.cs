@@ -1,6 +1,7 @@
 using System.Net;
 using Acs.Core.Hik;
 using Acs.Core.Model;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Acs.Core.Tests.Hik;
 
@@ -71,6 +72,115 @@ public class HikClientBaseTests
         await c.GetDeviceInfoAsync(default);
         Assert.Equal(5, h.Requests.Count);   // 2 failed + challenge, answer, then the cached nonce straight away
         Assert.NotNull(h.Requests[4].Authorization);
+    }
+
+    [Fact]
+    public async Task An_expired_nonce_answered_without_a_challenge_starts_a_fresh_login()
+    {
+        // Seen on site (DS-K1T9342MFWX V4.39): the device drops a nonce ~3 s after issuing it and answers the next
+        // request that still carries it with a bare 401 (no WWW-Authenticate). That is not a wrong password.
+        var h = new FakeIsapiHandler { RequireDigest = true };
+        h.On(HttpMethod.Get, "/ISAPI/System/deviceInfo", "{\"DeviceInfo\":{\"model\":\"DS-K1T\"}}");
+        var c = Make(h);
+        await c.GetDeviceInfoAsync(default);
+        h.ExpireNonce();
+        var info = await c.GetDeviceInfoAsync(default);
+        Assert.Equal("DS-K1T", info.Model);
+        // challenge, answer | stale nonce (bare 401), plain request (fresh challenge), answer with the new nonce
+        Assert.Equal(5, h.Requests.Count);
+        Assert.Null(h.Requests[3].Authorization);
+        Assert.Equal(h.CurrentNonce, FakeIsapiHandler.Param(h.Requests[4].Authorization!, "nonce"));
+        Assert.Equal("00000001", FakeIsapiHandler.Param(h.Requests[4].Authorization!, "nc"));
+    }
+
+    [Fact]
+    public async Task An_expired_nonce_then_a_wrong_password_still_fails_once_and_stops()
+    {
+        var h = new FakeIsapiHandler { RequireDigest = true };
+        h.On(HttpMethod.Get, "/ISAPI/System/deviceInfo", "{\"DeviceInfo\":{}}");
+        var c = Make(h);
+        await c.GetDeviceInfoAsync(default);
+        h.ExpireNonce();
+        h.Password = "changed-on-the-device";
+        await Assert.ThrowsAsync<HikAuthException>(() => c.GetDeviceInfoAsync(default));
+        // stale nonce, plain request, ONE answer that fails: no loop, no second password attempt
+        Assert.Equal(5, h.Requests.Count);
+        await Assert.ThrowsAsync<HikAuthException>(() => c.GetDeviceInfoAsync(default));
+        Assert.Null(h.Requests[5].Authorization);   // after a real failure the next call starts without credentials
+    }
+
+    [Fact]
+    public async Task A_fresh_nonce_dropped_by_another_login_is_retried_once()
+    {
+        var h = new FakeIsapiHandler { RequireDigest = true, DropNextAnswers = 1 };
+        h.On(HttpMethod.Get, "/ISAPI/System/deviceInfo", "{\"DeviceInfo\":{}}");
+        await Make(h).GetDeviceInfoAsync(default);
+        // plain, answer (dropped: bare 401, no failed-login counters), plain, answer
+        Assert.Equal(4, h.Requests.Count);
+        Assert.Null(h.Requests[2].Authorization);
+    }
+
+    [Fact]
+    public async Task Bare_401s_stop_after_two_logins()
+    {
+        var h = new FakeIsapiHandler { RequireDigest = true, DropNextAnswers = 99 };
+        h.On(HttpMethod.Get, "/ISAPI/System/deviceInfo", "{\"DeviceInfo\":{}}");
+        await Assert.ThrowsAsync<HikAuthException>(() => Make(h).GetDeviceInfoAsync(default));
+        Assert.Equal(4, h.Requests.Count);
+    }
+
+    [Fact]
+    public async Task A_device_style_wrong_password_is_never_retried()
+    {
+        // Real device, wrong password: bare 401 with <retryLoginTime>. One failed login per call, no second attempt.
+        var h = new FakeIsapiHandler { RequireDigest = true, DeviceStyleWrongPassword = true, Password = "other" };
+        h.On(HttpMethod.Get, "/ISAPI/System/deviceInfo", "{}");
+        await Assert.ThrowsAsync<HikAuthException>(() => Make(h).GetDeviceInfoAsync(default));
+        Assert.Equal(2, h.Requests.Count);
+    }
+
+    [Fact]
+    public async Task A_wrong_password_on_a_cached_nonce_is_not_retried()
+    {
+        // The password was changed on the device while our nonce was still fresh: the bare 401 carries the counters.
+        var h = new FakeIsapiHandler { RequireDigest = true, DeviceStyleWrongPassword = true };
+        h.On(HttpMethod.Get, "/ISAPI/System/deviceInfo", "{\"DeviceInfo\":{}}");
+        var c = Make(h);
+        await c.GetDeviceInfoAsync(default);
+        h.Password = "changed-on-the-device";
+        var ex = await Assert.ThrowsAsync<HikAuthException>(() => c.GetDeviceInfoAsync(default));
+        Assert.Equal(3, h.Requests.Count);
+        Assert.Contains("retryLoginTime", ex.Detail);   // the body still reaches the error map
+    }
+
+    [Fact]
+    public async Task A_nonce_older_than_two_seconds_is_not_sent_again()
+    {
+        // Measured on site: a nonce still worked 2.2 s after it was issued and failed at 3.4 s. Past 2 s the handler
+        // asks for a fresh challenge instead of sending a nonce the device has most likely dropped (the 30 s ping).
+        var time = new FakeTimeProvider();
+        var h = new FakeIsapiHandler { RequireDigest = true };
+        h.On(HttpMethod.Get, "/ISAPI/System/deviceInfo", "{\"DeviceInfo\":{}}");
+        var c = new HikClient("192.168.1.201", "admin", "secret", h, time);
+        await c.GetDeviceInfoAsync(default);
+        time.Advance(TimeSpan.FromSeconds(1));
+        await c.GetDeviceInfoAsync(default);
+        Assert.Equal(3, h.Requests.Count);            // still fresh: reused
+        time.Advance(TimeSpan.FromSeconds(30));
+        await c.GetDeviceInfoAsync(default);
+        Assert.Equal(5, h.Requests.Count);            // plain request + answer, no stale attempt
+        Assert.Null(h.Requests[3].Authorization);
+    }
+
+    [Fact]
+    public async Task Calls_to_one_device_never_overlap()
+    {
+        // Seen on site: four logins in flight at once, one fresh-challenge answer got 401 invalidOperation.
+        var h = new FakeIsapiHandler { RequireDigest = true, Delay = TimeSpan.FromMilliseconds(30) };
+        h.On(HttpMethod.Get, "/ISAPI/System/deviceInfo", "{\"DeviceInfo\":{}}");
+        var c = Make(h);
+        await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => c.GetDeviceInfoAsync(default)));
+        Assert.Equal(1, h.MaxInFlight);
     }
 
     [Fact]

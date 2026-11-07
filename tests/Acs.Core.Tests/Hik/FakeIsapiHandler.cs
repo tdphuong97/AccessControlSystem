@@ -20,6 +20,40 @@ public sealed class FakeIsapiHandler : HttpMessageHandler
     public string Password { get; set; } = "secret";
     /// <summary>Throws this from SendAsync (simulates a network error).</summary>
     public Exception? Throw { get; set; }
+    /// <summary>Per-request delay, to keep requests in flight at the same time.</summary>
+    public TimeSpan Delay { get; set; }
+    public int MaxInFlight { get; private set; }
+    private int _inFlight;
+
+    private readonly object _lock = new();
+    private string _nonce = Nonce;
+    private readonly HashSet<string> _expired = new();
+    private int _gen;
+    public string CurrentNonce { get { lock (_lock) return _nonce; } }
+
+    /// <summary>
+    /// Real firmware (DS-K1T9342MFWX V4.39) drops a nonce about 3 s after issuing it. A request still carrying it gets
+    /// 401 WITHOUT a WWW-Authenticate header; only a request without credentials gets a fresh challenge.
+    /// </summary>
+    public void ExpireNonce() { lock (_lock) { _expired.Add(_nonce); _nonce = Nonce + (++_gen); } }
+
+    /// <summary>
+    /// Another client logs in between our challenge and our answer this many times: the device drops our fresh nonce
+    /// and answers with a bare 401 (no challenge, no failed-login counters). Seen on site with two logins at once.
+    /// </summary>
+    public int DropNextAnswers { get; set; }
+
+    /// <summary>
+    /// Wrong password the way the real device answers it: a bare 401 whose body carries the failed-login counters
+    /// (lockStatus / unlockTime / retryLoginTime), instead of the RFC-style fresh challenge.
+    /// </summary>
+    public bool DeviceStyleWrongPassword { get; set; }
+
+    private const string StaleBody = "<userCheck><statusValue>401</statusValue><statusString>Unauthorized</statusString><isActivated>true</isActivated></userCheck>";
+    private const string WrongPasswordBody = "<userCheck><statusValue>401</statusValue><statusString>Unauthorized</statusString><isActivated>true</isActivated><lockStatus>unlock</lockStatus><unlockTime>0</unlockTime><retryLoginTime>4</retryLoginTime></userCheck>";
+
+    private static HttpResponseMessage Bare401(string body) =>
+        new(HttpStatusCode.Unauthorized) { Content = new StringContent(body, Encoding.UTF8, "application/xml") };
 
     public FakeIsapiHandler On(HttpMethod m, string path, Func<Seen, Reply> reply) { _routes[m.Method + " " + path] = reply; return this; }
     public FakeIsapiHandler On(HttpMethod m, string path, string body, HttpStatusCode status = HttpStatusCode.OK, string contentType = "application/json")
@@ -40,20 +74,42 @@ public sealed class FakeIsapiHandler : HttpMessageHandler
         var uri = Param(h, "uri"); var nc = Param(h, "nc"); var cn = Param(h, "cnonce"); var resp = Param(h, "response");
         var ha1 = Md5($"{User}:{Realm}:{Password}");
         var ha2 = Md5($"{s.Method.Method}:{uri}");
-        return Param(h, "username") == User && Param(h, "nonce") == Nonce && resp == Md5($"{ha1}:{Nonce}:{nc}:{cn}:auth:{ha2}");
+        var nonce = CurrentNonce;
+        return Param(h, "username") == User && Param(h, "nonce") == nonce && resp == Md5($"{ha1}:{nonce}:{nc}:{cn}:auth:{ha2}");
     }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
         if (Throw is not null) throw Throw;
         ct.ThrowIfCancellationRequested();
+        lock (_lock) { _inFlight++; MaxInFlight = Math.Max(MaxInFlight, _inFlight); }
+        try
+        {
+            if (Delay > TimeSpan.Zero) await Task.Delay(Delay, ct);
+            return await AnswerAsync(request, ct);
+        }
+        finally { lock (_lock) _inFlight--; }
+    }
+
+    private async Task<HttpResponseMessage> AnswerAsync(HttpRequestMessage request, CancellationToken ct)
+    {
         var bytes = request.Content is null ? Array.Empty<byte>() : await request.Content.ReadAsByteArrayAsync(ct);
         var seen = new Seen(request.Method, request.RequestUri!.PathAndQuery, request.Headers.Authorization?.ToString(), Encoding.UTF8.GetString(bytes), bytes);
-        Requests.Add(seen);
+        lock (_lock) Requests.Add(seen);
+        if (RequireDigest && seen.Authorization is not null && DropNextAnswers > 0 && DigestOk(seen))
+        {
+            DropNextAnswers--;
+            ExpireNonce();
+            return Bare401(StaleBody);
+        }
         if (RequireDigest && !DigestOk(seen))
         {
+            var sentNonce = seen.Authorization is null ? null : Param(seen.Authorization, "nonce");
+            bool expired; lock (_lock) expired = sentNonce is not null && _expired.Contains(sentNonce);
+            if (expired) return Bare401(StaleBody);
+            if (DeviceStyleWrongPassword && seen.Authorization is not null) return Bare401(WrongPasswordBody);
             var r401 = new HttpResponseMessage(HttpStatusCode.Unauthorized) { Content = new StringContent("") };
-            r401.Headers.TryAddWithoutValidation("WWW-Authenticate", $"Digest realm=\"{Realm}\",nonce=\"{Nonce}\",qop=\"auth\"");
+            r401.Headers.TryAddWithoutValidation("WWW-Authenticate", $"Digest realm=\"{Realm}\",nonce=\"{CurrentNonce}\",qop=\"auth\"");
             return r401;
         }
         if (!_routes.TryGetValue(request.Method.Method + " " + request.RequestUri.AbsolutePath, out var f))

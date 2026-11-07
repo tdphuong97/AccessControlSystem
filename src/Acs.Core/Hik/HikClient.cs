@@ -11,12 +11,13 @@ public sealed partial class HikClient : IHikDevice, IDisposable
     public static readonly TimeSpan CaptureTimeout = TimeSpan.FromSeconds(60);
 
     private readonly HttpClient _http;
+    private readonly SemaphoreSlim _gate = new(1, 1);   // never disposed: no wait handle is ever created
 
-    public HikClient(string host, string user, string password, HttpMessageHandler? inner = null)
+    public HikClient(string host, string user, string password, HttpMessageHandler? inner = null, TimeProvider? time = null)
     {
         // The devices sit on the local network: never route their traffic (and the digest login) through a system proxy.
         inner ??= new HttpClientHandler { UseProxy = false, ServerCertificateCustomValidationCallback = (_, _, _, _) => true };
-        _http = new HttpClient(new DigestHandler(user, password, inner), disposeHandler: true)
+        _http = new HttpClient(new DigestHandler(user, password, inner, time), disposeHandler: true)
         {
             BaseAddress = new Uri(host.Contains("://") ? host.TrimEnd('/') : "http://" + host.TrimEnd('/')),
             Timeout = Timeout.InfiniteTimeSpan,   // per-call timeouts are applied in SendRawAsync
@@ -51,6 +52,16 @@ public sealed partial class HikClient : IHikDevice, IDisposable
     /// retried; other failures (including HTTP 200 with statusCode != 1) are mapped by HikErrorMap.
     /// </summary>
     internal async Task<byte[]> SendRawAsync(HttpMethod method, string path, HttpContent? body, TimeSpan? timeout, CancellationToken ct)
+    {
+        // One call at a time per device: on site, logins in flight together made the device refuse one of them (401
+        // invalidOperation), which read as a wrong password and paused the device. The wait for the gate is not part
+        // of the call's timeout, so a ping queued behind a 60 s capture does not report the device as offline.
+        await _gate.WaitAsync(ct);
+        try { return await SendOneAsync(method, path, body, timeout, ct); }
+        finally { _gate.Release(); }
+    }
+
+    private async Task<byte[]> SendOneAsync(HttpMethod method, string path, HttpContent? body, TimeSpan? timeout, CancellationToken ct)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(timeout ?? DefaultTimeout);
