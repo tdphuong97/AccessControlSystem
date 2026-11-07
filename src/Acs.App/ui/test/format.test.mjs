@@ -43,3 +43,20 @@ test('durationText for device badge', () => {
   assert.equal(F.durationText(90 * 60), '1 giờ');
   assert.equal(F.durationText(30), 'dưới 1 phút');
 });
+
+test('paginate: one page of a list, clamped to the pages that exist', () => {
+  assert.deepEqual(F.paginate(157, 50, 1), { page: 1, pages: 4, from: 0, to: 50 });
+  assert.deepEqual(F.paginate(157, 50, 4), { page: 4, pages: 4, from: 150, to: 157 });
+  assert.deepEqual(F.paginate(157, 50, 9), { page: 4, pages: 4, from: 150, to: 157 }, 'past the end: the last page');
+  assert.deepEqual(F.paginate(157, 50, 0), { page: 1, pages: 4, from: 0, to: 50 });
+  assert.deepEqual(F.paginate(157, 0, 3), { page: 1, pages: 1, from: 0, to: 157 }, '0 = everyone on one page');
+  assert.deepEqual(F.paginate(0, 50, 1), { page: 1, pages: 1, from: 0, to: 0 });
+});
+
+test('pageSize: a remembered choice from PAGE_SIZES, otherwise 50', () => {
+  assert.deepEqual(F.PAGE_SIZES, [20, 50, 100, 0]);
+  assert.equal(F.pageSize('20'), 20);
+  assert.equal(F.pageSize('0'), 0);
+  assert.equal(F.pageSize('37'), 50);
+  assert.equal(F.pageSize(null), 50);
+});

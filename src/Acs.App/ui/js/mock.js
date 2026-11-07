@@ -1,6 +1,6 @@
 // Mock host used when the page is opened outside WebView2 (design checks, screenshots). Answers every C3
 // command with believable sample data. All people and devices are invented.
-// Query flags: ?err (one failed sync), ?locked (a stale locked person), ?noupdate, ?authpause, ?firstrun (no devices yet), ?empty, ?nobackup (no backup password), ?plansame (reconcile finds nothing), ?needrec (app.state.needsReconcile), ?importwarn (import could not read everyone), ?slowimport (import takes ~9 s: leave the screen and come back)
+// Query flags: ?err (one failed sync), ?locked (a stale locked person), ?noupdate, ?authpause, ?firstrun (no devices yet), ?empty, ?nobackup (no backup password), ?plansame (reconcile finds nothing), ?needrec (app.state.needsReconcile), ?importwarn (import could not read everyone), ?slowimport (import takes ~9 s: leave the screen and come back), ?many (157 people)
 (function () {
   const ACS = (window.ACS = window.ACS || {});
   const F = () => ACS.fmt;
@@ -30,6 +30,13 @@
     { employeeNo: '1132', fullName: 'Võ Thị Hà', initials: 'VH', groupName: 'Nhân sự', hasFace: true, fingers: [[7, 77], [8, 72]], wait: [], created: 120, error: /err/.test(q) },
     { employeeNo: '1131', fullName: 'Đặng Quốc Huy', initials: 'ĐH', groupName: 'Kho', hasFace: true, fingers: [[2, 81], [7, 85]], wait: [], created: 150 },
   ];
+  if (/many/.test(q)) {
+    const ho = ['Nguyễn', 'Trần', 'Lê', 'Phạm', 'Hoàng', 'Vũ', 'Đặng', 'Bùi', 'Đỗ', 'Hồ'], ten = ['An', 'Bình', 'Chi', 'Dũng', 'Giang', 'Hà', 'Khoa', 'Lan', 'Minh', 'Nam', 'Oanh', 'Phúc', 'Quân', 'Sơn', 'Trang'];
+    for (let i = 0; i < 150; i++) {
+      const name = ho[i % ho.length] + ' Văn ' + ten[(i * 7) % ten.length] + ' ' + (i + 1);
+      people.push({ employeeNo: String(2000 + i), fullName: name, initials: F().initials(name), groupName: 'Kho', hasFace: i % 9 !== 0, fingers: i % 5 ? [[7, 80]] : [], wait: [], created: 30 + i });
+    }
+  }
   people.forEach((p) => { p.validFrom = day(p.created); p.validTo = null; p.locked = false; });
   if (/locked/.test(q)) {
     people.push({ employeeNo: '1090', fullName: 'Bùi Văn Khánh', initials: 'BK', groupName: 'Kho', hasFace: true, fingers: [[7, 80]], wait: [], created: 400,

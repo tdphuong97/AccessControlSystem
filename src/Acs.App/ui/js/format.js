@@ -46,5 +46,19 @@
     return m ? m[3] + '/' + m[2] + '/' + m[1] : d;
   }
 
-  return { initials, fingerLabel, durationText, timeAgo, plural, fmtDate };
+  // People per page on the people screen; 0 = everyone on one page.
+  const PAGE_SIZES = [20, 50, 100, 0];
+  function pageSize(saved) {
+    const n = Number(saved);
+    return saved != null && saved !== '' && PAGE_SIZES.includes(n) ? n : 50;
+  }
+
+  // Page `page` (1-based) of `total` rows: slice [from, to). A page past the end shows the last one.
+  function paginate(total, size, page) {
+    const pages = size > 0 ? Math.max(1, Math.ceil(total / size)) : 1;
+    const p = Math.min(Math.max(1, Math.floor(page) || 1), pages);
+    return size > 0 ? { page: p, pages, from: (p - 1) * size, to: Math.min(total, p * size) } : { page: 1, pages: 1, from: 0, to: total };
+  }
+
+  return { initials, fingerLabel, durationText, timeAgo, plural, fmtDate, PAGE_SIZES, pageSize, paginate };
 });

@@ -32,7 +32,7 @@ Các nút lọc nằm cạnh ô tìm kiếm, mỗi nút có một con số là s
 Ba nút giữa không tính người đã khoá. Bộ lọc và ô tìm kiếm dùng cùng lúc được. Không có ai khớp thì danh sách báo **Không có ai khớp. Thử bỏ bớt bộ lọc hoặc gõ tên khác.**
 
 {% hint style="info" %}
-Khi nhóm **Tất cả** không tìm kiếm, danh sách chỉ hiện 20 người đầu theo tên. Bấm **Xem tất cả** kèm số người để hiện hết, và **Thu gọn danh sách** để thu lại.
+Danh sách xếp theo tên và chia trang, mặc định 50 người mỗi trang. Ở cuối bảng, chọn **Mỗi trang** là 20, 50, 100 hoặc **Tất cả**; bấm **Trước** / **Sau** để chuyển trang. Phần mềm nhớ lựa chọn này trên máy tính, và quay về trang 1 khi bạn đổi nhóm hoặc gõ tìm kiếm.
 {% endhint %}
 
 ## Đọc cột trạng thái trên máy

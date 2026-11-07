@@ -4,7 +4,9 @@
   const { esc, on } = ACS.ui;
   const icon = ACS.icons.icon;
   const F = ACS.fmt;
-  const LIMIT = 20;
+  const SIZE_KEY = 'acs.people.pageSize';   // per-PC convenience only: lost storage just means the default 50
+  const savedSize = () => { try { return localStorage.getItem(SIZE_KEY); } catch (e) { return null; } };
+  const saveSize = (n) => { try { localStorage.setItem(SIZE_KEY, String(n)); } catch (e) { /* not kept */ } };
 
   const CHIPS = [
     ['all', 'Tất cả'], ['noFace', 'Chưa có khuôn mặt'], ['noFinger', 'Chưa có vân tay'], ['notSynced', null], ['locked', 'Đã khoá'],
@@ -55,7 +57,7 @@
   }
 
   function render(host, params, ctx) {
-    let filter = 'all', query = '', showAll = false, rows = [], counts = null, seq = 0, timer = 0;
+    let filter = 'all', query = '', rows = [], counts = null, seq = 0, timer = 0, size = F.pageSize(savedSize()), page = 1;
     host.innerHTML = '<div class="pad stack">' +
       '<div id="p-upd"></div><div id="p-imp"></div><div id="p-rec"></div><div id="p-stale"></div>' +
       '<div class="pagehead"><div><h1 class="h1">Người dùng</h1><p class="sub" id="p-count"></p></div>' +
@@ -66,7 +68,7 @@
       '<input id="tim" class="input" type="text" autocomplete="off" placeholder="Gõ tên hoặc mã nhân viên…"></div></div>' +
       '<div class="chips" role="group" aria-label="Lọc danh sách" id="p-chips"></div></div>' +
       '<div class="tablebox"><div class="tscroll"><div class="table" id="p-table"></div></div>' +
-      '<div class="tfoot"><span class="sub" id="p-note"></span><button type="button" class="btn btn-sm" id="p-all" hidden></button></div></div></div>';
+      '<div class="tfoot"><span class="sub" id="p-note"></span><div class="pager" id="p-pager"></div></div></div></div>';
     const $ = (id) => host.querySelector('#' + id);
 
     const nMachines = () => (ACS.state ? ACS.state.devices.length : 2);
@@ -100,18 +102,29 @@
 
     function drawTable() {
       const n = nMachines();
-      const limited = filter === 'all' && !query && !showAll && rows.length > LIMIT;
-      const shown = limited ? rows.slice(0, LIMIT) : rows;
+      const pg = F.paginate(rows.length, size, page);
+      page = pg.page;
+      const shown = rows.slice(pg.from, pg.to);
       $('p-table').innerHTML = '<div class="thead"><div>Người</div><div>Khuôn mặt</div><div>Vân tay</div><div>Có trên ' + n + ' máy</div><div></div></div>' +
         (shown.length ? shown.map((r) => rowHtml(r, n)).join('')
           : '<div class="empty-row">' + (query || filter !== 'all' ? 'Không có ai khớp. Thử bỏ bớt bộ lọc hoặc gõ tên khác.' : 'Chưa có ai. Bấm "Thêm người mới" để bắt đầu.') + '</div>');
       // The list is sorted by name (vi-VN), so the first page is not "the newest people".
-      $('p-note').textContent = !shown.length ? '' : (filter === 'all' && !query
-        ? 'Đang hiện ' + shown.length + ' người' + (limited ? ' (trong ' + rows.length + ' người, theo tên)' : '')
-        : 'Đang hiện ' + shown.length + ' người' + (filter === 'all' ? ' khớp tìm kiếm' : ' cần bổ sung'));
-      const btn = $('p-all');
-      btn.hidden = !(filter === 'all' && !query && rows.length > LIMIT);
-      btn.textContent = showAll ? 'Thu gọn danh sách' : 'Xem tất cả ' + rows.length + ' người';
+      const what = filter === 'all' ? (query ? ' khớp tìm kiếm' : ', theo tên') : ' cần bổ sung';
+      $('p-note').textContent = !shown.length ? '' : (pg.pages > 1
+        ? 'Đang hiện ' + (pg.from + 1) + '–' + pg.to + ' trong ' + rows.length + ' người' + what
+        : 'Đang hiện ' + rows.length + ' người' + (what === ', theo tên' ? '' : what));
+      // The page-size choice only matters once there is more than the smallest page.
+      $('p-pager').innerHTML = rows.length <= F.PAGE_SIZES[0] ? '' :
+        '<label class="pager-size" for="p-size">Mỗi trang<select id="p-size" class="input pager-sel">' +
+        F.PAGE_SIZES.map((s) => '<option value="' + s + '"' + (s === size ? ' selected' : '') + '>' + (s ? s : 'Tất cả') + '</option>').join('') + '</select></label>' +
+        (pg.pages > 1 ? '<button type="button" class="btn btn-sm" data-act="pg-prev"' + (pg.page <= 1 ? ' disabled' : '') + ' aria-label="Trang trước">' + icon('chevronLeft', 16) + 'Trước</button>' +
+          '<span class="pager-n" aria-live="polite">Trang ' + pg.page + '/' + pg.pages + '</span>' +
+          '<button type="button" class="btn btn-sm" data-act="pg-next"' + (pg.page >= pg.pages ? ' disabled' : '') + ' aria-label="Trang sau">Sau' + icon('chevronRight', 16) + '</button>' : '');
+    }
+    function goPage(n) {
+      page = n; drawTable();
+      const box = host.querySelector('.tablebox');
+      if (box && box.getBoundingClientRect().top < 0) box.scrollIntoView({ block: 'start' });
     }
 
     async function loadCounts() {
@@ -134,16 +147,18 @@
       }
     }
 
-    on(host, 'click', '[data-chip]', (el) => { filter = el.dataset.chip; showAll = false; load(); });
-    on(host, 'click', '[data-act="show-locked"]', (el, ev) => { ev.preventDefault(); filter = 'locked'; load(); });
+    on(host, 'click', '[data-chip]', (el) => { filter = el.dataset.chip; page = 1; load(); });
+    on(host, 'click', '[data-act="show-locked"]', (el, ev) => { ev.preventDefault(); filter = 'locked'; page = 1; load(); });
+    on(host, 'change', '#p-size', (el) => { size = F.pageSize(el.value); saveSize(size); page = 1; drawTable(); });
+    on(host, 'click', '[data-act="pg-prev"]', () => goPage(page - 1));
+    on(host, 'click', '[data-act="pg-next"]', () => goPage(page + 1));
     on(host, 'click', '[data-act="retry"]', async (el) => {
       el.disabled = true;
       try { await ACS.bridge.call('sync.retry', { deviceId: +el.dataset.dev }); ACS.ui.toast('Đã thử gửi lại. Nếu máy vẫn mất kết nối, app sẽ tự thử tiếp.'); }
       catch (e) { ACS.ui.toast(ACS.ui.errMessage(e), 'error'); }
       el.disabled = false;
     });
-    $('p-all').addEventListener('click', () => { showAll = !showAll; drawTable(); });
-    $('tim').addEventListener('input', (ev) => { clearTimeout(timer); timer = setTimeout(() => { query = ev.target.value.trim(); load(); }, 200); });
+    $('tim').addEventListener('input', (ev) => { clearTimeout(timer); timer = setTimeout(() => { query = ev.target.value.trim(); page = 1; load(); }, 200); });
 
     // An import started on another screen keeps running in the host: say so here and refresh the list when it ends.
     let imp = null;
