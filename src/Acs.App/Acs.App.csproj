@@ -28,7 +28,10 @@
 
   <ItemGroup>
     <Resource Include="Assets\acs.ico" />
-    <!-- ui\test holds the node tests of the page helpers: not shipped with the app. -->
+    <!-- ui\test holds the node tests of the page helpers: not shipped with the app.
+         ui\help\huong-dan.html is the user guide in docs\, built offline (guidebook build docs) and copied from
+         docs\_site\index.html: rebuild and copy it whenever docs\ changes. -->
+
     <Content Include="ui\**\*" Exclude="ui\test\**" CopyToOutputDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
   </ItemGroup>
 
