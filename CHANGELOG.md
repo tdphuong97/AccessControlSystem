@@ -1,3 +1,11 @@
+## 0.9.2
+
+- Mới: mục "Lấy dữ liệu từ máy" trên tab Máy chấm công & cập nhật. Lấy toàn bộ người, khuôn mặt và vân tay từ một máy về app bất cứ lúc nào, không chỉ ở lần thiết lập đầu.
+- So khớp 2 máy: khi app chưa có ai, đề nghị lấy dữ liệu từ máy trước thay vì liệt kê mọi người trên máy là người lạ. Sau đó So khớp chỉ hiện những người khác nhau giữa hai máy.
+- Trạng thái máy đổi từ "Đang kết nối" thành "Đã kết nối" cho khỏi hiểu nhầm là đang thử kết nối.
+- Sau khi cập nhật, app tự xoá bộ cài đã tải về (khoảng 49 MB mỗi lần).
+- Đã thử trên hai máy thật: lấy 157 người kèm khuôn mặt và vân tay trong khoảng 50 giây, So khớp chỉ ra đúng 5 người khác nhau.
+
 ## 0.9.1
 
 - Sửa lỗi: nhập đúng mật khẩu, máy báo "Đã kết nối" rồi khoảng 30 giây sau lại báo "Sai mật khẩu, đã dừng". Máy Hikvision chỉ giữ phiên đăng nhập vài giây; phần mềm nay tự đăng nhập lại thay vì coi đó là sai mật khẩu.
