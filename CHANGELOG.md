@@ -1,3 +1,10 @@
+## 0.9.1
+
+- Sửa lỗi: nhập đúng mật khẩu, máy báo "Đã kết nối" rồi khoảng 30 giây sau lại báo "Sai mật khẩu, đã dừng". Máy Hikvision chỉ giữ phiên đăng nhập vài giây; phần mềm nay tự đăng nhập lại thay vì coi đó là sai mật khẩu.
+- Sửa lỗi: bấm "Kiểm tra kết nối" trên máy có nhiều người báo sai mật khẩu giữa chừng.
+- Mỗi máy chấm công chỉ nhận một lệnh một lúc; hai lệnh đăng nhập cùng lúc không còn làm máy từ chối một trong hai.
+- Đã thử trên hai máy DS-K1T9342MFWX thật (firmware V4.39).
+
 ## 0.9.0
 
 - Bản đầu tiên: đăng ký khuôn mặt và vân tay cho hai máy kiểm soát ra vào Hikvision, nhập một lần và tự gửi xuống cả hai máy.
