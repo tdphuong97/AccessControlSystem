@@ -1,3 +1,7 @@
+## 0.9.4
+
+- Danh sách người dùng chia trang: chọn 20, 50, 100 hoặc Tất cả người mỗi trang (mặc định 50), có nút Trước / Sau. Phần mềm nhớ lựa chọn trên máy tính này.
+
 ## 0.9.3
 
 - Sửa lỗi: So khớp báo nhầm "thiếu vân tay" cho người mà máy vẫn có đủ ngón, mỗi lần chạy ra một danh sách khác. Máy Hikvision chỉ có một con trỏ đọc vân tay, lần đọc bị chen ngang thì chỉ trả về một phần. App nay đọc trọn từng người một mạch, mỗi lần một phiên mới, và không bao giờ báo thiếu khi số ngón đọc được ít hơn số máy báo.
