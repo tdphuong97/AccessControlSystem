@@ -57,7 +57,7 @@
   function render(host, params, ctx) {
     let filter = 'all', query = '', showAll = false, rows = [], counts = null, seq = 0, timer = 0;
     host.innerHTML = '<div class="pad stack">' +
-      '<div id="p-upd"></div><div id="p-rec"></div><div id="p-stale"></div>' +
+      '<div id="p-upd"></div><div id="p-imp"></div><div id="p-rec"></div><div id="p-stale"></div>' +
       '<div class="pagehead"><div><h1 class="h1">Người dùng</h1><p class="sub" id="p-count"></p></div>' +
       '<a class="btn btn-big" href="#/new/info">' + icon('addPerson', 20) + 'Thêm người mới</a></div>' +
       '<div class="devcards" id="p-dev"></div>' +
@@ -145,11 +145,32 @@
     $('p-all').addEventListener('click', () => { showAll = !showAll; drawTable(); });
     $('tim').addEventListener('input', (ev) => { clearTimeout(timer); timer = setTimeout(() => { query = ev.target.value.trim(); load(); }, 200); });
 
+    // An import started on another screen keeps running in the host: say so here and refresh the list when it ends.
+    let imp = null;
+    function drawImp() {
+      const text = ACS.recon.importNotice(imp);
+      $('p-imp').innerHTML = text ? '<div class="notice-info" role="status">' + icon('refresh', 18).replace('class="ic"', 'class="ic xoay"') +
+        '<span>' + esc(text) + '. Danh sách tự cập nhật khi xong. <a href="#/settings">Xem chi tiết</a></span></div>' : '';
+    }
+    ACS.bridge.call('import.status').then((st) => { if (ctx.alive()) { imp = st; drawImp(); } }).catch(() => {});
+    const offImpProg = ACS.bridge.on('import.progress', (d) => {
+      // Only an import this screen already knows about (import.status): a late event never brings a notice back.
+      if (!ctx.alive() || !d || !imp || !imp.running) return;
+      imp = Object.assign({}, imp, { done: d.done, total: d.total });
+      if (/^Không đọc được/.test(d.currentName || '')) return;
+      drawImp();
+    });
+    const offImpDone = ACS.bridge.on('import.done', () => {
+      if (!ctx.alive()) return;
+      imp = null; drawImp(); load();
+      if (ACS.refreshState) ACS.refreshState().catch(() => {});
+    });
+
     const offState = ACS.onState(() => { if (counts && ctx.alive()) drawTop(); });
     const offPerson = ACS.bridge.on('person.changed', () => load());
     const offDev = ACS.bridge.on('devices.changed', () => load());
     load();
-    return () => { seq++; clearTimeout(timer); offState(); offPerson(); offDev(); };
+    return () => { seq++; clearTimeout(timer); offState(); offPerson(); offDev(); offImpProg(); offImpDone(); };
   }
 
   ACS.screens = ACS.screens || {};

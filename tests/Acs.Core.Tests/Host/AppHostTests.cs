@@ -112,6 +112,62 @@ public sealed class AppHostTests : IAsyncDisposable
     private async Task<bool> NeedsReconcile(AppHost h) =>
         Out(await h.HandleAsync("app.state", J())).GetProperty("needsReconcile").GetBoolean();
 
+    private async Task<JsonElement> ImportStatus(AppHost h) => Out(await h.HandleAsync("import.status", J()));
+
+    [Fact]
+    public async Task a_running_import_is_reported_and_a_second_one_is_refused()
+    {
+        var h = NewHost();
+        var a = await AddDevice(h, "Máy A");
+        await SeedOnDevice(_factory.For(a), "1001", "Nguyễn Văn An", true, 1, 6);
+        Assert.False((await ImportStatus(h)).GetProperty("running").GetBoolean());
+        var hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _factory.For(a).HoldList = hold;
+
+        var first = h.HandleAsync("import.start", J($$"""{"deviceId":{{a}}}"""));
+        await Until(() => ImportStatus(h).Result.GetProperty("running").GetBoolean());
+        Assert.Equal("Máy A", (await ImportStatus(h)).GetProperty("deviceName").GetString());
+        var ex = await Assert.ThrowsAsync<HostException>(() => h.HandleAsync("import.start", J($$"""{"deviceId":{{a}}}""")));
+        Assert.StartsWith("Đang lấy dữ liệu từ Máy A", ex.Message);
+
+        hold.SetResult();
+        await first;
+        Assert.False((await ImportStatus(h)).GetProperty("running").GetBoolean());
+        var done = Out(Ev.Last(e => e.Name == "import.done").Data);
+        Assert.Equal(1, done.GetProperty("summary").GetProperty("people").GetInt32());
+    }
+
+    [Fact]
+    public async Task a_failed_import_says_so_to_a_screen_that_was_not_waiting_for_it()
+    {
+        var h = NewHost();
+        var a = await AddDevice(h, "Máy A");
+        _factory.For(a).WrongPassword = true;
+        await Assert.ThrowsAsync<Acs.Core.Hik.HikAuthException>(() => h.HandleAsync("import.start", J($$"""{"deviceId":{{a}}}""")));
+        Assert.False((await ImportStatus(h)).GetProperty("running").GetBoolean());
+        var done = Out(Ev.Last(e => e.Name == "import.done").Data);
+        Assert.False(string.IsNullOrEmpty(done.GetProperty("error").GetString()));
+    }
+
+    [Fact]
+    public async Task two_plans_asked_at_once_read_the_devices_once()
+    {
+        var h = NewHost();
+        var a = await AddDevice(h, "Máy A");
+        var dev = _factory.For(a);
+        var before = dev.Calls.Count(c => c == "ListUsersAsync");
+        var hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        dev.HoldList = hold;
+
+        var p1 = h.HandleAsync("reconcile.plan", J());
+        await Until(() => dev.Calls.Count(c => c == "ListUsersAsync") > before);
+        var p2 = h.HandleAsync("reconcile.plan", J());
+        hold.SetResult();
+        await Task.WhenAll(p1, p2);
+
+        Assert.Equal(before + 1, dev.Calls.Count(c => c == "ListUsersAsync"));
+    }
+
     [Fact]
     public async Task first_import_shows_the_other_device_pending_until_reconcile_is_verified()
     {

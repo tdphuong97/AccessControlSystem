@@ -161,6 +161,12 @@
     return (devs || []).filter((d) => d.online && !d.authPaused);
   }
 
-  return { CHOICES, CHOICE_LABEL, IMPORT_EXPLAIN, deviceStatus, importSources, describeItem, summarizeDevice, strangerKey, buildStrangers, removals, nothingToDo, planTotals,
+  // import.status as one line, for screens other than the one that started it ('' when nothing runs).
+  function importNotice(st) {
+    if (!st || !st.running) return '';
+    return 'Đang lấy dữ liệu từ ' + (st.deviceName || 'máy') + '…' + (st.total ? ' ' + st.done + '/' + st.total : '');
+  }
+
+  return { CHOICES, CHOICE_LABEL, IMPORT_EXPLAIN, deviceStatus, importSources, importNotice, describeItem, summarizeDevice, strangerKey, buildStrangers, removals, nothingToDo, planTotals,
     splitItems, lockedCount, backupPasswordProblem, fmtSize, fmtDateTime, filterLog, deviceArgs, deviceProblem };
 });

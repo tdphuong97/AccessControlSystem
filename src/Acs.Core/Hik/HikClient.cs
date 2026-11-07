@@ -61,6 +61,10 @@ public sealed partial class HikClient : IHikDevice, IDisposable
         finally { _gate.Release(); }
     }
 
+    /// <summary>For a caller that already holds the gate: a multi-page read that nothing may land in between.</summary>
+    private async Task<string> SendHeldAsync(HttpMethod method, string path, HttpContent? body, CancellationToken ct)
+        => Decode(await SendOneAsync(method, path, body, null, ct));
+
     private async Task<byte[]> SendOneAsync(HttpMethod method, string path, HttpContent? body, TimeSpan? timeout, CancellationToken ct)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);

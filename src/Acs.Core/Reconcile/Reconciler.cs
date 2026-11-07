@@ -51,6 +51,9 @@ public sealed class Reconciler(Database db, IHikDeviceFactory factory, SyncEngin
         return new ReconcilePlan(diffs);
     }
 
+    private static async Task<HashSet<int>> ReadFingerIdsAsync(IHikDevice hik, string employeeNo, CancellationToken ct)
+        => (await hik.ReadFingerprintsAsync(employeeNo, ct)).Select(f => f.FingerId).ToHashSet();
+
     private async Task<DeviceDiff> BuildDeviceAsync(DeviceRecord dev, IReadOnlyList<PersonRecord> people, IProgress<string>? progress, CancellationToken ct)
     {
         var byNo = people.ToDictionary(p => p.EmployeeNo);
@@ -106,10 +109,19 @@ public sealed class Reconciler(Database db, IHikDeviceFactory factory, SyncEngin
             if (prev is null || !prev.FingersKnown || du.FingerCount != appFingers.Count || du.FingerCount != prev.Fingers.Count)
             {
                 HashSet<int>? devIds = null;
-                try { devIds = (await hik.ReadFingerprintsAsync(p.EmployeeNo, ct)).Select(f => f.FingerId).ToHashSet(); }
+                try
+                {
+                    devIds = await ReadFingerIdsAsync(hik, p.EmployeeNo, ct);
+                    // Fewer fingers than the device's own count: the read was cut short (on site another read landed
+                    // in between and only finger 1 came back). Read once more; still short = unknown, so a finger the
+                    // device has is never reported missing (and never sent over the device's own template).
+                    if (devIds.Count < du.FingerCount) devIds = await ReadFingerIdsAsync(hik, p.EmployeeNo, ct);
+                    if (devIds.Count < du.FingerCount) { devIds = null; known = false; }
+                }
                 catch (Exception e) when (e is HikRejectedException or HikNotSupportedException)
                 {
                     // This person's list is unreadable: keep it unknown (never "no fingers") and carry on with the plan.
+                    devIds = null;
                     known = false;
                 }
                 if (devIds is not null)

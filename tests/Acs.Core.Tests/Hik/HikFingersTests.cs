@@ -204,13 +204,83 @@ public class HikFingersTests
     }
 
     [Fact]
-    public async Task ReadFingers_stops_on_repeated_page()
+    public async Task ReadFingers_stops_after_three_pages_with_nothing_new()
     {
         var h = new FakeIsapiHandler().On(HttpMethod.Post, Upload,
             "{\"FingerPrintInfo\":{\"status\":\"MORE\",\"FingerPrintList\":[{\"fingerPrintID\":1,\"fingerData\":\"AAA=\"}]}}");
         var list = await Make(h).ReadFingerprintsAsync("1001", default);
         Assert.Single(list);
-        Assert.Equal(2, h.Requests.Count);
+        Assert.Equal(4, h.Requests.Count);   // the finger, then three repeats
+    }
+
+    /// <summary>
+    /// Behaves like DS-K1T9342MFWX V4.39 on site: ONE fingerprint cursor for the whole device. Each call returns the
+    /// next finger of (searchID, employeeNo); a call for any other pair starts that pair over; the same pair after its
+    /// last finger keeps answering NoFP.
+    /// </summary>
+    private sealed class CursorDevice(Dictionary<string, int[]> fingers)
+    {
+        private readonly object _lock = new();
+        private (string Sid, string No) _current = ("", "");
+        private int _pos;
+        public List<string> SearchIds { get; } = new();
+
+        public FakeIsapiHandler.Reply Answer(FakeIsapiHandler.Seen r)
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(r.Body);
+            var cond = doc.RootElement.GetProperty("FingerPrintCond");
+            var key = (cond.GetProperty("searchID").GetString()!, cond.GetProperty("employeeNo").GetString()!);
+            lock (_lock)
+            {
+                SearchIds.Add(key.Item1);
+                if (key != _current) { _current = key; _pos = 0; }
+                var list = fingers.GetValueOrDefault(key.Item2) ?? [];
+                if (_pos >= list.Length) return new(HttpStatusCode.OK, "{\"FingerPrintInfo\":{\"searchID\":\"x\",\"status\":\"NoFP\"}}");
+                var id = list[_pos++];
+                return new(HttpStatusCode.OK, "{\"FingerPrintInfo\":{\"searchID\":\"x\",\"status\":\"OK\",\"FingerPrintList\":[{\"cardReaderNo\":1,\"fingerPrintID\":" + id + ",\"fingerType\":\"normalFP\",\"fingerData\":\"F" + id + "=\"}]}}");
+            }
+        }
+
+        /// <summary>Another client reads someone else in between: the device starts our read over.</summary>
+        public void InterruptBySomeoneElse() { lock (_lock) { _current = ("other", "9999"); _pos = 0; } }
+    }
+
+    [Fact]
+    public async Task ReadFingers_two_reads_on_one_device_never_cut_each_other_short()
+    {
+        var dev = new CursorDevice(new() { ["1001"] = [1, 2], ["2002"] = [3, 4, 6] });
+        var h = new FakeIsapiHandler { Delay = TimeSpan.FromMilliseconds(15) }.On(HttpMethod.Post, Upload, dev.Answer);
+        var c = Make(h);
+        var a = c.ReadFingerprintsAsync("1001", default);
+        var b = c.ReadFingerprintsAsync("2002", default);
+        Assert.Equal([1, 2], (await a).Select(f => f.FingerId));
+        Assert.Equal([3, 4, 6], (await b).Select(f => f.FingerId));
+    }
+
+    [Fact]
+    public async Task ReadFingers_the_same_person_twice_reads_the_full_list_both_times()
+    {
+        var dev = new CursorDevice(new() { ["1001"] = [1, 2] });
+        var c = Make(new FakeIsapiHandler().On(HttpMethod.Post, Upload, dev.Answer));
+        Assert.Equal([1, 2], (await c.ReadFingerprintsAsync("1001", default)).Select(f => f.FingerId));
+        Assert.Equal([1, 2], (await c.ReadFingerprintsAsync("1001", default)).Select(f => f.FingerId));
+        var first = dev.SearchIds[0];
+        Assert.All(dev.SearchIds.Take(3), s => Assert.Equal(first, s));   // pages of one read share their search
+        Assert.NotEqual(first, dev.SearchIds[3]);                         // the next read starts a new one
+    }
+
+    [Fact]
+    public async Task ReadFingers_a_read_started_over_by_another_client_still_returns_every_finger()
+    {
+        var dev = new CursorDevice(new() { ["1001"] = [1, 2, 7] });
+        var calls = 0;
+        var c = Make(new FakeIsapiHandler().On(HttpMethod.Post, Upload, r =>
+        {
+            var reply = dev.Answer(r);
+            if (++calls == 2) dev.InterruptBySomeoneElse();   // after finger 2: someone else reads, we start over
+            return reply;
+        }));
+        Assert.Equal([1, 2, 7], (await c.ReadFingerprintsAsync("1001", default)).Select(f => f.FingerId));
     }
 
     [Fact]

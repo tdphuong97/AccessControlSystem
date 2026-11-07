@@ -1,6 +1,6 @@
 // Mock host used when the page is opened outside WebView2 (design checks, screenshots). Answers every C3
 // command with believable sample data. All people and devices are invented.
-// Query flags: ?err (one failed sync), ?locked (a stale locked person), ?noupdate, ?authpause, ?firstrun (no devices yet), ?empty, ?nobackup (no backup password), ?plansame (reconcile finds nothing), ?needrec (app.state.needsReconcile), ?importwarn (import could not read everyone)
+// Query flags: ?err (one failed sync), ?locked (a stale locked person), ?noupdate, ?authpause, ?firstrun (no devices yet), ?empty, ?nobackup (no backup password), ?plansame (reconcile finds nothing), ?needrec (app.state.needsReconcile), ?importwarn (import could not read everyone), ?slowimport (import takes ~9 s: leave the screen and come back)
 (function () {
   const ACS = (window.ACS = window.ACS || {});
   const F = () => ACS.fmt;
@@ -36,6 +36,7 @@
       validFrom: day(400), validTo: null, locked: true });
   }
   if (/empty|firstrun/.test(q)) people.length = 0;
+  let imp = { running: false, deviceId: null, deviceName: null, done: 0, total: 0, currentName: null };
   if (/firstrun/.test(q)) devices.length = 0;
 
   const syncOf = (p) => (p.error ? 'error' : (p.wait.length ? 'pending' : 'ok'));
@@ -217,17 +218,25 @@
       needsReconcile = false;
       return null;
     },
-    'import.start': async () => {
+    'import.status': () => Object.assign({}, imp),
+    'import.start': async (a) => {
+      if (imp.running) throw new Error('Đang lấy dữ liệu từ ' + imp.deviceName + '. Chờ xong rồi thử lại.');
       const names = ['Nguyễn Văn An', 'Trần Thị Bình', 'Lê Hoàng Cường', 'Phạm Minh Đức', 'Hoàng Thị Em'];
       const total = 24;
+      const dev = devices.find((d) => d.id === a.deviceId) || devices[0];
+      imp = { running: true, deviceId: dev.id, deviceName: dev.name, done: 0, total, currentName: '' };
       for (let i = 1; i <= total; i += 4) {
-        ACS.bridge.emit('import.progress', { done: i, total, currentName: names[(i >> 2) % names.length] });
-        await wait(350);
+        Object.assign(imp, { done: i, currentName: names[(i >> 2) % names.length] });
+        ACS.bridge.emit('import.progress', { done: i, total, currentName: imp.currentName });
+        await wait(/slowimport/.test(q) ? 1500 : 350);
       }
       ACS.bridge.emit('import.progress', { done: total, total, currentName: '' });
       if (/importwarn/.test(q)) ACS.bridge.emit('import.progress', { done: total, total, currentName: 'Không đọc được đủ dữ liệu của 2 người. Xem Nhật ký; chạy lại Lấy dữ liệu sau nếu cần.' });
       if (devices.length > 1) needsReconcile = true;
-      return { people: total, withFace: 21, facesMissing: 3, fingers: 38 };
+      const summary = { people: total, withFace: 21, facesMissing: 3, fingers: 38 };
+      imp = { running: false, deviceId: null, deviceName: null, done: 0, total: 0, currentName: null };
+      ACS.bridge.emit('import.done', { deviceId: dev.id, deviceName: dev.name, summary, error: null });
+      return summary;
     },
     'backup.status': () => ({ hasPassword: bak.hasPassword, lastAt: bak.lastAt, files: bak.files, extraFolder: extra }),
     'backup.setPassword': (a) => {

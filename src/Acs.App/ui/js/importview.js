@@ -10,8 +10,10 @@
 
   function view(root, ctx, opts) {
     opts = opts || {};
-    const s = { phase: 'loading', devs: [], source: null, done: 0, total: 0, name: '', note: '', summary: null, err: '' };
-    const srcName = () => { const d = s.devs.find((x) => x.id === s.source); return d ? d.name : 'máy'; };
+    // attached: showing an import that runs in the host but was not started by this view (the screen was left and
+    // opened again); its end comes as the import.done event instead of the import.start answer.
+    const s = { phase: 'loading', devs: [], source: null, done: 0, total: 0, name: '', note: '', summary: null, err: '', attached: false, runName: '' };
+    const srcName = () => { const d = s.devs.find((x) => x.id === s.source); return d ? d.name : (s.runName || 'máy'); };
 
     function draw() {
       if (!ctx.alive() || !root.isConnected) return;
@@ -51,6 +53,16 @@
       s.phase = 'idle'; draw();
     }
 
+    // An import already running (started before this screen opened): show its progress instead of the button.
+    async function attachIfRunning() {
+      let st = null;
+      try { st = await ACS.bridge.call('import.status'); } catch (e) { /* treat as idle */ }
+      if (!ctx.alive() || !st || !st.running) return false;
+      Object.assign(s, { phase: 'running', attached: true, source: st.deviceId, runName: st.deviceName || '', done: st.done, total: st.total, name: st.currentName || '', err: '' });
+      draw();
+      return true;
+    }
+
     on(root, 'change', '#iv-src', (el) => { s.source = +el.value; });
     on(root, 'click', '[data-act="iv-reload"]', () => { s.phase = 'loading'; draw(); loadDevs(); });
     on(root, 'click', '[data-act="iv-import"]', async () => {
@@ -66,6 +78,7 @@
         if (opts.onDone) opts.onDone(sum);
       } catch (e) {
         if (!ctx.alive()) return;
+        if (await attachIfRunning()) return;   // refused because another import runs: show that one
         s.phase = 'idle'; s.err = ACS.ui.errMessage(e);
         const keep = s.source;
         await loadDevs();   // the device may have gone offline or been paused meanwhile
@@ -80,8 +93,18 @@
       s.done = d.done; s.total = d.total; s.name = d.currentName;
       draw();
     });
+    const offDone = ACS.bridge.on('import.done', (d) => {
+      if (!ctx.alive() || s.phase !== 'running' || !s.attached) return;
+      s.attached = false;
+      if (ACS.refreshState) ACS.refreshState().catch(() => {});
+      if (d && d.summary) { s.phase = 'done'; s.summary = d.summary; draw(); if (opts.onDone) opts.onDone(d.summary); }
+      else { s.phase = 'idle'; s.err = (d && d.error) || 'Lấy dữ liệu bị dừng giữa chừng. Bấm lấy lại, app sẽ chạy tiếp.'; loadDevs(); }
+    });
 
-    return { start() { draw(); loadDevs(); }, destroy() { offImp(); } };
+    return {
+      async start() { draw(); await loadDevs(); await attachIfRunning(); },
+      destroy() { offImp(); offDone(); },
+    };
   }
 
   ACS.importView = view;

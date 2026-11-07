@@ -233,6 +233,7 @@ public sealed partial class AppHost
         "reconcile.plan" => await ReconcilePlanAsync(),
         "reconcile.apply" => await ReconcileApplyAsync(a),
         "import.start" => await ImportStart(a),
+        "import.status" => ImportStatus(),
         "backup.status" => BackupStatusView(),
         "backup.setPassword" => BackupSetPassword(a),
         "backup.now" => BackupNow(),

@@ -45,13 +45,15 @@
       if (s.phase === 'empty') {
         // Nobody in the app yet: every person on every device would show up as a stranger. Bring one device in first;
         // So khớp then lists only what differs between the devices.
-        root.innerHTML = '<div class="alert alert-wait" role="note">' + icon('alertCircle', 18) + '<span>App chưa có ai trong danh sách, nên mọi người trên máy sẽ hiện là "người lạ". ' +
-          'Hãy lấy dữ liệu từ một máy về app trước. Sau đó So khớp chỉ hiện những người khác nhau giữa các máy.</span></div>' +
+        root.innerHTML = '<div class="alert alert-wait" role="note" data-imp-note>' + icon('alertCircle', 18) + '<span>' + (s.importing
+          ? 'App đang lấy dữ liệu từ máy về. So khớp sau khi lấy xong, để chỉ hiện những người khác nhau giữa các máy.'
+          : 'App chưa có ai trong danh sách, nên mọi người trên máy sẽ hiện là "người lạ". Hãy lấy dữ liệu từ một máy về app trước. Sau đó So khớp chỉ hiện những người khác nhau giữa các máy.') + '</span></div>' +
           '<div id="rc-imp" style="margin-top:12px"></div>' +
-          '<div class="wfoot" data-anyway><span class="grow"></span><button type="button" class="btn btn-link" data-act="rc-anyway">Vẫn so khớp với danh sách trống</button></div>';
+          (s.importing ? '' : '<div class="wfoot" data-anyway><span class="grow"></span><button type="button" class="btn btn-link" data-act="rc-anyway">Vẫn so khớp với danh sách trống</button></div>');
         s.iv = ACS.importView(root.querySelector('#rc-imp'), ctx, {
           doneHtml: '<button type="button" class="btn btn-primary btn-next" data-act="rc-retry">Tiếp: So khớp 2 máy' + icon('chevronRight', 18) + '</button>',
-          onStart() { const f = root.querySelector('[data-anyway]'); if (f) f.remove(); } });
+          onStart() { const f = root.querySelector('[data-anyway]'); if (f) f.remove(); },
+          onDone() { const n = root.querySelector('[data-imp-note]'); if (n) n.remove(); } });
         s.iv.start();
       } else if (s.phase === 'reading') {
         root.innerHTML = '<div class="card rstate" role="status">' + spin(26) + '<div><div class="fw6">Đang đọc máy…</div><div class="small muted">' + esc(s.msg || 'App đang đọc danh sách người trên từng máy để so với bản gốc. Việc này mất vài chục giây.') + '</div></div></div>';
@@ -79,9 +81,12 @@
       try {
         if (!s.checkedEmpty) {
           s.checkedEmpty = true;
-          const people = await ACS.bridge.call('people.list', {});
+          const [people, imp] = await Promise.all([ACS.bridge.call('people.list', {}),
+            ACS.bridge.call('import.status').catch(() => null)]);
           if (!ctx.alive()) return;
-          if (Array.isArray(people) && !people.length) { s.phase = 'empty'; draw(); return; }
+          // Nobody in the app yet, or an import still running: comparing now would list half the people as strangers.
+          s.importing = !!(imp && imp.running);
+          if (s.importing || (Array.isArray(people) && !people.length)) { s.phase = 'empty'; draw(); return; }
         }
         const plan = await ACS.bridge.call('reconcile.plan');
         if (ACS.refreshState) ACS.refreshState().catch(() => {});   // a plan with nothing to send also clears the notice

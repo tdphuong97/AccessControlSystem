@@ -11,6 +11,9 @@ namespace Acs.Core.Host;
 public sealed partial class AppHost
 {
     private ReconcilePlan? _plan;
+    private Task<ReconcilePlan>? _planRun;
+    private readonly object _importLock = new();
+    private ImportStatusView? _importRun;   // null = no import running
 
     /// <summary>Reports synchronously, in order, before the command returns. Progress&lt;T&gt; posts to the thread pool,
     /// so its events could arrive out of order or after the result (the page then ignores them).</summary>
@@ -147,8 +150,22 @@ public sealed partial class AppHost
         return null;
     }
 
-    private async Task<ReconcilePlan> ReconcilePlanAsync()
+    /// <summary>
+    /// A second request while a plan is being built (the screen was left and opened again) waits for that same run:
+    /// two runs would read every device twice over, side by side.
+    /// </summary>
+    private Task<ReconcilePlan> ReconcilePlanAsync()
     {
+        lock (_importLock)
+        {
+            if (_planRun is null || _planRun.IsCompleted) _planRun = BuildPlanAsync();
+            return _planRun;
+        }
+    }
+
+    private async Task<ReconcilePlan> BuildPlanAsync()
+    {
+        await Task.Yield();   // never run the device reads inside the lock above
         var plan = await Reconciler.BuildAsync(new InOrder<string>(m => Emit("reconcile.progress", new { message = m })), _cts.Token);
         _plan = plan;
         // Nothing to send anywhere (ExtraFingers is information only): the devices already match the app.
@@ -170,18 +187,45 @@ public sealed partial class AppHost
         return null;
     }
 
+    private ImportStatusView ImportStatus()
+    {
+        lock (_importLock) return _importRun ?? new ImportStatusView(false, null, null, 0, 0, null);
+    }
+
+    /// <summary>
+    /// The import runs on in the host when its screen is left; import.status and the import.done event let a screen
+    /// opened later show it. One import at a time: two would read the same device side by side.
+    /// </summary>
     private async Task<ImportSummary> ImportStart(JsonElement a)
     {
         var id = Int(a, "deviceId");
+        var name = Db.Devices.Get(id)?.Name ?? "máy";
+        lock (_importLock)
+        {
+            if (_importRun is { } running) throw new HostException($"Đang lấy dữ liệu từ {running.DeviceName}. Chờ xong rồi thử lại.");
+            _importRun = new ImportStatusView(true, id, name, 0, 0, null);
+        }
         var before = Db.People.Count();
         var finished = false;
+        ImportSummary? summary = null;
+        string? error = null;
         try
         {
-            var summary = await Importer.ImportAllAsync(id,
-                new InOrder<ImportProgress>(p => Emit("import.progress", new { done = p.Done, total = p.Total, currentName = p.CurrentName })),
+            summary = await Importer.ImportAllAsync(id,
+                new InOrder<ImportProgress>(p =>
+                {
+                    lock (_importLock) if (_importRun is not null) _importRun = _importRun with { Done = p.Done, Total = p.Total, CurrentName = p.CurrentName };
+                    Emit("import.progress", new { done = p.Done, total = p.Total, currentName = p.CurrentName });
+                }),
                 _cts.Token);
             finished = true;
             return summary;
+        }
+        catch (Exception ex)
+        {
+            error = ex is Acs.Core.Enroll.EnrollException or HikException or HostException ? ex.Message
+                : ex is OperationCanceledException ? SlowNetworkMessage : GenericError;
+            throw;
         }
         finally
         {
@@ -190,6 +234,8 @@ public sealed partial class AppHost
             try { if (Db.Devices.List().Count > 1 && (finished || Db.People.Count() > before)) SetNeedsReconcile(true); }
             catch { /* the hint is best-effort */ }
             Sync.Wake();
+            lock (_importLock) _importRun = null;
+            Emit("import.done", new { deviceId = id, deviceName = name, summary, error });
         }
     }
 

@@ -22,6 +22,10 @@ public sealed class FakeDevice : IHikDevice
     public volatile bool RejectFace;
     public volatile bool AcceptOnlyGroup;
     public volatile bool ForgetWrites;
+    /// <summary>The next N fingerprint reads return only the first finger (a read cut short, as on site).</summary>
+    public int ShortReads;
+    /// <summary>When set, ListUsersAsync waits for it: keeps an import or a plan running while a test looks.</summary>
+    public TaskCompletionSource? HoldList;
     public string FpGroup { get; set; } = "ModelA";
     public byte[] NextFace { get; set; } = [0xFF, 0xD8, 0xFF, 0xD9];
     public CapturedFinger NextFinger { get; set; } = new("ModelA:AAAA", 80);
@@ -55,6 +59,7 @@ public sealed class FakeDevice : IHikDevice
     public async IAsyncEnumerable<HikUser> ListUsersAsync([EnumeratorCancellation] CancellationToken ct)
     {
         Enter(nameof(ListUsersAsync));
+        if (HoldList is { } hold) await hold.Task;
         List<HikUser> snap;
         lock (_gate) snap = _users.Values.Select(ToUser).ToList();
         foreach (var u in snap) { yield return u; await Task.Yield(); }
@@ -141,8 +146,11 @@ public sealed class FakeDevice : IHikDevice
     {
         Enter(nameof(ReadFingerprintsAsync));
         lock (_gate)
-            return Task.FromResult<IReadOnlyList<HikFinger>>(_fingers.Where(kv => kv.Key.No == employeeNo)
-                .OrderBy(kv => kv.Key.Id).Select(kv => new HikFinger(kv.Key.Id, kv.Value)).ToList());
+        {
+            var all = _fingers.Where(kv => kv.Key.No == employeeNo).OrderBy(kv => kv.Key.Id).Select(kv => new HikFinger(kv.Key.Id, kv.Value)).ToList();
+            if (ShortReads > 0 && all.Count > 1) { ShortReads--; all = all.Take(1).ToList(); }
+            return Task.FromResult<IReadOnlyList<HikFinger>>(all);
+        }
     }
 
     public Task DeleteFingerprintAsync(string employeeNo, int fingerId, CancellationToken ct)

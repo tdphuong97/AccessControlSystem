@@ -11,6 +11,7 @@ public sealed partial class HikClient
     private const string FpBase = "/ISAPI/AccessControl";
     private const int FpPageSize = 30;
     private const int FpMaxPages = 20;
+    private const int FpIdlePages = 3;
     private const string FpCaptureFailedMessage = "Máy chưa quét được vân tay. Đặt ngón tay lên cảm biến, giữ yên rồi bấm lại.";
     private const string FpUnconfirmedMessage = "Máy chưa xác nhận đã lưu vân tay. Bấm Thử lại; nếu vẫn không được, kiểm tra máy rồi gửi lại.";
     public const string FpUnreadableMessage = "Máy trả về danh sách vân tay không đọc được. Bấm Thử lại; nếu vẫn lỗi, xem Chi tiết và báo lại cho người làm phần mềm.";
@@ -199,12 +200,23 @@ public sealed partial class HikClient
 
     // ---- read ----
 
+    /// <summary>
+    /// Measured on DS-K1T9342MFWX V4.39: the device keeps ONE fingerprint cursor and hands out one finger per call.
+    /// Another fingerprint read landing between two pages starts ours over (the list came back short and So khớp
+    /// reported fingers the device had as missing), and the same search asked again after its last page answers
+    /// NoFP. So a read keeps the device to itself from the first page to the last and runs a search of its own.
+    /// </summary>
     public async Task<IReadOnlyList<HikFinger>> ReadFingerprintsAsync(string employeeNo, CancellationToken ct)
     {
-        try { return await ReadFingerprintPagesAsync(employeeNo, nested: true, ct); }
-        catch (HikRejectedException) { }
-        // Older firmware wants the flat form.
-        return await ReadFingerprintPagesAsync(employeeNo, nested: false, ct);
+        await _gate.WaitAsync(ct);
+        try
+        {
+            try { return await ReadFingerprintPagesAsync(employeeNo, nested: true, ct); }
+            catch (HikRejectedException) { }
+            // Older firmware wants the flat form.
+            return await ReadFingerprintPagesAsync(employeeNo, nested: false, ct);
+        }
+        finally { _gate.Release(); }
     }
 
     private async Task<IReadOnlyList<HikFinger>> ReadFingerprintPagesAsync(string employeeNo, bool nested, CancellationToken ct)
@@ -212,12 +224,14 @@ public sealed partial class HikClient
         var result = new List<HikFinger>();
         var seen = new HashSet<int>();
         var pos = 0;
+        var idle = 0;
+        var searchId = Guid.NewGuid().ToString("N");
         for (var page = 0; page < FpMaxPages; page++)
         {
             object payload = nested
-                ? new { FingerPrintCond = new { searchID = "acs", employeeNo, cardReaderNo = 1 } }
-                : new { searchID = "acs", searchResultPosition = pos, maxResults = FpPageSize, employeeNo };
-            var text = await SendAsync(HttpMethod.Post, $"{FpBase}/FingerPrintUpload?format=json", JsonBody(payload), null, ct);
+                ? new { FingerPrintCond = new { searchID = searchId, employeeNo, cardReaderNo = 1 } }
+                : new { searchID = searchId, searchResultPosition = pos, maxResults = FpPageSize, employeeNo };
+            var text = await SendHeldAsync(HttpMethod.Post, $"{FpBase}/FingerPrintUpload?format=json", JsonBody(payload), ct);
             using var doc = TryParseJson(text);
             // Not JSON: the list is unknown, which must never read as "this person has no fingers".
             if (doc is null) throw new HikRejectedException("fpListUnreadable", FpUnreadableMessage, HikErrorMap.Trim(text));
@@ -238,7 +252,10 @@ public sealed partial class HikClient
                     if (data is null || id <= 0) continue;
                     if (seen.Add(id)) { result.Add(new HikFinger(id, Regex.Replace(data, @"\s+", ""))); added++; }
                 }
-            if (string.Equals(status, "NoFP", StringComparison.OrdinalIgnoreCase) || count == 0 || added == 0) break;
+            // A page with nothing new is either a device that ignores the cursor or our read started over by another
+            // client (fingers we already have come round again): give it a few pages before deciding it is the first.
+            idle = added == 0 ? idle + 1 : 0;
+            if (string.Equals(status, "NoFP", StringComparison.OrdinalIgnoreCase) || count == 0 || idle >= FpIdlePages) break;
             pos += count;
         }
         return result;

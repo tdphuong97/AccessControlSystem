@@ -112,3 +112,10 @@ test('importSources: only devices the app can read right now', () => {
   assert.deepEqual(R.importSources([]), []);
   assert.deepEqual(R.importSources(null), []);
 });
+
+test('importNotice: one line for an import running behind another screen', () => {
+  assert.equal(R.importNotice({ running: true, deviceName: 'Trệt', done: 45, total: 157 }), 'Đang lấy dữ liệu từ Trệt… 45/157');
+  assert.equal(R.importNotice({ running: true, deviceName: 'Trệt', done: 0, total: 0 }), 'Đang lấy dữ liệu từ Trệt…');
+  assert.equal(R.importNotice({ running: false, deviceName: 'Trệt', done: 157, total: 157 }), '');
+  assert.equal(R.importNotice(null), '');
+});

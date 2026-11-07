@@ -29,6 +29,41 @@ public sealed class ReconcilerTests : IAsyncDisposable
 
     private static readonly CancellationToken Ct = CancellationToken.None;
 
+    private async Task PersonWithTwoFingersOnBoth()
+    {
+        _h.AddPerson("1002", "Bình");
+        _h.AddFinger("1002", 1, "ModelA"); _h.AddFinger("1002", 2, "ModelA");
+        await _dev1.UpsertUserAsync(W("1002", "Bình"), Ct);
+        await _dev1.SetFingerprintAsync("1002", 1, SyncHarness.Tpl("ModelA"), 1, Ct);
+        await _dev1.SetFingerprintAsync("1002", 2, SyncHarness.Tpl("ModelA"), 1, Ct);
+    }
+
+    [Fact]
+    public async Task Plan_reads_again_when_the_finger_list_is_shorter_than_the_device_count()
+    {
+        await PersonWithTwoFingersOnBoth();
+        _dev1.ShortReads = 1;   // on site: another read landed in between and the list came back with finger 1 only
+
+        var plan = await _rec.BuildAsync(null, Ct);
+
+        Assert.DoesNotContain(plan.Devices.Single().Items, i => i.Kind == DiffKind.MissingFingers);
+        var st = _h.Db.Jobs.GetState("1002", _d1)!;
+        Assert.True(st.FingersKnown);
+        Assert.Equal(new HashSet<int> { 1, 2 }, st.Fingers);
+    }
+
+    [Fact]
+    public async Task Plan_keeps_a_finger_list_that_stays_short_unknown_never_missing()
+    {
+        await PersonWithTwoFingersOnBoth();
+        _dev1.ShortReads = 99;
+
+        var plan = await _rec.BuildAsync(null, Ct);
+
+        Assert.DoesNotContain(plan.Devices.Single().Items, i => i.Kind == DiffKind.MissingFingers);
+        Assert.False(_h.Db.Jobs.GetState("1002", _d1)!.FingersKnown);
+    }
+
     [Fact]
     public async Task Plan_lists_missing_person_face_fingers()
     {
