@@ -49,6 +49,13 @@ Lần đầu: tải **AccessControlSystem-Setup-$version.exe** ở mục Assets 
 Bản chính thức chỉ có ở trang này. SHA-256 của AccessControlSystem-Setup-$version.exe:
 ``$($latest.windows.sha256)``
 "@
-& $gh release create "v$version" $setup $probe 'dist\latest.json' --repo $repo --title "Access Control System $version" --notes $body
-if ($LASTEXITCODE) { throw 'Publishing the release failed.' }
+# The notes go through a file: Windows PowerShell 5.1 splits an argument at embedded double quotes, so notes quoting
+# a message ("Đã kết nối") reached gh as stray file names.
+$notesFile = Join-Path ([IO.Path]::GetTempPath()) "acs-release-notes-$version.md"
+[IO.File]::WriteAllText($notesFile, $body, [Text.UTF8Encoding]::new($false))
+try {
+    & $gh release create "v$version" $setup $probe 'dist\latest.json' --repo $repo --title "Access Control System $version" --notes-file $notesFile
+    if ($LASTEXITCODE) { throw 'Publishing the release failed.' }
+}
+finally { Remove-Item $notesFile -ErrorAction SilentlyContinue }
 "Published https://github.com/$repo/releases/tag/v$version"
