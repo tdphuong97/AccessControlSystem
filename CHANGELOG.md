@@ -1,3 +1,9 @@
+## 0.9.5
+
+- Mới: nút Hướng dẫn ở góc trên bên phải (phím F1) mở hướng dẫn sử dụng ngay trong phần mềm, đúng trang của màn hình đang dùng. Hướng dẫn đi kèm phần mềm, không cần mạng.
+- Hướng dẫn bổ sung trang Lấy dữ liệu từ máy và bảng "Bạn cần bấm gì để đồng bộ".
+- Bỏ khoảng trống thừa phía trên tiêu đề các màn hình.
+
 ## 0.9.4
 
 - Danh sách người dùng chia trang: chọn 20, 50, 100 hoặc Tất cả người mỗi trang (mặc định 50), có nút Trước / Sau. Phần mềm nhớ lựa chọn trên máy tính này.
