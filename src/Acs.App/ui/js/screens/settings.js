@@ -13,10 +13,10 @@
   // "E:\SaoLuuACS" + "ACS-....acsbak" -> full path for backup.restore {path}
   const joinPath = (folder, name) => String(folder).replace(/[\\/]+$/, '') + '\\' + name;
 
+  const DOT = { ok: 'var(--ok-dot)', wait: 'var(--wait-dot)', err: 'var(--err)' };
   function statusPill(d) {
-    if (d.authPaused) return '<span class="pill pill-err"><span class="dot" style="background:var(--err)"></span>Sai mật khẩu, đã dừng</span>';
-    if (!d.online) return '<span class="pill pill-wait"><span class="dot" style="background:var(--wait-dot)"></span>Mất kết nối</span>';
-    return '<span class="pill pill-ok"><span class="dot" style="background:var(--ok-dot)"></span>Đang kết nối</span>';
+    const st = R.deviceStatus(d);
+    return '<span class="pill pill-' + st.tone + '"><span class="dot" style="background:' + DOT[st.tone] + '"></span>' + st.pill + '</span>';
   }
 
   function render(host, params, ctx) {
@@ -27,6 +27,7 @@
       '<section aria-labelledby="h-dev" class="sec"><div class="pagehead"><h2 id="h-dev" class="h2-lg">Máy chấm công</h2>' +
       '<button type="button" class="btn" data-act="add-dev">' + icon('plus', 18) + 'Thêm máy</button></div>' +
       '<div id="s-form"></div><div class="devgrid" id="s-dev"></div></section>' +
+      '<section aria-labelledby="h-imp" class="sec"><h2 id="h-imp" class="h2-lg">Lấy dữ liệu từ máy</h2><div id="s-imp"></div></section>' +
       '<section aria-labelledby="h-rec" class="sec"><h2 id="h-rec" class="h2-lg">So khớp 2 máy</h2><div id="s-rec"></div></section>' +
       '<section aria-labelledby="h-bak" class="sec"><h2 id="h-bak" class="h2-lg">Sao lưu</h2><div id="s-bak"></div></section>' +
       '<section aria-labelledby="h-oth" class="sec"><h2 id="h-oth" class="h2-lg">Khác</h2><div id="s-oth"></div></section></div>';
@@ -167,6 +168,12 @@
       } catch (e) { delete s.deleting[id]; if (alive()) { drawDevs(); ACS.ui.toast(ACS.ui.errMessage(e), 'error'); } }
     });
     const offDev = ACS.bridge.on('devices.changed', (list) => { if (alive() && Array.isArray(list)) { s.devs = list; drawDevs(); } });
+
+    // ---------- import from a device ----------
+    const iv = ACS.importView($('s-imp'), ctx, {
+      intro: '<p class="small muted" style="margin:0 0 12px">Chép người, khuôn mặt và vân tay đang có trên máy về app. Dùng khi mới cài, hoặc khi app còn thiếu người đã có sẵn trên máy. Sau đó So khớp để bổ sung cho máy còn lại.</p>',
+      doneHtml: '<a class="btn btn-primary" href="#/reconcile">Tiếp: So khớp 2 máy</a>' });
+    iv.start();
 
     // ---------- reconcile entry ----------
     $('s-rec').innerHTML = '<div class="card recentry"><span class="devic devic-ok">' + icon('refresh', 22) + '</span><div class="grow"><div class="fw6">So khớp người, khuôn mặt và vân tay giữa 2 máy</div>' +
@@ -341,7 +348,7 @@
       catch (e) { if (alive()) $('s-dev').innerHTML = errBox(ACS.ui.errMessage(e)); }
     })();
     const offState = ACS.onState(() => { if (alive() && s.upd === 'idle') drawUpd(); });
-    return () => { offProg(); offDev(); offState(); };
+    return () => { offProg(); offDev(); offState(); iv.destroy(); };
   }
 
   ACS.screens = ACS.screens || {};

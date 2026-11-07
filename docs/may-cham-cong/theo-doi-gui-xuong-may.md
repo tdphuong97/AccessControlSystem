@@ -28,17 +28,17 @@ Phần mềm chỉ gửi khi đang chạy. Nên bật **Tự chạy cùng Window
 
 ## Đọc các chấm trạng thái trên đầu cửa sổ
 
-Bên phải hàng thẻ **Người dùng** và **Máy chấm công & cập nhật** có một chấm cho mỗi máy, ví dụ **Tầng trệt: đang kết nối**. Phần mềm bỏ chữ "Máy" ở đầu tên cho gọn.
+Bên phải hàng thẻ **Người dùng** và **Máy chấm công & cập nhật** có một chấm cho mỗi máy, ví dụ **Tầng trệt: đã kết nối**. Phần mềm bỏ chữ "Máy" ở đầu tên cho gọn.
 
 | Chấm | Chữ | Ý nghĩa |
 | --- | --- | --- |
-| Xanh | **đang kết nối** | Máy trả lời bình thường, việc gửi chạy được. |
+| Xanh | **đã kết nối** | Máy trả lời bình thường, việc gửi chạy được. |
 | Vàng | **mất kết nối** | Phần mềm không gọi được máy (tắt nguồn, đứt mạng, sai địa chỉ). Việc chờ sẽ tự gửi khi máy có lại. |
 | Đỏ | **sai mật khẩu** | Máy từ chối tài khoản hoặc mật khẩu. Phần mềm đã dừng gửi tới máy này. |
 
 Trên tab **Người dùng**, mỗi máy còn có một thẻ chi tiết hơn:
 
-- **Đang kết nối**: thẻ hiện số người và vai trò của máy.
+- **Đã kết nối**: thẻ hiện số người và vai trò của máy.
 - **Mất kết nối**: thẻ cho biết đã mất bao lâu và có bao nhiêu việc chờ, ví dụ "Có 4 việc đang chờ. App sẽ tự gửi khi máy có mạng lại." Bấm **Thử lại** để phần mềm kiểm tra máy ngay, không phải đợi.
 - **Sai mật khẩu, đã dừng**: bấm **Sửa mật khẩu** để mở tab **Máy chấm công & cập nhật**.
 
@@ -95,7 +95,7 @@ Phần mềm không tự xếp việc gửi cho một máy vừa thêm, vừa đ
 Trên màn hình từng người, phần chưa được xác nhận trên máy hiện dòng "Chưa có trên máy này — chạy So khớp 2 máy." Bấm **Mở So khớp 2 máy** và làm theo [So khớp 2 máy](so-khop-2-may.md).
 
 {% hint style="success" %}
-**Kết quả:** các chấm đều **đang kết nối**, cột cuối của danh sách người hiện **Đủ 2 máy** và không còn dòng **Việc chờ** trên thẻ máy.
+**Kết quả:** các chấm đều **đã kết nối**, cột cuối của danh sách người hiện **Đủ 2 máy** và không còn dòng **Việc chờ** trên thẻ máy.
 {% endhint %}
 
 ## Lỗi thường gặp
@@ -110,7 +110,7 @@ Kiểm tra máy tính và máy chấm công có cùng mạng không, và địa 
 
 <details>
 
-<summary>Việc chờ không giảm dù máy đang kết nối</summary>
+<summary>Việc chờ không giảm dù máy đã kết nối</summary>
 
 Mở người đó, đọc thông báo dưới từng mục. Nếu có chữ **Có lỗi**, làm theo hướng dẫn trong thông báo rồi bấm **Thử lại ngay**. Xem thêm [Xử lý sự cố](../tham-khao/xu-ly-su-co.md).
 

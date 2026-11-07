@@ -98,3 +98,17 @@ test('splitItems / lockedCount / ExtraFingers does not count as work', () => {
   assert.equal(R.nothingToDo(onlyExtra, {}), true);
   assert.equal(R.nothingToDo({ devices: [{ deviceId: 1, deviceName: 'x', items: [items[1]], strangers: [] }] }, {}), false);
 });
+
+test('deviceStatus: a connected device reads as connected, not as still connecting', () => {
+  assert.deepEqual(R.deviceStatus({ online: true, authPaused: false }), { tone: 'ok', short: 'đã kết nối', pill: 'Đã kết nối' });
+  assert.deepEqual(R.deviceStatus({ online: false, authPaused: false }), { tone: 'wait', short: 'mất kết nối', pill: 'Mất kết nối' });
+  assert.deepEqual(R.deviceStatus({ online: true, authPaused: true }), { tone: 'err', short: 'sai mật khẩu', pill: 'Sai mật khẩu, đã dừng' });
+  assert.equal(R.deviceStatus({ online: false, authPaused: true }).tone, 'err', 'a paused device is paused whatever the network says');
+});
+
+test('importSources: only devices the app can read right now', () => {
+  const devs = [{ id: 1, online: false }, { id: 2, online: true, authPaused: true }, { id: 3, online: true }, { id: 4, online: true, authPaused: false }];
+  assert.deepEqual(R.importSources(devs).map((d) => d.id), [3, 4]);
+  assert.deepEqual(R.importSources([]), []);
+  assert.deepEqual(R.importSources(null), []);
+});

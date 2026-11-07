@@ -63,7 +63,7 @@ Máy mới chưa có việc nào trong hàng đợi. Chạy [So khớp 2 máy](s
 {% endstepper %}
 
 {% hint style="success" %}
-**Kết quả:** thẻ máy hiện **Đang kết nối** và chấm trạng thái của máy trên đầu cửa sổ chuyển xanh.
+**Kết quả:** thẻ máy hiện **Đã kết nối** và chấm trạng thái của máy trên đầu cửa sổ chuyển xanh.
 {% endhint %}
 
 ## Sửa máy

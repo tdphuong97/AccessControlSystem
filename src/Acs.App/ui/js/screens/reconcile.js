@@ -36,12 +36,24 @@
   // Reusable view: returns {start(), destroy()}. opts.onDone(), opts.intro (html), opts.doneHtml(html).
   function view(root, ctx, opts) {
     opts = opts || {};
-    const s = { phase: 'reading', plan: null, choices: {}, msg: '', err: '' };
+    const s = { phase: 'reading', plan: null, choices: {}, msg: '', err: '', checkedEmpty: false, iv: null };
     let offProg = null;
 
     function draw() {
       if (!ctx.alive()) return;
-      if (s.phase === 'reading') {
+      if (s.iv) { s.iv.destroy(); s.iv = null; }
+      if (s.phase === 'empty') {
+        // Nobody in the app yet: every person on every device would show up as a stranger. Bring one device in first;
+        // So khớp then lists only what differs between the devices.
+        root.innerHTML = '<div class="alert alert-wait" role="note">' + icon('alertCircle', 18) + '<span>App chưa có ai trong danh sách, nên mọi người trên máy sẽ hiện là "người lạ". ' +
+          'Hãy lấy dữ liệu từ một máy về app trước. Sau đó So khớp chỉ hiện những người khác nhau giữa các máy.</span></div>' +
+          '<div id="rc-imp" style="margin-top:12px"></div>' +
+          '<div class="wfoot" data-anyway><span class="grow"></span><button type="button" class="btn btn-link" data-act="rc-anyway">Vẫn so khớp với danh sách trống</button></div>';
+        s.iv = ACS.importView(root.querySelector('#rc-imp'), ctx, {
+          doneHtml: '<button type="button" class="btn btn-primary btn-next" data-act="rc-retry">Tiếp: So khớp 2 máy' + icon('chevronRight', 18) + '</button>',
+          onStart() { const f = root.querySelector('[data-anyway]'); if (f) f.remove(); } });
+        s.iv.start();
+      } else if (s.phase === 'reading') {
         root.innerHTML = '<div class="card rstate" role="status">' + spin(26) + '<div><div class="fw6">Đang đọc máy…</div><div class="small muted">' + esc(s.msg || 'App đang đọc danh sách người trên từng máy để so với bản gốc. Việc này mất vài chục giây.') + '</div></div></div>';
       } else if (s.phase === 'error') {
         root.innerHTML = errBox(s.err) + '<div class="rowwrap" style="margin-top:12px"><button type="button" class="btn btn-primary" data-act="rc-retry">' + icon('refresh', 18) + 'Đọc lại</button></div>';
@@ -65,6 +77,12 @@
     async function load() {
       s.phase = 'reading'; s.err = ''; s.msg = ''; draw();
       try {
+        if (!s.checkedEmpty) {
+          s.checkedEmpty = true;
+          const people = await ACS.bridge.call('people.list', {});
+          if (!ctx.alive()) return;
+          if (Array.isArray(people) && !people.length) { s.phase = 'empty'; draw(); return; }
+        }
         const plan = await ACS.bridge.call('reconcile.plan');
         if (ACS.refreshState) ACS.refreshState().catch(() => {});   // a plan with nothing to send also clears the notice
         if (!ctx.alive()) return;
@@ -100,6 +118,7 @@
     }
 
     on(root, 'click', '[data-act="rc-retry"]', () => load());
+    on(root, 'click', '[data-act="rc-anyway"]', () => load());
     on(root, 'click', '[data-act="rc-apply"]', (el) => { el.disabled = true; apply().then(() => { if (el.isConnected && s.phase === 'plan') el.disabled = R.nothingToDo(s.plan, s.choices); }); });
     root.addEventListener('change', (ev) => {
       const sel = ev.target.closest('[data-stranger]');
@@ -114,7 +133,7 @@
       s.msg = (d && d.message) || '';
       const el = root.querySelector('.rstate .small'); if (el) el.textContent = s.msg;
     });
-    return { start: load, destroy() { if (offProg) offProg(); } };
+    return { start: load, destroy() { if (offProg) offProg(); if (s.iv) { s.iv.destroy(); s.iv = null; } } };
   }
 
   function render(host, params, ctx) {

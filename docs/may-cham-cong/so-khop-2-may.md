@@ -17,6 +17,10 @@ Chạy So khớp 2 máy khi:
 Phần mềm coi bản gốc của nó là chuẩn. So khớp đọc từng máy, so với bản gốc rồi nói bằng lời những gì lệch. Bạn xem trước, chưa có gì thay đổi cho tới khi bạn bấm **Bổ sung**.
 
 {% hint style="info" %}
+**Phần mềm chưa có ai trong danh sách?** Khi đó mọi người trên máy đều hiện là người lạ. So khớp sẽ tự đề nghị **Lấy dữ liệu từ máy** trước: chọn máy có đủ người nhất, bấm **Lấy dữ liệu từ máy này**, chờ xong rồi bấm **Tiếp: So khớp 2 máy**. Sau đó So khớp chỉ hiện những người khác nhau giữa hai máy. Mục **Lấy dữ liệu từ máy** cũng có sẵn trên tab **Máy chấm công & cập nhật**.
+{% endhint %}
+
+{% hint style="info" %}
 **Trước khi bắt đầu:** cả hai máy phải bật và kết nối được. Nếu máy đang báo **sai mật khẩu**, sửa mật khẩu trước (xem [Thêm và sửa máy chấm công](them-sua-may.md)).
 {% endhint %}
 

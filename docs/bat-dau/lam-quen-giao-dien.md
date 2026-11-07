@@ -11,7 +11,7 @@ Phần mềm có hai tab. Tab **Người dùng** là nơi bạn làm việc hằ
 | Số | Vùng | Dùng để |
 | --- | --- | --- |
 | 1 | Hai tab **Người dùng** và **Máy chấm công & cập nhật** | Chuyển giữa công việc hằng ngày và phần cài đặt máy. |
-| 2 | Chấm trạng thái máy, ví dụ **Tầng trệt: đang kết nối** | Xem nhanh từng máy có đang kết nối không. Luôn hiện ở góc trên bên phải, dù bạn đang ở màn hình nào. |
+| 2 | Chấm trạng thái máy, ví dụ **Tầng trệt: đã kết nối** | Xem nhanh từng máy có đang kết nối không. Luôn hiện ở góc trên bên phải, dù bạn đang ở màn hình nào. |
 | 3 | **Thêm người mới** | Bắt đầu đăng ký một người: thông tin, khuôn mặt, vân tay. |
 | 4 | Thẻ máy | Trạng thái chi tiết của từng máy: số người, máy dùng để chụp mặt hay quét vân tay, số việc đang chờ. Máy mất kết nối có nút **Thử lại**. |
 | 5 | Ô **Tìm người** | Gõ tên hoặc mã nhân viên. Không cần gõ dấu: gõ `nguyen` vẫn ra "Nguyễn". |
@@ -22,7 +22,7 @@ Phần mềm có hai tab. Tab **Người dùng** là nơi bạn làm việc hằ
 
 | Chấm | Ý nghĩa | Bạn cần làm gì |
 | --- | --- | --- |
-| Xanh lá, **đang kết nối** | Máy đang nối mạng với phần mềm. | Không cần làm gì. |
+| Xanh lá, **đã kết nối** | Máy đang nối mạng với phần mềm. | Không cần làm gì. |
 | Cam, **mất kết nối** | Phần mềm không liên lạc được với máy. Việc gửi cho máy đó nằm trong hàng đợi và tự gửi khi máy có mạng lại. | Kiểm tra điện và dây mạng của máy. Xem [Theo dõi việc gửi xuống máy](../may-cham-cong/theo-doi-gui-xuong-may.md). |
 | Đỏ, **sai mật khẩu** | Máy từ chối mật khẩu. Phần mềm dừng gửi ngay để máy không khoá địa chỉ IP. | Sửa mật khẩu ở tab **Máy chấm công & cập nhật**. Xem [Thêm và sửa máy chấm công](../may-cham-cong/them-sua-may.md). |
 

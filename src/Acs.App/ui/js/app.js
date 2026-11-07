@@ -20,11 +20,10 @@
     return s.charAt(0).toLocaleUpperCase('vi') + s.slice(1);
   }
 
+  const DOT = { ok: 'var(--ok-dot)', wait: 'var(--wait-dot)', err: 'var(--err)' };
   function deviceDot(d) {
-    let color = 'var(--ok-dot)', text = 'đang kết nối';
-    if (d.authPaused) { color = 'var(--err)'; text = 'sai mật khẩu'; }
-    else if (!d.online) { color = 'var(--wait-dot)'; text = 'mất kết nối'; }
-    return '<span class="dev-dot"><span class="dot" style="background:' + color + '"></span>' + esc(shortName(d.name)) + ': ' + text + '</span>';
+    const st = ACS.recon.deviceStatus(d);
+    return '<span class="dev-dot"><span class="dot" style="background:' + DOT[st.tone] + '"></span>' + esc(shortName(d.name)) + ': ' + st.short + '</span>';
   }
 
   function shell() {

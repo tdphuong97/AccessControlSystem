@@ -50,7 +50,7 @@
         '<button type="button" class="btn btn-wait" data-act="retry" data-dev="' + d.id + '">' + icon('refresh', 18) + 'Thử lại</button></div>';
     }
     return '<div class="devcard"><span class="devic devic-ok">' + icon('device', 22) + '</span><div class="devbody">' +
-      '<div class="devhead"><span class="devname">' + esc(d.name) + '</span><span class="pill pill-ok"><span class="dot" style="background:var(--ok-dot)"></span>Đang kết nối</span></div>' +
+      '<div class="devhead"><span class="devname">' + esc(d.name) + '</span><span class="pill pill-ok"><span class="dot" style="background:var(--ok-dot)"></span>' + ACS.recon.deviceStatus(d).pill + '</span></div>' +
       '<div class="devsub">' + esc(people) + '</div></div></div>';
   }
 

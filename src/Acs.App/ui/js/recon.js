@@ -148,6 +148,19 @@
     return '';
   }
 
-  return { CHOICES, CHOICE_LABEL, IMPORT_EXPLAIN, describeItem, summarizeDevice, strangerKey, buildStrangers, removals, nothingToDo, planTotals,
+  // One wording for a device's state everywhere (header dots, device cards, people screen). A device that answers is
+  // "đã kết nối": "đang kết nối" read as "still trying".
+  function deviceStatus(d) {
+    if (d && d.authPaused) return { tone: 'err', short: 'sai mật khẩu', pill: 'Sai mật khẩu, đã dừng' };
+    if (!d || !d.online) return { tone: 'wait', short: 'mất kết nối', pill: 'Mất kết nối' };
+    return { tone: 'ok', short: 'đã kết nối', pill: 'Đã kết nối' };
+  }
+
+  // Devices the app can read now: an import from one that is offline or paused would only fail.
+  function importSources(devs) {
+    return (devs || []).filter((d) => d.online && !d.authPaused);
+  }
+
+  return { CHOICES, CHOICE_LABEL, IMPORT_EXPLAIN, deviceStatus, importSources, describeItem, summarizeDevice, strangerKey, buildStrangers, removals, nothingToDo, planTotals,
     splitItems, lockedCount, backupPasswordProblem, fmtSize, fmtDateTime, filterLog, deviceArgs, deviceProblem };
 });

@@ -156,8 +156,19 @@ public sealed partial class AppHost
         if (_started) return;
         _started = true;
         Sync.Start();
-        await Task.Run(DailyBackup);
+        await Task.Run(() => { DeleteOldInstallers(); DailyBackup(); });
         StartUpdateTimer();
+    }
+
+    /// <summary>
+    /// Installers downloaded by update.install have done their job once the app runs again. One that is still open (the
+    /// installer that just started this app may not have exited yet) is left for the next start.
+    /// </summary>
+    private void DeleteOldInstallers()
+    {
+        if (!Directory.Exists(_updatesFolder)) return;
+        foreach (var f in Directory.GetFiles(_updatesFolder))
+            try { File.Delete(f); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }
 
     public async Task StopAsync()

@@ -626,6 +626,36 @@ public sealed class AppHostTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task start_deletes_installers_left_by_an_earlier_update()
+    {
+        var updates = Path.Combine(_folder, "updates");
+        Directory.CreateDirectory(updates);
+        File.WriteAllBytes(Path.Combine(updates, "AccessControlSystem-Setup-0.9.1.exe"), new byte[1000]);
+        File.WriteAllBytes(Path.Combine(updates, "AccessControlSystem-Setup-0.9.2.exe.part"), new byte[10]);
+
+        await NewHost().StartAsync();
+
+        Assert.Empty(Directory.GetFiles(updates));
+    }
+
+    [Fact]
+    public async Task start_skips_an_installer_that_is_still_running()
+    {
+        var updates = Path.Combine(_folder, "updates");
+        Directory.CreateDirectory(updates);
+        var busy = Path.Combine(updates, "AccessControlSystem-Setup-0.9.2.exe");
+        var old = Path.Combine(updates, "AccessControlSystem-Setup-0.9.1.exe");
+        File.WriteAllBytes(busy, new byte[10]);
+        File.WriteAllBytes(old, new byte[10]);
+
+        using (new FileStream(busy, FileMode.Open, FileAccess.Read, FileShare.None))
+            await NewHost().StartAsync();
+
+        Assert.True(File.Exists(busy));
+        Assert.False(File.Exists(old));
+    }
+
+    [Fact]
     public async Task backup_status_and_extra_folder()
     {
         var h = NewHost();
