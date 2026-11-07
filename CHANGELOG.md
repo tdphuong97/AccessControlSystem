@@ -1,3 +1,10 @@
+## 0.9.3
+
+- Sửa lỗi: So khớp báo nhầm "thiếu vân tay" cho người mà máy vẫn có đủ ngón, mỗi lần chạy ra một danh sách khác. Máy Hikvision chỉ có một con trỏ đọc vân tay, lần đọc bị chen ngang thì chỉ trả về một phần. App nay đọc trọn từng người một mạch, mỗi lần một phiên mới, và không bao giờ báo thiếu khi số ngón đọc được ít hơn số máy báo.
+- Lấy dữ liệu từ máy vẫn chạy khi chuyển trang: quay lại vẫn thấy tiến độ, tab Người dùng hiện dòng đang lấy dữ liệu, lấy xong danh sách tự cập nhật.
+- Không chạy hai lần lấy dữ liệu cùng lúc. Mở So khớp lần nữa khi app đang đọc máy thì dùng chung lần đọc đó. So khớp chờ lấy dữ liệu xong rồi mới so.
+- Đã thử trên hai máy thật: So khớp chạy hai lần liền cho cùng kết quả.
+
 ## 0.9.2
 
 - Mới: mục "Lấy dữ liệu từ máy" trên tab Máy chấm công & cập nhật. Lấy toàn bộ người, khuôn mặt và vân tay từ một máy về app bất cứ lúc nào, không chỉ ở lần thiết lập đầu.
