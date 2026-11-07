@@ -119,3 +119,25 @@ test('importNotice: one line for an import running behind another screen', () =>
   assert.equal(R.importNotice({ running: false, deviceName: 'Trệt', done: 157, total: 157 }), '');
   assert.equal(R.importNotice(null), '');
 });
+
+test('helpPage: the guide page for the screen in front of the user', () => {
+  assert.equal(R.helpPage('people'), 'nguoi-dung/tim-va-xem');
+  assert.equal(R.helpPage('person'), 'nguoi-dung/tim-va-xem');
+  assert.equal(R.helpPage('new/info'), 'nguoi-dung/them-nguoi-moi');
+  assert.equal(R.helpPage('new/face'), 'nguoi-dung/chup-khuon-mat');
+  assert.equal(R.helpPage('new/finger'), 'nguoi-dung/lay-van-tay');
+  assert.equal(R.helpPage('settings'), 'may-cham-cong/theo-doi-gui-xuong-may');
+  assert.equal(R.helpPage('reconcile'), 'may-cham-cong/so-khop-2-may');
+  assert.equal(R.helpPage('setup'), 'bat-dau/thiet-lap-lan-dau');
+  assert.equal(R.helpPage('log'), 'may-cham-cong/xem-nhat-ky');
+  assert.equal(R.helpPage('whatever'), '');
+  assert.equal(R.helpUrl('reconcile'), 'help/huong-dan.html#/may-cham-cong/so-khop-2-may');
+  assert.equal(R.helpUrl(undefined), 'help/huong-dan.html#/');
+});
+
+test('helpPage: every page it opens exists in the guide (docs/)', async () => {
+  const { existsSync } = await import('node:fs');
+  const docs = new URL('../../../../docs/', import.meta.url);
+  for (const r of ['people', 'person', 'new/info', 'new/face', 'new/finger', 'new/done', 'settings', 'reconcile', 'setup', 'log'])
+    assert.ok(existsSync(new URL(R.helpPage(r) + '.md', docs)), r + ' -> ' + R.helpPage(r));
+});

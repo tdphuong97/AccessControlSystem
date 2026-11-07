@@ -29,7 +29,8 @@
   function shell() {
     document.getElementById('app').innerHTML =
       '<header class="strip">' + ACS.icons.LOGO + '<span class="strip-name">Access Control System</span>' +
-      '<span class="strip-sub">Đăng ký khuôn mặt &amp; vân tay</span></header>' +
+      '<span class="strip-sub">Đăng ký khuôn mặt &amp; vân tay</span>' +
+      '<button type="button" class="strip-help" data-act="help" title="Mở hướng dẫn sử dụng (F1)">' + icon('help', 16) + 'Hướng dẫn</button></header>' +
       '<div class="tabrow"><nav class="tabs" aria-label="Mục chính">' +
       '<a class="tab" data-tab="main" href="#/people">' + icon('people', 18) + 'Người dùng</a>' +
       '<a class="tab" data-tab="devices" href="#/settings">' + icon('device', 18) + 'Máy chấm công &amp; cập nhật</a></nav>' +
@@ -101,6 +102,27 @@
       mountScreen(route);
     });
   }
+
+  // The user guide (docs/, built offline into ui/help/huong-dan.html) in a large panel over the app, opened on the
+  // page about the screen in use. Links out of the guide open in the browser (WebHost's new-window rule).
+  function openHelp() {
+    const url = ACS.recon.helpUrl(current.name);
+    let d = document.querySelector('dialog.helpdlg');
+    if (d) { const f = d.querySelector('iframe'); if (f) f.src = url; if (!d.open) d.showModal(); return; }
+    d = document.createElement('dialog');
+    d.className = 'helpdlg';
+    d.setAttribute('aria-label', 'Hướng dẫn sử dụng');
+    d.innerHTML = '<div class="helpdlg-bar"><span class="fw6">' + icon('help', 18) + 'Hướng dẫn sử dụng</span>' +
+      '<button type="button" class="btn btn-sm" data-act="help-close">' + icon('x', 16) + 'Đóng</button></div>' +
+      '<iframe class="helpdlg-frame" title="Hướng dẫn sử dụng" src="' + esc(url) + '"></iframe>';
+    document.body.appendChild(d);
+    d.addEventListener('click', (ev) => { if (ev.target === d) d.close(); });
+    d.querySelector('[data-act="help-close"]').addEventListener('click', () => d.close());
+    d.showModal();
+  }
+  ACS.openHelp = openHelp;
+  on(document, 'click', '[data-act="help"]', () => openHelp());
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'F1') { ev.preventDefault(); openHelp(); } });
 
   on(document, 'click', '[data-act="dismiss-update"]', () => { ACS.dismissUpdate(); setState(ACS.state); });
   boot();

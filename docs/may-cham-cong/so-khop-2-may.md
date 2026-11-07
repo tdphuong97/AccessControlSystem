@@ -16,9 +16,7 @@ Chạy So khớp 2 máy khi:
 
 Phần mềm coi bản gốc của nó là chuẩn. So khớp đọc từng máy, so với bản gốc rồi nói bằng lời những gì lệch. Bạn xem trước, chưa có gì thay đổi cho tới khi bạn bấm **Bổ sung**.
 
-{% hint style="info" %}
-**Phần mềm chưa có ai trong danh sách?** Khi đó mọi người trên máy đều hiện là người lạ. So khớp sẽ tự đề nghị **Lấy dữ liệu từ máy** trước: chọn máy có đủ người nhất, bấm **Lấy dữ liệu từ máy này**, chờ xong rồi bấm **Tiếp: So khớp 2 máy**. Sau đó So khớp chỉ hiện những người khác nhau giữa hai máy. Mục **Lấy dữ liệu từ máy** cũng có sẵn trên tab **Máy chấm công & cập nhật**.
-{% endhint %}
+So khớp so **từng máy với danh sách trong phần mềm**, không so hai máy trực tiếp với nhau. Vì vậy khi phần mềm chưa có ai, mọi người trên máy đều hiện là người lạ. Hãy [lấy dữ liệu từ máy](lay-du-lieu-tu-may.md) có đủ người nhất trước. Sau đó So khớp chỉ còn hiện những người khác nhau giữa hai máy.
 
 {% hint style="info" %}
 **Trước khi bắt đầu:** cả hai máy phải bật và kết nối được. Nếu máy đang báo **sai mật khẩu**, sửa mật khẩu trước (xem [Thêm và sửa máy chấm công](them-sua-may.md)).
@@ -30,7 +28,9 @@ Phần mềm coi bản gốc của nó là chuẩn. So khớp đọc từng máy
 
 Mở tab **Máy chấm công & cập nhật**, đến mục **So khớp 2 máy** rồi bấm **So khớp 2 máy**. Nếu trên tab **Người dùng** có thông báo nhắc, bấm **Mở So khớp 2 máy** ở đó cũng được.
 
-Màn hình **So khớp 2 máy** hiện **Đang đọc máy…** và đọc lần lượt từng máy. Việc này mất vài chục giây.
+Màn hình **So khớp 2 máy** hiện **Đang đọc máy…** và đọc lần lượt từng máy. Việc này mất khoảng 1 phút khi mỗi máy có 150 người.
+
+Nếu phần mềm chưa có ai, hoặc đang lấy dữ liệu từ máy, màn hình hiện mục lấy dữ liệu thay cho kết quả. Lấy xong, bấm **Tiếp: So khớp 2 máy**.
 {% endstep %}
 
 {% step %}
@@ -62,6 +62,10 @@ Với mỗi người lạ, chọn một trong ba cách trong ô bên phải.
 | **Gỡ khỏi máy** | Xoá người đó khỏi máy này. Vì phần mềm không có bản gốc của họ nên không khôi phục lại được. |
 
 Nếu không chắc, giữ **Bỏ qua**. Bạn có thể quay lại So khớp sau.
+
+{% hint style="warning" %}
+Mỗi người trong phần mềm được gửi xuống **tất cả** các máy. Người lạ chỉ được vào một tầng thì để **Bỏ qua**: chọn **Nhập vào app** sẽ gửi họ sang cả máy kia.
+{% endhint %}
 {% endstep %}
 
 {% step %}

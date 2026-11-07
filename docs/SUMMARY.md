@@ -21,6 +21,7 @@
 ## Máy chấm công & cập nhật
 
 * [Theo dõi việc gửi xuống máy](may-cham-cong/theo-doi-gui-xuong-may.md)
+* [Lấy dữ liệu từ máy](may-cham-cong/lay-du-lieu-tu-may.md)
 * [So khớp 2 máy](may-cham-cong/so-khop-2-may.md)
 * [Thêm và sửa máy chấm công](may-cham-cong/them-sua-may.md)
 * [Sao lưu và khôi phục](may-cham-cong/sao-luu-khoi-phuc.md)

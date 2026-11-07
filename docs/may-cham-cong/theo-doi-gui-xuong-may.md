@@ -6,6 +6,18 @@ description: Hiểu phần mềm gửi dữ liệu xuống máy chấm công th�
 
 **Ai làm:** Người quản lý phần mềm · **Khi nào:** khi thêm, sửa người rồi muốn biết dữ liệu đã tới máy chưa, hoặc khi thấy máy báo lỗi
 
+## Bạn cần bấm gì để đồng bộ
+
+Không có nút "đồng bộ". Sau mỗi thao tác, phần mềm tự gửi xuống mọi máy. Chỉ khi phần mềm chưa biết trên máy có gì, bạn mới cần chạy So khớp.
+
+| Bạn vừa làm | Phần mềm tự làm | Bạn cần bấm |
+| --- | --- | --- |
+| Thêm người mới, chụp khuôn mặt, lấy vân tay | Gửi xuống cả hai máy ngay khi lưu | Không cần |
+| Sửa thông tin, **Khoá ra vào**, mở lại, xoá hẳn | Gửi thay đổi xuống cả hai máy | Không cần |
+| Máy mất mạng rồi có mạng lại | Gửi tiếp các việc đang chờ | Không cần. Muốn gửi ngay: **Thử lại** trên thẻ máy |
+| [Lấy dữ liệu từ máy](lay-du-lieu-tu-may.md) | Chỉ chép về phần mềm, chưa gửi sang máy kia | **So khớp 2 máy**, rồi **Bổ sung** |
+| Thêm máy, đổi địa chỉ máy, khôi phục bản sao lưu, hoặc có người thêm thẳng trên máy | Chưa gửi gì, hiện thông báo nhắc So khớp | **So khớp 2 máy**, rồi **Bổ sung** |
+
 ## Phần mềm gửi xuống máy như thế nào
 
 Khi bạn thêm hoặc sửa một người, phần mềm lưu vào bản gốc trước, rồi xếp việc gửi vào **hàng đợi** của từng máy. Mỗi máy có một hàng đợi riêng, làm lần lượt từng việc.

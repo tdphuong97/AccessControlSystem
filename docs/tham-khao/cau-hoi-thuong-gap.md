@@ -38,6 +38,22 @@ Không. Phần mềm vẫn chạy ở khay hệ thống để gửi dữ liệu 
 
 </details>
 
+<details>
+
+<summary>Thêm hoặc sửa người xong, tôi phải bấm gì để đồng bộ xuống máy?</summary>
+
+Không cần bấm gì. Lưu xong là phần mềm tự gửi xuống cả hai máy, rồi đọc lại để kiểm tra. Cột **Có trên 2 máy** của người đó chuyển sang **Đủ 2 máy** khi xong. Chỉ cần chạy So khớp sau khi lấy dữ liệu từ máy, thêm máy, khôi phục bản sao lưu hoặc có người thêm thẳng trên máy. Xem bảng ở [Theo dõi việc gửi xuống máy](../may-cham-cong/theo-doi-gui-xuong-may.md#ban-can-bam-gi-de-dong-bo).
+
+</details>
+
+<details>
+
+<summary>Vì sao So khớp hiện cả trăm người lạ?</summary>
+
+Vì phần mềm chưa có những người đó. So khớp so từng máy với danh sách trong phần mềm, không so hai máy với nhau. Hãy [lấy dữ liệu từ máy](../may-cham-cong/lay-du-lieu-tu-may.md) có đủ người nhất trước, rồi So khớp lại: lúc đó chỉ còn những người khác nhau giữa hai máy.
+
+</details>
+
 ## Khuôn mặt và vân tay
 
 <details>
@@ -57,6 +73,14 @@ Vân tay chỉ dùng chung giữa các máy có cùng loại cảm biến. Nếu
 </details>
 
 ## Dùng cùng công cụ khác
+
+<details>
+
+<summary>Một người chỉ được vào một tầng thì làm sao?</summary>
+
+Phần mềm gửi mỗi người xuống tất cả các máy. Người chỉ được vào một tầng thì không thêm vào phần mềm: đăng ký trực tiếp trên máy đó hoặc bằng iVMS-4200. Khi So khớp, họ hiện là người lạ; để **Bỏ qua**, đừng chọn **Nhập vào app**.
+
+</details>
 
 <details>
 
@@ -112,6 +136,6 @@ Không. Phần mềm chỉ kết nối tới hai máy chấm công trong mạng 
 
 <summary>Phần mềm đã dùng được trên máy chấm công thật chưa?</summary>
 
-Bản 0.9.0 đã kiểm thử bằng máy giả lập nhưng chưa thử trên máy thật. Nếu bạn là người triển khai đầu tiên, hãy chạy Probe trước: [Kiểm tra máy thật bằng Probe](probe.md).
+Từ bản 0.9.1, phần mềm đã chạy trên hai máy DS-K1T9342MFWX thật (phần mềm máy V4.39): kết nối, lấy dữ liệu 157 người kèm khuôn mặt và vân tay, So khớp. Chụp khuôn mặt và quét vân tay qua mạng chưa thử trên máy thật. Nếu bạn dùng model khác, hãy chạy Probe trước: [Kiểm tra máy thật bằng Probe](probe.md).
 
 </details>

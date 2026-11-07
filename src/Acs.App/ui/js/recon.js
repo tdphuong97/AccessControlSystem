@@ -167,6 +167,15 @@
     return 'Đang lấy dữ liệu từ ' + (st.deviceName || 'máy') + '…' + (st.total ? ' ' + st.done + '/' + st.total : '');
   }
 
-  return { CHOICES, CHOICE_LABEL, IMPORT_EXPLAIN, deviceStatus, importSources, importNotice, describeItem, summarizeDevice, strangerKey, buildStrangers, removals, nothingToDo, planTotals,
+  // The guide (docs/, built into help/huong-dan.html) opens on the page about the screen in use.
+  const HELP = {
+    people: 'nguoi-dung/tim-va-xem', person: 'nguoi-dung/tim-va-xem',
+    'new/info': 'nguoi-dung/them-nguoi-moi', 'new/face': 'nguoi-dung/chup-khuon-mat', 'new/finger': 'nguoi-dung/lay-van-tay', 'new/done': 'nguoi-dung/them-nguoi-moi',
+    settings: 'may-cham-cong/theo-doi-gui-xuong-may', reconcile: 'may-cham-cong/so-khop-2-may', setup: 'bat-dau/thiet-lap-lan-dau', log: 'may-cham-cong/xem-nhat-ky',
+  };
+  function helpPage(route) { return HELP[route] || ''; }
+  function helpUrl(route) { return 'help/huong-dan.html#/' + helpPage(route); }
+
+  return { CHOICES, CHOICE_LABEL, IMPORT_EXPLAIN, deviceStatus, importSources, importNotice, helpPage, helpUrl, describeItem, summarizeDevice, strangerKey, buildStrangers, removals, nothingToDo, planTotals,
     splitItems, lockedCount, backupPasswordProblem, fmtSize, fmtDateTime, filterLog, deviceArgs, deviceProblem };
 });

@@ -15,6 +15,7 @@ Phần mềm này không làm được mọi việc. Trang này liệt kê từn
 | Máy tính tắt hoặc phần mềm không chạy | Hàng đợi chỉ gửi khi phần mềm chạy | Phần mềm chạy nền ở khay và khởi động cùng Windows (nếu bạn chọn khi cài). Việc chờ vẫn còn và gửi tiếp khi phần mềm mở lại |
 | Máy chấm công bị reset hoặc thay máy mới | Máy mất hết dữ liệu | Chạy **So khớp 2 máy**: phần mềm gửi lại toàn bộ từ bản gốc |
 | Có người thêm hoặc sửa thẳng trên máy, hoặc bằng iVMS-4200 | Phần mềm không biết cho tới khi So khớp | So khớp hiện họ là người lạ để bạn chọn **Nhập vào app**, **Gỡ khỏi máy** hoặc **Bỏ qua**. Nên chỉ dùng một công cụ để thêm người |
+| Một người chỉ được vào một số máy (ví dụ chỉ tầng trệt) | Phần mềm gửi mỗi người xuống tất cả các máy, chưa có chế độ chọn máy riêng cho từng người | Không thêm người đó vào phần mềm: đăng ký trực tiếp trên máy hoặc bằng iVMS-4200, và để **Bỏ qua** khi họ hiện là người lạ trong So khớp |
 | Sai mật khẩu máy | Hikvision khoá địa chỉ IP khoảng 30 phút sau vài lần sai | Phần mềm dừng ngay sau lần sai đầu, không tự thử lại. Sửa mật khẩu rồi thử lại |
 | Hỏng máy tính hoặc cài lại Windows | Khoá mã hoá gắn với tài khoản Windows cũ | Cài phần mềm lại, rồi khôi phục từ file sao lưu cùng mật khẩu sao lưu. Xem [Sao lưu và khôi phục](../may-cham-cong/sao-luu-khoi-phuc.md) |
 | Cảnh báo **Windows đã bảo vệ máy tính của bạn** khi cài lần đầu | Bộ cài chưa có chữ ký số | Bấm **Thông tin thêm** > **Vẫn chạy** một lần. Xem [Cài đặt](../bat-dau/cai-dat.md) |
@@ -27,4 +28,4 @@ Phần mềm này không làm được mọi việc. Trang này liệt kê từn
 - Họ tên dài tối đa 32 ký tự, vì máy chấm công không nhận tên dài hơn.
 - Mã nhân viên chỉ gồm chữ và số, tối đa 32 ký tự.
 - Phần mềm không bao giờ tự xoá người khỏi máy; mọi lần gỡ đều do bạn chọn. Ngoại lệ có thông báo trước: người đã **Khoá ra vào** được gỡ khỏi máy, nhưng dữ liệu vẫn giữ trong phần mềm.
-- Phiên bản 0.9.0 chưa được thử trên máy chấm công thật. Xem [Kiểm tra máy thật bằng Probe](probe.md).
+- Từ bản 0.9.1, kết nối, lấy dữ liệu và So khớp đã chạy trên hai máy DS-K1T9342MFWX thật (phần mềm máy V4.39). Chụp khuôn mặt và quét vân tay qua mạng chưa thử trên máy thật. Xem [Kiểm tra máy thật bằng Probe](probe.md).

@@ -26,6 +26,16 @@ Thông báo đầy đủ: **Sai mật khẩu hoặc máy đang khoá tạm (kho�
 
 <details>
 
+<summary>Mật khẩu đúng, máy báo đã kết nối rồi khoảng 30 giây sau báo Sai mật khẩu, đã dừng</summary>
+
+**Nguyên nhân:** lỗi của bản 0.9.0. Máy Hikvision chỉ giữ phiên đăng nhập vài giây, bản cũ hiểu nhầm phiên hết hạn là sai mật khẩu. Máy không tính đó là lần đăng nhập sai.
+
+**Cách khắc phục:** cập nhật lên bản mới nhất (xem [Cập nhật phần mềm](../may-cham-cong/cap-nhat-phan-mem.md)). Sau đó ở từng máy, bấm **Sửa mật khẩu**, nhập lại mật khẩu rồi bấm **Lưu máy**.
+
+</details>
+
+<details>
+
 <summary>Máy không trả lời kịp / Không kết nối được máy / Mất kết nối với máy giữa chừng</summary>
 
 Trên máy hiện chấm **Mất kết nối**.
@@ -47,6 +57,30 @@ Trên máy hiện chấm **Mất kết nối**.
 **Nguyên nhân:** máy đang xử lý việc khác.
 
 **Cách khắc phục:** chờ một lúc, phần mềm tự thử lại. Nếu chụp hoặc quét báo **Máy đang chụp/quét, đợi xong rồi bấm lại**, đợi người trước xong rồi bấm lại.
+
+</details>
+
+## Lấy dữ liệu và So khớp
+
+<details>
+
+<summary>So khớp báo nhiều người thiếu vân tay, mỗi lần chạy ra một danh sách khác</summary>
+
+**Nguyên nhân:** máy Hikvision chỉ đọc được vân tay cho một nơi hỏi tại một thời điểm. Bản trước 0.9.3 có thể bị cắt ngang khi đọc, nên báo thiếu cả những ngón máy đang có. Một chương trình khác (iVMS-4200, công cụ cũ) đọc vân tay của máy cùng lúc cũng gây ra chuyện này.
+
+**Cách khắc phục:**
+
+1. **Không** bấm **Bổ sung** khi danh sách thiếu vân tay trông bất thường.
+2. Cập nhật lên bản mới nhất (xem [Cập nhật phần mềm](../may-cham-cong/cap-nhat-phan-mem.md)).
+3. Đóng các chương trình khác đang kết nối tới máy chấm công, rồi bấm **Đọc lại**.
+
+</details>
+
+<details>
+
+<summary>Đang lấy dữ liệu, chuyển sang tab khác thì như bị dừng</summary>
+
+Từ bản 0.9.3, việc lấy vẫn chạy tiếp khi chuyển tab: tab **Người dùng** hiện tiến độ, và quay lại mục **Lấy dữ liệu từ máy** vẫn thấy thanh tiến độ. Ở bản cũ, việc lấy cũng chạy tiếp nhưng màn hình không hiện; đợi khoảng 1 phút rồi xem danh sách người. Xem [Lấy dữ liệu từ máy](../may-cham-cong/lay-du-lieu-tu-may.md).
 
 </details>
 

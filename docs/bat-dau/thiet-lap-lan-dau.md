@@ -66,14 +66,14 @@ Bước này chép người, khuôn mặt và vân tay đang có trên máy về
 1. Trong ô **Lấy dữ liệu từ máy nào?**, chọn máy đang có đầy đủ người nhất (máy tầng trệt trong ví dụ).
 2. Bấm **Lấy dữ liệu từ máy này**.
 
-Thanh tiến độ hiện **Đang lấy dữ liệu từ** tên máy, số người đã đọc và tên người đang đọc. Bạn vẫn đợi ở màn hình này tới khi xong. Nếu bị đứt giữa chừng (mất mạng, máy tắt), bấm **Lấy lại dữ liệu**; phần mềm chạy tiếp, không bắt đầu lại từ đầu.
+Thanh tiến độ hiện **Đang lấy dữ liệu từ** tên máy, số người đã đọc và tên người đang đọc. Nên đợi ở màn hình này tới khi xong. Nếu lỡ chuyển sang tab khác, việc lấy vẫn chạy tiếp và tab **Người dùng** hiện tiến độ; khi đó làm nốt bước Sao lưu và So khớp ở tab **Máy chấm công & cập nhật**. Nếu bị đứt giữa chừng (mất mạng, máy tắt), bấm **Lấy lại dữ liệu**; phần mềm chạy tiếp, không bắt đầu lại từ đầu.
 
 Khi xong, bạn thấy **Đã lấy** số người, số người có khuôn mặt và số vân tay. Có thể kèm cảnh báo vàng:
 
 - Một số người "đã có mặt trên máy nhưng app chưa có ảnh": máy đó không cho tải ảnh gốc. Người này vẫn vào được máy đang có mặt; cần chụp lại một lần nếu muốn gửi sang máy kia.
 - "Không đọc được đủ dữ liệu của N người": bấm **Mở Nhật ký** để xem người nào, rồi chạy lại bước này nếu cần.
 
-Bấm **Tiếp: Sao lưu**. Nếu máy còn trống và bạn muốn bắt đầu từ danh sách trống, bấm **Bỏ qua, bắt đầu từ danh sách trống**.
+Bấm **Tiếp: Sao lưu**. Nếu máy còn trống và bạn muốn bắt đầu từ danh sách trống, bấm **Bỏ qua, bắt đầu từ danh sách trống**. Lỡ bỏ qua bước này khi máy đã có người thì làm lại sau ở [Lấy dữ liệu từ máy](../may-cham-cong/lay-du-lieu-tu-may.md).
 
 <figure><img src="../.gitbook/assets/thiet-lap-lay-du-lieu.png" alt="Bước 3 Lấy dữ liệu: ô chọn máy nguồn và nút Lấy dữ liệu từ máy này"><figcaption></figcaption></figure>
 {% endstep %}
