@@ -63,8 +63,8 @@ description: Phần mềm Windows để đăng ký khuôn mặt và vân tay cho
 | Máy chấm công | Máy kiểm soát ra vào Hikvision có ISAPI, cùng mạng nội bộ với máy tính |
 | Khác | Microsoft Edge WebView2 (Windows 11 và Windows 10 đã cập nhật thường có sẵn); Internet khi cập nhật phần mềm |
 
-{% hint style="warning" %}
-Bản 0.9.0 đã kiểm thử bằng máy giả lập, **chưa thử trên máy chấm công thật**. Trước khi dùng chính thức, nhờ IT chạy công cụ kiểm tra tại chỗ theo trang [Kiểm tra máy thật bằng Probe](tham-khao/probe.md).
+{% hint style="info" %}
+Phần mềm đã chạy trên hai máy DS-K1T9342MFWX thật (phần mềm máy V4.39): kết nối, lấy dữ liệu 157 người kèm khuôn mặt và vân tay, So khớp, hình camera trực tiếp (cả lúc máy đang chụp). Máy nhận lệnh chụp khuôn mặt và quét vân tay qua mạng; một lần đăng ký trọn vẹn với người thật (chụp được mặt, quét được ngón) chưa được ghi nhận. Dùng model máy khác thì nhờ IT chạy công cụ kiểm tra tại chỗ theo trang [Kiểm tra máy thật bằng Probe](tham-khao/probe.md).
 {% endhint %}
 
-Tài liệu này viết cho phiên bản 0.9.0. Phần mềm là mã nguồn mở, giấy phép MIT: [github.com/tdphuong97/AccessControlSystem](https://github.com/tdphuong97/AccessControlSystem).
+Tài liệu này viết cho phiên bản 0.9.11. Phần mềm là mã nguồn mở, giấy phép MIT: [github.com/tdphuong97/AccessControlSystem](https://github.com/tdphuong97/AccessControlSystem).

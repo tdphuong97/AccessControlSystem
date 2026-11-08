@@ -24,7 +24,9 @@ description: Giải thích các từ dùng trong phần mềm và trong tài li�
 | **Probe** | Công cụ dòng lệnh đi kèm để kiểm tra máy chấm công thật. Xem [Kiểm tra máy thật bằng Probe](probe.md). |
 | **Sai mật khẩu** | Trạng thái máy từ chối đăng nhập, phần mềm đã dừng gửi tới máy đó để máy không khoá địa chỉ IP. |
 | **Sao lưu** | File `.acsbak` mã hoá chứa toàn bộ dữ liệu. Phần mềm tự sao lưu mỗi ngày và trước mỗi lần cập nhật, giữ 14 bản. |
+| **Chẩn đoán** | Nút trên thẻ máy: kiểm tra lần lượt kết nối, đăng nhập, camera, việc gửi và lần chụp/quét lỗi gần nhất, kèm cách xử lý. |
 | **So khớp 2 máy** | Đối chiếu từng máy với bản gốc và bổ sung phần thiếu. Xem [So khớp 2 máy](../may-cham-cong/so-khop-2-may.md). |
 | **Tray (khay hệ thống)** | Khu vực biểu tượng gần đồng hồ Windows. Phần mềm chạy ở đây khi bạn đóng cửa sổ. |
 | **WebView2** | Thành phần của Microsoft Edge mà phần mềm dùng để hiển thị giao diện. |
-| **Xoá hẳn** | Gỡ người khỏi máy và xoá dữ liệu trong phần mềm. Không hoàn tác được. |
+| **Thùng rác** | Nơi giữ người đã xoá hẳn, kèm ảnh mặt và vân tay, để khôi phục. Giữ tới khi bạn xoá vĩnh viễn. Xem [Xoá hẳn một người](../nguoi-dung/xoa-han.md). |
+| **Xoá hẳn** | Gỡ người khỏi cả hai máy và chuyển vào Thùng rác. Khôi phục được cho tới khi xoá vĩnh viễn. |

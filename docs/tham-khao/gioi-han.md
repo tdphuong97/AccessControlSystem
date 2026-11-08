@@ -28,4 +28,4 @@ Phần mềm này không làm được mọi việc. Trang này liệt kê từn
 - Họ tên dài tối đa 32 ký tự, vì máy chấm công không nhận tên dài hơn.
 - Mã nhân viên chỉ gồm chữ và số, tối đa 32 ký tự.
 - Phần mềm không bao giờ tự xoá người khỏi máy; mọi lần gỡ đều do bạn chọn. Ngoại lệ có thông báo trước: người đã **Khoá ra vào** được gỡ khỏi máy, nhưng dữ liệu vẫn giữ trong phần mềm.
-- Từ bản 0.9.1, kết nối, lấy dữ liệu và So khớp đã chạy trên hai máy DS-K1T9342MFWX thật (phần mềm máy V4.39). Chụp khuôn mặt và quét vân tay qua mạng chưa thử trên máy thật. Xem [Kiểm tra máy thật bằng Probe](probe.md).
+- Phần mềm đã chạy trên hai máy DS-K1T9342MFWX thật (phần mềm máy V4.39): kết nối, lấy dữ liệu 157 người kèm khuôn mặt và vân tay, So khớp, hình camera trực tiếp (cả lúc máy đang chụp). Máy nhận lệnh chụp khuôn mặt và quét vân tay qua mạng; một lần đăng ký trọn vẹn với người thật (chụp được mặt, quét được ngón) chưa được ghi nhận. Xem [Kiểm tra máy thật bằng Probe](probe.md).

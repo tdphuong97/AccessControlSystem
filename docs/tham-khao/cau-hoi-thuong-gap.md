@@ -176,6 +176,6 @@ Không. Phần mềm chỉ kết nối tới hai máy chấm công trong mạng 
 
 <summary>Phần mềm đã dùng được trên máy chấm công thật chưa?</summary>
 
-Từ bản 0.9.1, phần mềm đã chạy trên hai máy DS-K1T9342MFWX thật (phần mềm máy V4.39): kết nối, lấy dữ liệu 157 người kèm khuôn mặt và vân tay, So khớp. Chụp khuôn mặt và quét vân tay qua mạng chưa thử trên máy thật. Nếu bạn dùng model khác, hãy chạy Probe trước: [Kiểm tra máy thật bằng Probe](probe.md).
+Phần mềm đã chạy trên hai máy DS-K1T9342MFWX thật (phần mềm máy V4.39): kết nối, lấy dữ liệu 157 người kèm khuôn mặt và vân tay, So khớp, hình camera trực tiếp (cả lúc máy đang chụp). Máy nhận lệnh chụp khuôn mặt và quét vân tay qua mạng; một lần đăng ký trọn vẹn với người thật (chụp được mặt, quét được ngón) chưa được ghi nhận. Nếu bạn dùng model khác, hãy chạy Probe trước: [Kiểm tra máy thật bằng Probe](probe.md).
 
 </details>

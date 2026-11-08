@@ -122,6 +122,7 @@ a:hover { color: var(--accent-hover); }
 .group-new { margin-top: 8px; }
 .chip { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--soft); color: var(--text-3);
   font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+a.chip { text-decoration: none; }
 .chip-n { padding: 0 8px; border-radius: 999px; background: var(--chip-count); font-size: 13px; color: var(--text-2); }
 .chip.on { border-color: var(--text); background: var(--text); color: #FFFFFF; font-weight: 600; }
 .chip.on .chip-n { background: rgba(255, 255, 255, 0.18); color: #FFFFFF; }

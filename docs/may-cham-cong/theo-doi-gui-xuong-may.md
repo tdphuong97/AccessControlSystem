@@ -12,8 +12,8 @@ Không có nút "đồng bộ". Sau mỗi thao tác, phần mềm tự gửi xu�
 
 | Bạn vừa làm | Phần mềm tự làm | Bạn cần bấm |
 | --- | --- | --- |
-| Thêm người mới, chụp khuôn mặt, lấy vân tay | Gửi người đó xuống cả hai máy ngay khi có khuôn mặt hoặc vân tay đầu tiên. Chưa có thì chưa gửi, nhãn **Chưa gửi · cần mặt hoặc vân tay** | Không cần |
-| Sửa thông tin, **Khoá ra vào**, mở lại, xoá hẳn | Gửi thay đổi xuống cả hai máy | Không cần |
+| Thêm người mới, chụp khuôn mặt, lấy vân tay | Gửi người đó xuống cả hai máy ngay khi có khuôn mặt hoặc vân tay đầu tiên. Chưa có cả hai thì không lưu, không gửi | Không cần |
+| Sửa thông tin, **Khoá ra vào**, mở lại, xoá hẳn, khôi phục từ Thùng rác | Gửi thay đổi xuống cả hai máy | Không cần |
 | Máy mất mạng rồi có mạng lại | Gửi tiếp các việc đang chờ | Không cần. Muốn gửi ngay: **Thử lại** trên thẻ máy |
 | [Lấy dữ liệu từ máy](lay-du-lieu-tu-may.md) | Chỉ chép về phần mềm, chưa gửi sang máy kia | **So khớp 2 máy**, rồi **Bổ sung** |
 | Thêm máy, đổi địa chỉ máy, khôi phục bản sao lưu, hoặc có người thêm thẳng trên máy | Chưa gửi gì, hiện thông báo nhắc So khớp | **So khớp 2 máy**, rồi **Bổ sung** |

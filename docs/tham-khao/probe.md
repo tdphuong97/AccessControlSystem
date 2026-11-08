@@ -6,7 +6,7 @@ description: Chạy công cụ Probe một lần tại chỗ để kiểm tra c�
 
 **Ai làm:** người phụ trách IT, có mặt tại chỗ với máy chấm công · **Mất khoảng:** 10 phút
 
-Bản 0.9.0 chưa được thử trên máy chấm công thật. Probe (`AccessControlSystem-Probe.exe`) là công cụ dòng lệnh đi kèm bản phát hành, dùng một lần để kiểm tra từng lệnh phần mềm sẽ dùng: đọc thông tin máy, tạo người, ghi khuôn mặt, ghi vân tay, đọc lại. Kết quả là một file báo cáo để gửi lại cho người phát triển.
+Phần mềm đã chạy trên hai máy DS-K1T9342MFWX thật (phần mềm máy V4.39): kết nối, lấy dữ liệu 157 người kèm khuôn mặt và vân tay, So khớp, hình camera trực tiếp (cả lúc máy đang chụp). Máy nhận lệnh chụp khuôn mặt và quét vân tay qua mạng; một lần đăng ký trọn vẹn với người thật (chụp được mặt, quét được ngón) chưa được ghi nhận. Với model máy khác, hoặc để kiểm tra trọn vẹn việc ghi khuôn mặt, vân tay, dùng Probe. Probe (`AccessControlSystem-Probe.exe`) là công cụ dòng lệnh đi kèm bản phát hành, dùng một lần để kiểm tra từng lệnh phần mềm sẽ dùng: đọc thông tin máy, tạo người, ghi khuôn mặt, ghi vân tay, đọc lại. Kết quả là một file báo cáo để gửi lại cho người phát triển.
 
 {% hint style="success" %}
 Probe chỉ tạo, sửa và xoá duy nhất một người thử mã `99999` (tên **TEST ACS**) rồi tự xoá khi xong, kể cả khi bạn nhấn `Ctrl` + `C`. Người thật trên máy không bị đụng tới. Nếu mã `99999` đang thuộc về người khác, Probe dừng lại và không đổi gì.

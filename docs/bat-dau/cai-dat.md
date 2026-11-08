@@ -23,7 +23,7 @@ description: Tải bộ cài, cài phần mềm lên máy tính, biết phần m
 {% step %}
 ### Tải bộ cài
 
-Mở trang [Releases của dự án trên GitHub](https://github.com/tdphuong97/AccessControlSystem/releases). Ở bản mới nhất, tải file `AccessControlSystem-Setup-<phiên bản>.exe`, ví dụ bản 0.9.0 có tên `AccessControlSystem-Setup-0.9.0.exe`.
+Mở trang [Releases của dự án trên GitHub](https://github.com/tdphuong97/AccessControlSystem/releases). Ở bản mới nhất, tải file `AccessControlSystem-Setup-<phiên bản>.exe`, ví dụ bản 0.9.11 có tên `AccessControlSystem-Setup-0.9.11.exe`.
 {% endstep %}
 
 {% step %}

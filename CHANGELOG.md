@@ -1,3 +1,8 @@
+## 0.9.11
+
+- Hướng dẫn sử dụng (F1) cập nhật theo bản mới nhất: ảnh giao diện đánh số mới, ảnh Thùng rác và hộp Chẩn đoán, ảnh form thêm người và thẻ máy, Thuật ngữ thêm Thùng rác và Chẩn đoán, tình trạng thử trên máy thật ghi đúng hiện trạng, bỏ các câu "không hoàn tác được" đã cũ.
+- Nút Thùng rác ở danh sách người không còn bị gạch chân.
+
 ## 0.9.10
 
 - Mới: Thùng rác. "Xoá hẳn" gỡ người khỏi mọi máy như trước nhưng giữ thông tin, ảnh mặt và vân tay (mã hoá như dữ liệu chính) để Khôi phục: khôi phục đưa lại vào app và gửi lại xuống máy, hỏi mã mới khi mã cũ đã có người dùng hoặc máy chưa gỡ xong. Thùng rác giữ tới khi Xoá vĩnh viễn hoặc Dọn sạch (không tự xoá). Mọi thao tác được ghi Nhật ký.

@@ -6,6 +6,13 @@ description: Các phiên bản đã phát hành và thay đổi trong từng b�
 
 {% updates format="full" %}
 {% update date="2026-11-08" %}
+## Phiên bản 0.9.11
+
+* Hướng dẫn cập nhật theo bản mới nhất: ảnh giao diện đánh số mới (ô Công ty, Sắp xếp, nút Thùng rác), ảnh Thùng rác, ảnh hộp Chẩn đoán, ảnh form thêm người và thẻ máy; mục Thuật ngữ thêm Thùng rác, Chẩn đoán; tình trạng thử trên máy thật.
+* Nút **Thùng rác** ở danh sách không còn bị gạch chân.
+{% endupdate %}
+
+{% update date="2026-11-08" %}
 ## Phiên bản 0.9.10
 
 * Mới: **Thùng rác**. Xoá hẳn gỡ người đó khỏi máy nhưng giữ thông tin, ảnh mặt và vân tay để **Khôi phục**; thùng rác giữ tới khi bạn **Xoá vĩnh viễn**.

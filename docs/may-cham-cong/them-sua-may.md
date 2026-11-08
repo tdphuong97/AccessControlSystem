@@ -8,7 +8,7 @@ description: Thêm máy chấm công mới, kiểm tra kết nối, đổi mật
 
 Mọi thao tác về máy nằm ở tab **Máy chấm công & cập nhật**, mục **Máy chấm công**. Mỗi máy là một thẻ cho biết **Địa chỉ**, **Tài khoản**, **Loại máy**, trạng thái kết nối và các vai trò (**Máy lấy vân tay**, **Máy chụp mặt mặc định**).
 
-<figure><img src="../.gitbook/assets/may-cham-cong.png" alt="Mục Máy chấm công: nút Thêm máy và các thẻ máy với nút Kiểm tra kết nối, Sửa, Xoá máy"><figcaption></figcaption></figure>
+<figure><img src="../.gitbook/assets/may-cham-cong.png" alt="Mục Máy chấm công: nút Thêm máy và các thẻ máy với nút Kiểm tra kết nối, Chẩn đoán, Sửa, Xoá máy"><figcaption></figcaption></figure>
 
 ## Thêm máy
 
@@ -107,6 +107,8 @@ Khi một máy chụp, quét hoặc gửi bị lỗi mà chưa rõ vì sao, bấ
 | **Camera** | Máy có gửi hình camera không (dùng cho hình trực tiếp). |
 | **Việc gửi xuống máy** | Còn việc đang chờ hay bị lỗi không. |
 | **Lần chụp/quét lỗi gần nhất** | Lỗi chụp mặt, quét vân tay trong 24 giờ qua, kèm câu trả lời của máy. |
+
+<figure><img src="../.gitbook/assets/chan-doan.png" alt="Hộp Chẩn đoán một máy: dòng tóm tắt ở trên, từng mục kiểm tra có dấu đạt hoặc cần để ý, mục lỗi chụp quét gần nhất kèm Cách xử lý, nút Chẩn đoán lại và Đóng"><figcaption></figcaption></figure>
 
 Bấm **Chẩn đoán lại** sau khi đã xử lý. Chẩn đoán không đổi gì trên máy. Máy đang dừng vì sai mật khẩu thì phần mềm không đăng nhập thử lại, chỉ nhắc sửa mật khẩu.
 

@@ -29,6 +29,8 @@ Xoá hẳn gỡ người đó khỏi cả hai máy, nhưng phần mềm vẫn gi
 - **Xoá vĩnh viễn:** xoá luôn thông tin, ảnh mặt và vân tay khỏi phần mềm. Không lấy lại được.
 - **Dọn sạch thùng rác:** xoá vĩnh viễn tất cả người trong thùng rác.
 
+<figure><img src="../.gitbook/assets/thung-rac.png" alt="Màn hình Thùng rác: mỗi người đã xoá có tên, mã nhân viên, lúc xoá, nút Khôi phục và Xoá vĩnh viễn; cuối bảng có nút Dọn sạch thùng rác"><figcaption></figcaption></figure>
+
 Thùng rác không tự xoá theo thời gian: người đã xoá nằm đó cho tới khi bạn xoá vĩnh viễn. Mọi thao tác chuyển vào thùng rác, khôi phục và xoá vĩnh viễn đều được ghi vào **Nhật ký**.
 
 Người mới thêm mà chưa có khuôn mặt hay vân tay thì không vào thùng rác: phần mềm bỏ luôn, vì chưa có gì trên máy.
@@ -53,7 +55,7 @@ Khác với khoá ra vào, xoá hẳn gỡ người đó khỏi máy mà không 
 
 <summary>Tôi xoá nhầm một người</summary>
 
-Phần mềm không có nút hoàn tác. Thêm lại người đó bằng [Thêm người mới](them-nguoi-moi.md) và chụp, quét lại. Mã nhân viên cũ có thể phải chờ máy gỡ xong mới dùng lại được.
+Mở **Thùng rác** (nút ở tab **Người dùng**, cạnh các bộ lọc) và bấm **Khôi phục** ở người đó. Phần mềm đưa người đó lại vào danh sách với ảnh mặt và vân tay, rồi gửi lại xuống cả hai máy, không cần chụp, quét lại. Nếu máy chưa gỡ xong mã cũ, phần mềm hỏi một mã mới; muốn giữ mã cũ thì đợi vài phút rồi khôi phục.
 
 </details>
 

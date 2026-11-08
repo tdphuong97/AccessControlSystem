@@ -7,7 +7,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>AccessControlSystem</AssemblyName>
     <RootNamespace>Acs.App</RootNamespace>
-    <Version>0.9.10</Version>
+    <Version>0.9.11</Version>
     <Product>Access Control System</Product>
     <ApplicationIcon>Assets\acs.ico</ApplicationIcon>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
