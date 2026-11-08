@@ -74,5 +74,20 @@
     return msg ? '<div class="alert alert-err" role="alert">' + icon('alertCircle', 18) + '<span>' + esc(msg) + '</span></div>' : '';
   }
 
-  ACS.wizard = { stepper, personHead, deviceRows, deviceSelect, defaultDevice, currentDevices, errBox, itemState };
+  // Read-only version of the finger picker: the fingers the app holds are green, with their quality under them.
+  const HAND_H = { 1: 60, 2: 82, 3: 94, 4: 86, 5: 70 };
+  const HAND_N = { 1: 'Cái', 2: 'Trỏ', 3: 'Giữa', 4: 'Áp út', 5: 'Út' };
+  function handsView(fingers) {
+    const q = new Map(fingers.map((f) => [f.fingerId, f.quality]));
+    const one = (id) => {
+      const n = ((id - 1) % 5) + 1, got = q.has(id);
+      return '<span class="fing fing-ro' + (got ? ' got' : '') + '" style="height:' + HAND_H[n] + 'px" title="' + esc(ACS.fmt.fingerLabel(id)) +
+        (got ? ' — đã lấy' + (q.get(id) == null ? '' : ', chất lượng ' + q.get(id) + '/100') : ' — chưa lấy') + '">' +
+        (got ? icon('check', 14, 2.4) : '') + HAND_N[n] + (got && q.get(id) != null ? '<span class="fing-q">' + q.get(id) + '</span>' : '') + '</span>';
+    };
+    return '<div class="hands hands-ro"><div class="hand"><div class="hand-t">Tay trái</div><div class="hand-row">' + [10, 9, 8, 7, 6].map(one).join('') + '</div></div>' +
+      '<div class="hand"><div class="hand-t">Tay phải</div><div class="hand-row">' + [1, 2, 3, 4, 5].map(one).join('') + '</div></div></div>';
+  }
+
+  ACS.wizard = { stepper, personHead, deviceRows, deviceSelect, defaultDevice, currentDevices, errBox, itemState, handsView };
 })();

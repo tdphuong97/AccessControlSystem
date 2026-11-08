@@ -29,10 +29,29 @@ Các nút lọc nằm cạnh ô tìm kiếm, mỗi nút có một con số là s
 | **Chưa đủ 2 máy** | Còn việc đang chờ hoặc bị lỗi ở ít nhất một máy. |
 | **Đã khoá** | Người đã [khoá ra vào](khoa-va-mo-lai.md). Nút này chỉ hiện khi có người bị khoá. |
 
-Ba nút giữa không tính người đã khoá. Bộ lọc và ô tìm kiếm dùng cùng lúc được. Không có ai khớp thì danh sách báo **Không có ai khớp. Thử bỏ bớt bộ lọc hoặc gõ tên khác.**
+Ba nút giữa không tính người đã khoá.
+
+## Lọc theo công ty
+
+Ô **Công ty** cạnh ô tìm kiếm liệt kê các công ty kèm số người của mỗi công ty, và dòng **Chưa có nhóm** cho người chưa thuộc công ty nào. Chọn một công ty để chỉ xem người của công ty đó; chọn **Tất cả công ty** để xem lại cả danh sách.
+
+Bộ lọc, ô **Công ty** và ô tìm kiếm dùng cùng lúc được. Không có ai khớp thì danh sách báo **Không có ai khớp. Thử bỏ bớt bộ lọc hoặc gõ tên khác.**
 
 {% hint style="info" %}
 Danh sách xếp theo tên và chia trang, mặc định 50 người mỗi trang. Ở cuối bảng, chọn **Mỗi trang** là 20, 50, 100 hoặc **Tất cả**; bấm **Trước** / **Sau** để chuyển trang. Phần mềm nhớ lựa chọn này trên máy tính, và quay về trang 1 khi bạn đổi nhóm hoặc gõ tìm kiếm.
+{% endhint %}
+
+## Xem nhanh ảnh mặt và vân tay
+
+Trong danh sách, chữ **Có** ở cột **Khuôn mặt** và chữ **2 ngón** (hay số ngón khác) ở cột **Vân tay** bấm được. Bấm vào, một hộp hiện ra ngay trên danh sách với:
+
+- ảnh khuôn mặt phần mềm đang giữ;
+- hình hai bàn tay, ngón đã lấy tô xanh, số nhỏ dưới ngón là chất lượng (trên 100).
+
+Bấm **Mở hồ sơ** để sang màn hình của người đó, hoặc **Đóng** để ở lại danh sách.
+
+{% hint style="info" %}
+Vân tay không có ảnh để xem. Máy chấm công chỉ lưu và gửi dữ liệu đã mã hoá của ngón tay, không lưu hình chụp ngón tay, nên phần mềm chỉ cho biết ngón nào đã lấy và chất lượng bao nhiêu.
 {% endhint %}
 
 ## Đọc cột trạng thái trên máy

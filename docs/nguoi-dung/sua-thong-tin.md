@@ -18,7 +18,7 @@ Phần mềm gửi lại thay đổi cho cả hai máy, rồi đọc lại từ 
    | Ô | Ghi chú |
    | --- | --- |
    | **Họ tên** | Tối đa 32 ký tự. Không để trống. |
-   | **Nhóm (không bắt buộc)** | Xoá chữ để bỏ nhóm. |
+   | **Nhóm / công ty (không bắt buộc)** | Chọn công ty trong danh sách, hoặc **+ Nhóm mới…** rồi gõ tên. Chọn **— Không thuộc nhóm nào —** để bỏ nhóm. |
    | **Không thời hạn** | Chọn ô này nếu người đó ra vào không giới hạn. Bỏ chọn để nhập ngày. |
    | **Hết hạn ra vào** | Chọn ngày hết hạn. Ô này chỉ dùng được khi bỏ chọn **Không thời hạn**. |
 

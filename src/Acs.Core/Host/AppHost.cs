@@ -240,6 +240,7 @@ public sealed partial class AppHost
         "people.unlock" => PeopleAction(a, Enroll.Unlock),
         "people.delete" => PeopleDelete(a),
         "face.capture" => await FaceCapture(a),
+        "face.preview" => await FacePreview(a),
         "face.save" => FaceSave(a),
         "finger.capture" => await FingerCapture(a),
         "finger.delete" => FingerDelete(a),

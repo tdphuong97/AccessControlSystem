@@ -248,6 +248,7 @@ public sealed class DeviceImporterTests : IAsyncDisposable
         public Task UpsertUserAsync(HikUserWrite user, CancellationToken ct) => inner.UpsertUserAsync(user, ct);
         public Task DeleteUserAsync(string employeeNo, CancellationToken ct) => inner.DeleteUserAsync(employeeNo, ct);
         public Task<byte[]> CaptureFaceAsync(CancellationToken ct) => inner.CaptureFaceAsync(ct);
+        public Task<byte[]> SnapshotAsync(CancellationToken ct) => inner.SnapshotAsync(ct);
         public Task SetFaceAsync(string employeeNo, byte[] jpeg, CancellationToken ct) => inner.SetFaceAsync(employeeNo, jpeg, ct);
         public Task<bool> HasFaceAsync(string employeeNo, CancellationToken ct) => inner.HasFaceAsync(employeeNo, ct);
         public Task<byte[]?> DownloadFaceAsync(string employeeNo, CancellationToken ct) => Task.FromResult(face(employeeNo));

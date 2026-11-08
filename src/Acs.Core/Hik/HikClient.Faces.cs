@@ -28,6 +28,17 @@ public sealed partial class HikClient
 
     private static bool IsJpeg(ReadOnlySpan<byte> b) => b.Length >= 3 && b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF;
 
+    private const string SnapshotPath = "/ISAPI/Streaming/channels/101/picture";
+    public static readonly TimeSpan SnapshotTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>On site (DS-K1T9342, V4.39) one 768x432 frame takes about 0.3 s: enough for a live view at ~3 frames/s.</summary>
+    public async Task<byte[]> SnapshotAsync(CancellationToken ct)
+    {
+        var bytes = await SendRawAsync(HttpMethod.Get, SnapshotPath, null, SnapshotTimeout, ct);
+        if (IsJpeg(bytes)) return bytes;
+        throw new HikRejectedException("noSnapshot", "Máy không gửi hình camera.", $"{bytes.Length} B");
+    }
+
     public async Task<byte[]> CaptureFaceAsync(CancellationToken ct)
     {
         var attempts = new List<string>();

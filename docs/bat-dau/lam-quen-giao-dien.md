@@ -16,8 +16,12 @@ Phần mềm có hai tab. Tab **Người dùng** là nơi bạn làm việc hằ
 | 4 | Thẻ máy | Trạng thái chi tiết của từng máy: số người, máy dùng để chụp mặt hay quét vân tay, số việc đang chờ. Máy mất kết nối có nút **Thử lại**. |
 | 5 | Ô **Tìm người** | Gõ tên hoặc mã nhân viên. Không cần gõ dấu: gõ `nguyen` vẫn ra "Nguyễn". |
 | 6 | Bộ lọc **Tất cả**, **Chưa có khuôn mặt**, **Chưa có vân tay**, **Chưa đủ 2 máy**, **Đã khoá** | Lọc nhanh những người cần bổ sung. Con số bên cạnh là số người trong mỗi nhóm. Bộ lọc **Đã khoá** chỉ hiện khi có người đã khoá. |
-| 7 | Danh sách người | Mỗi dòng cho biết người đó đã có khuôn mặt, vân tay chưa và đã có trên mấy máy. Bấm **Mở** để xem chi tiết. Danh sách chia trang, mặc định 50 người; đổi ở ô **Mỗi trang** cuối bảng. |
+| 7 | Danh sách người | Mỗi dòng cho biết người đó đã có khuôn mặt, vân tay chưa và đã có trên mấy máy. Bấm **Có** hoặc số ngón để xem nhanh ảnh mặt và vân tay; bấm **Mở** để xem chi tiết. Ô **Công ty** cạnh ô tìm kiếm lọc theo công ty. Danh sách chia trang, mặc định 50 người; đổi ở ô **Mỗi trang** cuối bảng. |
 | 8 | **Hướng dẫn** | Mở tài liệu này ngay trong phần mềm, đúng trang của màn hình đang dùng. Phím tắt `F1`. Bấm **Đóng** để quay lại. |
+
+{% hint style="info" %}
+Cả giao diện to nhỏ theo cửa sổ: kéo cửa sổ to ra hoặc phóng to toàn màn hình thì chữ và nút to theo; thu nhỏ cửa sổ thì nhỏ theo. Ở cỡ cửa sổ mặc định, giao diện giữ đúng cỡ chữ gốc.
+{% endhint %}
 
 ## Chấm trạng thái máy
 

@@ -71,6 +71,7 @@ public sealed class StrictGroupDevice(FakeDevice inner, string group) : IHikDevi
     public Task UpsertUserAsync(HikUserWrite user, CancellationToken ct) => inner.UpsertUserAsync(user, ct);
     public Task DeleteUserAsync(string employeeNo, CancellationToken ct) => inner.DeleteUserAsync(employeeNo, ct);
     public Task<byte[]> CaptureFaceAsync(CancellationToken ct) => inner.CaptureFaceAsync(ct);
+    public Task<byte[]> SnapshotAsync(CancellationToken ct) => inner.SnapshotAsync(ct);
     public Task SetFaceAsync(string employeeNo, byte[] jpeg, CancellationToken ct) => inner.SetFaceAsync(employeeNo, jpeg, ct);
     public Task<bool> HasFaceAsync(string employeeNo, CancellationToken ct) => inner.HasFaceAsync(employeeNo, ct);
     public Task<byte[]?> DownloadFaceAsync(string employeeNo, CancellationToken ct) => inner.DownloadFaceAsync(employeeNo, ct);
@@ -98,6 +99,7 @@ public class ForwardingDevice(IHikDevice inner) : IHikDevice
     public virtual Task UpsertUserAsync(HikUserWrite user, CancellationToken ct) => inner.UpsertUserAsync(user, ct);
     public virtual Task DeleteUserAsync(string employeeNo, CancellationToken ct) => inner.DeleteUserAsync(employeeNo, ct);
     public virtual Task<byte[]> CaptureFaceAsync(CancellationToken ct) => inner.CaptureFaceAsync(ct);
+    public virtual Task<byte[]> SnapshotAsync(CancellationToken ct) => inner.SnapshotAsync(ct);
     public virtual Task SetFaceAsync(string employeeNo, byte[] jpeg, CancellationToken ct) => inner.SetFaceAsync(employeeNo, jpeg, ct);
     public virtual Task<bool> HasFaceAsync(string employeeNo, CancellationToken ct) => inner.HasFaceAsync(employeeNo, ct);
     public virtual Task<byte[]?> DownloadFaceAsync(string employeeNo, CancellationToken ct) => inner.DownloadFaceAsync(employeeNo, ct);
@@ -143,6 +145,7 @@ public sealed class ScriptedDevice(FakeDevice inner) : IHikDevice
     }
     public Task DeleteUserAsync(string employeeNo, CancellationToken ct) => inner.DeleteUserAsync(employeeNo, ct);
     public Task<byte[]> CaptureFaceAsync(CancellationToken ct) => inner.CaptureFaceAsync(ct);
+    public Task<byte[]> SnapshotAsync(CancellationToken ct) => inner.SnapshotAsync(ct);
     public Task SetFaceAsync(string employeeNo, byte[] jpeg, CancellationToken ct) => inner.SetFaceAsync(employeeNo, jpeg, ct);
     public Task<bool> HasFaceAsync(string employeeNo, CancellationToken ct) => inner.HasFaceAsync(employeeNo, ct);
     public Task<byte[]?> DownloadFaceAsync(string employeeNo, CancellationToken ct) => inner.DownloadFaceAsync(employeeNo, ct);

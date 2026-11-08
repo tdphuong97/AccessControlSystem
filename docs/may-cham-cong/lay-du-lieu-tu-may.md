@@ -10,6 +10,8 @@ Dùng khi trên máy chấm công đã có sẵn người mà phần mềm chưa
 
 Phần mềm chỉ **đọc** máy, không thay đổi gì trên máy. Người đã có trong phần mềm được giữ nguyên. Phần mềm chỉ bổ sung người, khuôn mặt hoặc ngón tay còn thiếu.
 
+Tên trên máy bắt đầu bằng mã công ty và dấu chấm (ví dụ `ABC. Lan`, `XYZ.KT.Minh`) thì người đó được xếp vào công ty `ABC`, `XYZ` trong phần mềm. Mã dài tối đa 6 chữ hoặc số. Tên không theo dạng này thì người đó chưa có nhóm; bạn chọn nhóm sau ở nút **Sửa**.
+
 {% hint style="info" %}
 **Trước khi bắt đầu:** máy muốn lấy phải đang **Đã kết nối**. Máy mất kết nối hoặc đang báo sai mật khẩu không hiện trong ô chọn máy.
 {% endhint %}

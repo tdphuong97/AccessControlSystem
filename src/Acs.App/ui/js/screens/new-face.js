@@ -11,7 +11,7 @@
     const emp = params.emp;
     if (!emp) { ACS.router.go('new/info'); return; }
     const devs = W.currentDevices();
-    const s = { p: null, tt: 'cho', busyText: '', img: null, devices: [], err: '', devId: W.defaultDevice(devs), busy: false };
+    const s = { p: null, tt: 'cho', busyText: '', img: null, devices: [], err: '', devId: W.defaultDevice(devs), busy: false, live: null, liveErr: '' };
     let webcamDialog = null;
     host.innerHTML = '<div class="wiz"><p class="muted">Đang tải…</p></div>';
 
@@ -26,9 +26,14 @@
         return '<div class="stage-photo"><img alt="Ảnh khuôn mặt vừa chụp" src="' + esc(s.img) + '">' +
           '<span class="badge-ok">' + icon('check', 16, 2.4) + 'Đã chụp · ảnh rõ nét</span></div>' + W.deviceRows(s.devices, 'Khuôn mặt');
       }
+      if (s.live) {
+        return '<div class="stage-photo stage-live"><img id="live-img" alt="Hình trực tiếp từ camera của ' + esc(devName()) + '" src="' + esc(s.live) + '">' +
+          '<span class="badge-live"><i class="live-dot"></i>Trực tiếp · ' + esc(devName()) + '</span></div>' +
+          '<p class="small muted live-note">Canh cho mặt người này nằm giữa khung, rồi bấm “Chụp ngay”.</p>';
+      }
       return '<div class="stage stage-wait"><span class="stage-ic">' + icon('faceScan', 72, 1.2) + '</span>' +
-        '<div class="fw6" style="font-size:16px">Ảnh chụp sẽ hiện ở đây</div>' +
-        '<div class="small muted" style="font-size:14px">Bấm “Chụp ngay” ở bên phải khi người này đã đứng trước máy.</div></div>';
+        '<div class="fw6" style="font-size:16px">' + (s.liveErr ? 'Chưa xem được hình trực tiếp' : 'Đang mở camera của ' + esc(devName()) + '…') + '</div>' +
+        '<div class="small muted" style="font-size:14px">' + (s.liveErr ? esc(s.liveErr) + ' Vẫn bấm “Chụp ngay” được.' : 'Ảnh chụp sẽ hiện ở đây.') + '</div></div>';
     }
 
     function draw() {
@@ -128,6 +133,36 @@
       });
     }
 
+    // Live view: frames from the chosen device's camera while nothing is captured yet (about 2-3 per second). The host
+    // answers busy while the device is capturing, so the loop never delays a capture.
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const redrawStage = () => { const el = host.querySelector('#stage'); if (el) el.innerHTML = stage(); };
+    let liveOn = false;
+    async function liveLoop() {
+      if (liveOn) return;
+      liveOn = true;
+      try {
+        while (ctx.alive()) {
+          if (s.tt !== 'cho' || s.busy || document.hidden || !s.devId) { await sleep(400); continue; }
+          const dev = s.devId;
+          try {
+            const r = await ACS.bridge.call('face.preview', { deviceId: dev });
+            if (!ctx.alive()) return;
+            if (r && r.imageDataUrl && s.tt === 'cho' && dev === s.devId) {
+              const img = host.querySelector('#live-img');
+              s.live = r.imageDataUrl; s.liveErr = '';
+              if (img) img.src = r.imageDataUrl; else redrawStage();
+            }
+            await sleep(150);
+          } catch (e) {
+            if (!ctx.alive()) return;
+            if (dev === s.devId && s.tt === 'cho') { s.live = null; s.liveErr = ACS.ui.errMessage(e); redrawStage(); }
+            await sleep(3000);
+          }
+        }
+      } finally { liveOn = false; }
+    }
+
     async function refreshDevices() {
       if (s.tt !== 'xong' || s.busy) return;
       try { const d = await ACS.bridge.call('sync.person', { employeeNo: emp }); if (ctx.alive()) { s.devices = d; const el = host.querySelector('#stage'); if (el) el.innerHTML = stage(); } }
@@ -140,14 +175,14 @@
       else if (act === 'webcam') openWebcam();
       else if (act === 'file') { const f = host.querySelector('#f-file'); if (f) f.click(); }
     });
-    on(host, 'change', '#may-chup', (el) => { s.devId = +el.value; });
+    on(host, 'change', '#may-chup', (el) => { s.devId = +el.value; s.live = null; s.liveErr = ''; if (s.tt === 'cho') redrawStage(); });
     on(host, 'change', '#f-file', (el) => { const f = el.files && el.files[0]; el.value = ''; pickFile(f); });
 
     const off = ACS.bridge.on('person.changed', (d) => { if (d && String(d.employeeNo) === String(emp)) refreshDevices(); });
 
     ACS.bridge.call('people.get', { employeeNo: emp }).then((p) => {
       if (!ctx.alive()) return;
-      s.p = p; draw();
+      s.p = p; draw(); liveLoop();
     }).catch((e) => {
       if (ctx.alive()) host.innerHTML = '<div class="wiz"><a class="back" href="#/people">' + icon('chevronLeft', 18) + 'Về danh sách</a>' + W.errBox(ACS.ui.errMessage(e)) + '</div>';
     });

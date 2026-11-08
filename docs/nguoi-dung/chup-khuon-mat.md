@@ -19,12 +19,15 @@ Màn hình có ba cách lấy ảnh. Chọn cách phù hợp.
 Cách này có nhãn **Nên dùng**. Ảnh chụp ngay tại máy chấm công nên khớp nhất với cách máy nhận diện sau này.
 
 1. Trong ô **Chụp ở máy**, chọn máy sẽ chụp. Máy dùng để chụp mặt đã được chọn sẵn. Máy mất kết nối hoặc sai mật khẩu vẫn nằm trong danh sách, có ghi chú kèm theo tên.
-2. Bấm **Chụp ngay**. Màn hình hiện **Đang chụp…** và dòng mời người đó nhìn thẳng vào camera của máy đã chọn.
-3. Máy tự chụp. Ảnh hiện ở khung bên trái kèm nhãn **Đã chụp · ảnh rõ nét**, bên dưới là trạng thái từng máy.
+2. Khung bên trái hiện hình camera của máy đó, có nhãn **Trực tiếp** và tên máy, hình tự cập nhật vài lần mỗi giây. Nhìn khung này để canh cho mặt người đó nằm giữa và đủ sáng.
+3. Bấm **Chụp ngay**. Màn hình hiện **Đang chụp…** và dòng mời người đó nhìn thẳng vào camera của máy đã chọn.
+4. Máy tự chụp. Ảnh hiện ở khung bên trái kèm nhãn **Đã chụp · ảnh rõ nét**, bên dưới là trạng thái từng máy.
 
 Chụp chưa đẹp thì bấm **Chụp lại**. Ảnh mới thay ảnh cũ.
 
-<figure><img src="../.gitbook/assets/chup-khuon-mat.png" alt="Bước Khuôn mặt: khung ảnh bên trái, nút Chụp ngay, Webcam máy tính và Chọn ảnh có sẵn bên phải"><figcaption></figcaption></figure>
+Khung báo **Chưa xem được hình trực tiếp** khi máy mất kết nối hoặc không gửi hình. Bạn vẫn bấm **Chụp ngay** được; phần mềm tự thử xem lại sau vài giây.
+
+<figure><img src="../.gitbook/assets/chup-khuon-mat.png" alt="Bước Khuôn mặt: khung hình trực tiếp từ camera máy bên trái, nút Chụp ngay, Webcam máy tính và Chọn ảnh có sẵn bên phải"><figcaption></figcaption></figure>
 {% endtab %}
 
 {% tab title="Webcam" %}

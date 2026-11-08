@@ -137,6 +137,12 @@ public sealed partial class AppHost
         return new FaceResult(DataUrl(jpeg), SyncPerson(no));
     }
 
+    private async Task<FacePreviewView> FacePreview(JsonElement a)
+    {
+        var jpeg = await Enroll.PreviewAsync(Int(a, "deviceId"), _cts.Token);
+        return new FacePreviewView(jpeg is null ? null : DataUrl(jpeg), jpeg is null);
+    }
+
     private FaceResult FaceSave(JsonElement a)
     {
         var no = Str(a, "employeeNo");

@@ -38,6 +38,9 @@ public sealed record BackupStatus(bool HasPassword, string? LastAt, IReadOnlyLis
 public sealed record SettingsView(bool AutoCheckUpdates, bool StartWithWindows);
 
 /// <summary>import.status: lets a screen opened mid-import show its progress instead of a fresh "Lấy dữ liệu" button.</summary>
+/// <summary>face.preview: a camera frame, or Busy while the device is capturing (no frame then).</summary>
+public sealed record FacePreviewView(string? ImageDataUrl, bool Busy);
+
 public sealed record ImportStatusView(bool Running, int? DeviceId, string? DeviceName, int Done, int Total, string? CurrentName);
 
 public sealed record LogRow(DateTime At, string? DeviceName, string? EmployeeNo, string Action, bool Ok, string? Message);

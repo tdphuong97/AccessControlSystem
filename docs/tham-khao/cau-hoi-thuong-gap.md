@@ -66,6 +66,22 @@ Nên lấy 2 ngón, mỗi tay một ngón, để khi một ngón bị thương h
 
 <details>
 
+<summary>Sao không xem được hình vân tay như ảnh khuôn mặt?</summary>
+
+Máy chấm công không lưu hình chụp ngón tay. Khi quét, máy chuyển ngón tay thành một chuỗi dữ liệu đã mã hoá rồi chỉ gửi chuỗi đó, kèm số ngón và chất lượng. Phần mềm vì vậy chỉ cho biết ngón nào đã lấy và chất lượng bao nhiêu: bấm số ngón ở cột **Vân tay** trong danh sách để xem.
+
+</details>
+
+<details>
+
+<summary>Danh sách công ty lấy từ đâu? Sao có người chưa có nhóm?</summary>
+
+Từ tên người dùng. Từ bản 0.9.6, tên có dạng mã công ty và dấu chấm ở đầu (ví dụ `ABC. Lan`) được xếp vào công ty đó, cả người đã có trong phần mềm lẫn người lấy về sau này. Người có tên không theo dạng này thì chưa có nhóm: mở người đó, bấm **Sửa** và chọn công ty. Nhóm bạn đã chọn hoặc bỏ bằng tay thì phần mềm không tự đổi lại.
+
+</details>
+
+<details>
+
 <summary>Vân tay đã lấy ở máy này, sao máy kia không nhận?</summary>
 
 Vân tay chỉ dùng chung giữa các máy có cùng loại cảm biến. Nếu hai máy khác loại, phần mềm báo cần quét lại ngón đó trực tiếp ở máy kia. Xem [Những trường hợp không làm được](gioi-han.md).

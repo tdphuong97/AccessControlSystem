@@ -23,13 +23,40 @@
     return '<span class="pill pill-wait">' + icon('clock', 16) + 'Chờ gửi ' + esc(names || 'máy') + '</span>';
   }
 
+  // "Có" / "2 ngón" open a quick look (photo + fingers) without leaving the list.
+  function peek(r, inner, label) {
+    return '<button type="button" class="peek-btn" data-act="peek" data-emp="' + esc(r.employeeNo) + '" aria-label="' + esc(label + r.fullName) + '">' + inner + '</button>';
+  }
+
+  async function peekDialog(emp) {
+    const p = await ACS.bridge.call('people.get', { employeeNo: emp });
+    const face = p.faceDataUrl
+      ? '<img class="peek-img" alt="Ảnh khuôn mặt của ' + esc(p.fullName) + '" src="' + esc(p.faceDataUrl) + '">'
+      : '<div class="peek-img peek-none"><span class="small muted">Chưa có ảnh khuôn mặt</span></div>';
+    const fingers = p.fingers.length ? ACS.wizard.handsView(p.fingers) : '<p class="small muted">Chưa có vân tay nào.</p>';
+    const html = '<div class="dlg-body"><h2 class="dlg-title">' + esc(p.fullName) + '</h2>' +
+      '<p class="sub" style="margin:0 0 14px">Mã NV ' + esc(p.employeeNo) + (p.groupName ? ' · ' + esc(p.groupName) : '') + '</p>' +
+      '<div class="peek-cols"><div class="peek-face">' + face + '</div><div class="peek-fingers"><div class="fw6" style="margin-bottom:10px">Vân tay đã lấy (' + p.fingers.length + ')</div>' +
+      fingers + '<p class="small muted" style="margin:12px 0 0">Số nhỏ dưới mỗi ngón là chất lượng (trên 100). Vân tay không có hình để xem: máy chấm công chỉ lưu dữ liệu đã mã hoá của ngón tay.</p></div></div>' +
+      '<div class="dlg-actions"><button type="button" class="btn" data-no>Đóng</button>' +
+      '<a class="btn btn-primary" href="#/person/' + encodeURIComponent(p.employeeNo) + '" data-open>Mở hồ sơ' + icon('chevronRight', 16) + '</a></div></div>';
+    return ACS.ui.dialog(html, {
+      onOpen(d) {
+        d.classList.add('dlg-wide');
+        d.querySelector('[data-no]').addEventListener('click', () => d.finish(null));
+        d.querySelector('[data-open]').addEventListener('click', () => d.finish(null));
+        d.querySelector('[data-no]').focus();
+      },
+    });
+  }
+
   function rowHtml(r, n) {
     return '<div class="trow' + (r.locked ? ' is-locked' : '') + '">' +
       '<div class="who"><span class="avatar">' + esc(r.initials || F.initials(r.fullName)) + '</span>' +
       '<div class="who-t"><div class="fw6">' + esc(r.fullName) + '</div><div class="mono small muted">Mã NV ' + esc(r.employeeNo) + '</div></div>' +
       (r.isNew ? '<span class="pill pill-new">Mới</span>' : '') + '</div>' +
-      '<div class="c" data-l="Khuôn mặt">' + (r.hasFace ? okText('checkCircle', 'Có') : waitText('Chưa có')) + '</div>' +
-      '<div class="c" data-l="Vân tay">' + (r.fingerCount > 0 ? okText('checkCircle', r.fingerCount + ' ngón') : waitText('Chưa có')) + '</div>' +
+      '<div class="c" data-l="Khuôn mặt">' + (r.hasFace ? peek(r, okText('checkCircle', 'Có'), 'Xem ảnh khuôn mặt của ') : waitText('Chưa có')) + '</div>' +
+      '<div class="c" data-l="Vân tay">' + (r.fingerCount > 0 ? peek(r, okText('checkCircle', r.fingerCount + ' ngón'), 'Xem vân tay của ') : waitText('Chưa có')) + '</div>' +
       '<div class="c" data-l="Có trên ' + n + ' máy">' + syncCell(r, n) + '</div>' +
       '<div class="c open"><a class="btn btn-sm" href="#/person/' + encodeURIComponent(r.employeeNo) + '">Mở' + icon('chevronRight', 16) + '</a></div></div>';
   }
@@ -163,6 +190,9 @@
 
     on(host, 'click', '[data-chip]', (el) => { filter = el.dataset.chip; page = 1; load(); });
     on(host, 'click', '[data-act="show-locked"]', (el, ev) => { ev.preventDefault(); filter = 'locked'; page = 1; load(); });
+    on(host, 'click', '[data-act="peek"]', async (el) => {
+      try { await peekDialog(el.dataset.emp); } catch (e) { ACS.ui.toast(ACS.ui.errMessage(e), 'error'); }
+    });
     on(host, 'change', '#p-group', (el) => { group = el.value; page = 1; drawTable(); });
     on(host, 'change', '#p-size', (el) => { size = F.pageSize(el.value); saveSize(size); page = 1; drawTable(); });
     on(host, 'click', '[data-act="pg-prev"]', () => goPage(page - 1));

@@ -12,6 +12,8 @@ public interface IHikDevice
     Task UpsertUserAsync(HikUserWrite user, CancellationToken ct);
     Task DeleteUserAsync(string employeeNo, CancellationToken ct);
     Task<byte[]> CaptureFaceAsync(CancellationToken ct);
+    /// <summary>One JPEG frame of the device camera, for the live view while capturing a face.</summary>
+    Task<byte[]> SnapshotAsync(CancellationToken ct);
     Task SetFaceAsync(string employeeNo, byte[] jpeg, CancellationToken ct);
     Task<bool> HasFaceAsync(string employeeNo, CancellationToken ct);
     /// <summary>Null means the device keeps no photo.</summary>

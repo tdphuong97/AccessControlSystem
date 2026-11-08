@@ -103,6 +103,7 @@ public class ProbeRunnerTests
             return inner.DeleteUserAsync(no, ct);
         }
         public Task<byte[]> CaptureFaceAsync(CancellationToken ct) => inner.CaptureFaceAsync(ct);
+        public Task<byte[]> SnapshotAsync(CancellationToken ct) => inner.SnapshotAsync(ct);
         public Task SetFaceAsync(string no, byte[] j, CancellationToken ct) => DropFace ? Task.CompletedTask : inner.SetFaceAsync(no, j, ct);
         public Task<bool> HasFaceAsync(string no, CancellationToken ct) => inner.HasFaceAsync(no, ct);
         public Task<byte[]?> DownloadFaceAsync(string no, CancellationToken ct) => inner.DownloadFaceAsync(no, ct);

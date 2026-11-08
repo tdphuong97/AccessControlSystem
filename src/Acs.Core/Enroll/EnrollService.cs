@@ -105,6 +105,19 @@ public sealed partial class EnrollService(Database db, IHikDeviceFactory factory
 
     private DeviceRecord Device(int id) => db.Devices.Get(id) ?? throw new EnrollException("Không tìm thấy máy chấm công.");
 
+    /// <summary>
+    /// One frame of the device camera for the live view, or null while that device is capturing: the preview never makes a
+    /// capture wait. A device paused for a wrong password is not asked (AuthGuard), and a wrong password pauses it.
+    /// </summary>
+    public async Task<byte[]?> PreviewAsync(int deviceId, CancellationToken ct)
+    {
+        var dev = Device(deviceId);
+        AuthGuard.Require(dev);
+        if (_busy.TryGetValue(dev.Id, out var gate) && gate.CurrentCount == 0) return null;
+        try { return await factory.Create(dev).SnapshotAsync(ct); }
+        catch (HikAuthException) { AuthGuard.Pause(db, dev.Id, sync); throw; }
+    }
+
     public async Task<byte[]> CaptureFaceAsync(string employeeNo, int deviceId, CancellationToken ct)
     {
         RequirePerson(employeeNo);

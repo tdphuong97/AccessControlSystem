@@ -28,7 +28,7 @@ description: Đăng ký một người mới qua 4 bước (Thông tin, Khuôn m
 | --- | --- |
 | **Họ và tên** \* | Tối đa 32 ký tự, vì máy chấm công không nhận tên dài hơn. |
 | **Mã nhân viên** | Phần mềm tự điền số kế tiếp. Sửa lại nếu người này đã có mã. |
-| **Nhóm / công ty** | Không bắt buộc. Gõ tên mới, hoặc chọn một nhóm đã có trong danh sách gợi ý. |
+| **Nhóm / công ty** | Không bắt buộc. Chọn một công ty trong danh sách. Chưa có thì chọn **+ Nhóm mới…** rồi gõ tên vào ô hiện ra bên dưới. Họ tên bắt đầu bằng mã công ty và dấu chấm (ví dụ `ABC. Lan`) thì phần mềm tự chọn sẵn công ty `ABC`, nếu công ty đó đã có trong danh sách. |
 | **Được ra vào đến khi nào?** | Chọn **Không thời hạn** (nhân viên chính thức) hoặc **Đến một ngày** (thời vụ, khách, nhà thầu). Chọn **Đến một ngày** thì nhập thêm ô **Hết hạn vào ngày**. |
 
 Người mới luôn được thêm vào tất cả các máy. Khung xanh **Được vào cả 2 máy** liệt kê tên hai máy, bạn không cần chọn.

@@ -30,6 +30,7 @@ public sealed class FakeDevice : IHikDevice
     public byte[] NextFace { get; set; } = [0xFF, 0xD8, 0xFF, 0xD9];
     public CapturedFinger NextFinger { get; set; } = new("ModelA:AAAA", 80);
     public TimeSpan CaptureDelay { get; set; } = TimeSpan.Zero;
+    public byte[] Frame { get; set; } = [0xFF, 0xD8, 0xFF, 0xD9];
     public DeviceInfo Info { get; set; } = new("DS-K1T343", "FAKE0001", "V1.0");
     public DeviceCapabilities Capabilities { get; set; } = new(true, true, 3000);
 
@@ -88,6 +89,12 @@ public sealed class FakeDevice : IHikDevice
             foreach (var k in _fingers.Keys.Where(k => k.No == employeeNo).ToList()) _fingers.Remove(k);
         }
         return Task.CompletedTask;
+    }
+
+    public Task<byte[]> SnapshotAsync(CancellationToken ct)
+    {
+        Enter(nameof(SnapshotAsync));
+        return Task.FromResult(Frame);
     }
 
     public async Task<byte[]> CaptureFaceAsync(CancellationToken ct)

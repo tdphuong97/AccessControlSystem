@@ -1,3 +1,10 @@
+## 0.9.6
+
+- Mới: chụp khuôn mặt bằng camera máy chấm công có khung hình trực tiếp (khoảng 3 hình/giây) để canh mặt trước khi chụp. Hình lấy từ camera của chính máy, không ảnh hưởng việc chụp: lúc máy đang chụp thì app tạm dừng lấy hình.
+- Mới: bấm "Có" ở cột Khuôn mặt hoặc số ngón ở cột Vân tay trong danh sách để xem nhanh ảnh mặt và các ngón đã lấy (kèm chất lượng). Vân tay không có ảnh: máy chỉ gửi dữ liệu đã mã hoá.
+- Mới: nhóm / công ty lấy từ mã đầu tên ("ABC. Lan" → ABC) khi lấy dữ liệu từ máy; một lần khi khởi động cho người đã lấy trước đây (không đổi nhóm đã chọn bằng tay). Ô Nhóm / công ty thành danh sách chọn có "+ Nhóm mới…"; danh sách người có ô lọc Công ty.
+- Cả giao diện to nhỏ theo cửa sổ (100% ở cỡ mặc định, từ 80% đến 150%).
+
 ## 0.9.5
 
 - Mới: nút Hướng dẫn ở góc trên bên phải (phím F1) mở hướng dẫn sử dụng ngay trong phần mềm, đúng trang của màn hình đang dùng. Hướng dẫn đi kèm phần mềm, không cần mạng.

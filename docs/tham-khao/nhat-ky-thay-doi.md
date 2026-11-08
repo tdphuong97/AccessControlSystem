@@ -5,6 +5,15 @@ description: Các phiên bản đã phát hành và thay đổi trong từng b�
 # Nhật ký thay đổi
 
 {% updates format="full" %}
+{% update date="2026-11-08" %}
+## Phiên bản 0.9.6
+
+* Mới: khi chụp khuôn mặt bằng camera máy chấm công, khung bên trái hiện hình **trực tiếp** từ camera của máy để canh mặt trước khi bấm **Chụp ngay**.
+* Mới: trong danh sách, bấm **Có** ở cột Khuôn mặt hoặc số ngón ở cột Vân tay để xem nhanh ảnh mặt và các ngón đã lấy, không phải mở hồ sơ.
+* Mới: người có tên dạng `ABC. Lan` được tự xếp vào công ty `ABC`, kể cả người đã lấy từ máy trước đây. Ô **Nhóm / công ty** thành danh sách chọn, có **+ Nhóm mới…**. Danh sách người có ô lọc **Công ty**.
+* Cả giao diện to nhỏ theo kích thước cửa sổ.
+{% endupdate %}
+
 {% update date="2026-11-07" %}
 ## Phiên bản 0.9.5
 

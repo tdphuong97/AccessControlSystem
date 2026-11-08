@@ -724,6 +724,50 @@ public sealed class AppHostTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task face_preview_gives_a_frame_of_the_device_camera()
+    {
+        var h = NewHost();
+        var dev = await AddDevice(h);
+        _factory.For(dev).Frame = [0xFF, 0xD8, 0xFF, 0xD9, 7];
+
+        var r = Out(await h.HandleAsync("face.preview", J($$"""{"deviceId":{{dev}}}""")));
+
+        Assert.Equal("data:image/jpeg;base64," + Convert.ToBase64String(new byte[] { 0xFF, 0xD8, 0xFF, 0xD9, 7 }), r.GetProperty("imageDataUrl").GetString());
+        Assert.False(r.GetProperty("busy").GetBoolean());
+    }
+
+    [Fact]
+    public async Task face_preview_leaves_the_camera_alone_while_the_device_is_capturing()
+    {
+        var h = NewHost();
+        var dev = await AddDevice(h);
+        await Create(h, "1001", "An");
+        _factory.For(dev).CaptureDelay = TimeSpan.FromMilliseconds(800);
+        var capture = h.HandleAsync("face.capture", J($$"""{"employeeNo":"1001","deviceId":{{dev}}}"""));
+        await Task.Delay(100);
+
+        var r = Out(await h.HandleAsync("face.preview", J($$"""{"deviceId":{{dev}}}""")));
+
+        Assert.True(r.GetProperty("busy").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, r.GetProperty("imageDataUrl").ValueKind);
+        Assert.DoesNotContain("SnapshotAsync", _factory.For(dev).Calls);
+        await capture;
+    }
+
+    [Fact]
+    public async Task face_preview_never_logs_in_again_to_a_device_paused_for_a_wrong_password()
+    {
+        var h = NewHost();
+        var dev = await AddDevice(h);
+        _factory.For(dev).WrongPassword = true;
+
+        await Assert.ThrowsAnyAsync<Exception>(() => h.HandleAsync("face.preview", J($$"""{"deviceId":{{dev}}}""")));
+        await Assert.ThrowsAnyAsync<Exception>(() => h.HandleAsync("face.preview", J($$"""{"deviceId":{{dev}}}""")));
+
+        Assert.Single(_factory.For(dev).Calls, c => c == "SnapshotAsync");
+    }
+
+    [Fact]
     public async Task start_skips_an_installer_that_is_still_running()
     {
         var updates = Path.Combine(_folder, "updates");

@@ -19,6 +19,20 @@ public class HikFacesTests
     private static FakeIsapiHandler.Reply Bin(byte[] b, string ct = "image/jpeg") => new(HttpStatusCode.OK, "", ct, b);
 
     [Fact]
+    public async Task Snapshot_reads_one_frame_of_the_device_camera()
+    {
+        var h = new FakeIsapiHandler().On(HttpMethod.Get, "/ISAPI/Streaming/channels/101/picture", _ => Bin(Jpeg));
+        Assert.Equal(Jpeg, await Make(h).SnapshotAsync(default));
+    }
+
+    [Fact]
+    public async Task Snapshot_that_is_not_a_picture_is_rejected()
+    {
+        var h = new FakeIsapiHandler().On(HttpMethod.Get, "/ISAPI/Streaming/channels/101/picture", _ => Bin([1, 2, 3], "application/octet-stream"));
+        await Assert.ThrowsAsync<HikRejectedException>(() => Make(h).SnapshotAsync(default));
+    }
+
+    [Fact]
     public async Task Capture_accepts_raw_jpeg_and_base64_xml()
     {
         var h = new FakeIsapiHandler().On(HttpMethod.Post, Capture, _ => Bin(Jpeg));

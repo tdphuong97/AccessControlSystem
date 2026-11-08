@@ -132,6 +132,17 @@
       const d = devices.find((x) => x.id === a.deviceId);
       if (d && !d.online) throw new Error(d.name + ' đang mất kết nối nên chưa chụp được. Hãy chọn máy khác hoặc kiểm tra dây mạng và nguồn của máy.');
       p.hasFace = true; return { imageDataUrl: portrait, devices: deviceSync(p) }; },
+    'face.preview': async (a) => {
+      await wait(250);
+      const d = devices.find((x) => x.id === a.deviceId);
+      if (d && !d.online) throw new Error('Không kết nối được máy. Kiểm tra dây mạng, địa chỉ IP và nguồn của máy, app sẽ tự thử lại.');
+      const c = document.createElement('canvas'); c.width = 768; c.height = 432;
+      const g = c.getContext('2d'), x = 384 + 30 * Math.sin(Date.now() / 900);
+      g.fillStyle = '#6B7A8C'; g.fillRect(0, 0, 768, 432);
+      g.fillStyle = '#B8C4D2'; g.beginPath(); g.ellipse(x, 470, 170, 150, 0, 0, 7); g.fill();
+      g.beginPath(); g.ellipse(x, 190, 72, 90, 0, 0, 7); g.fill();
+      return { imageDataUrl: c.toDataURL('image/jpeg', 0.7), busy: false };
+    },
     'face.save': (a) => { const p = need(a); p.hasFace = true; return { imageDataUrl: a.imageDataUrl, devices: deviceSync(p) }; },
     'finger.capture': async (a) => {
       const p = need(a);
