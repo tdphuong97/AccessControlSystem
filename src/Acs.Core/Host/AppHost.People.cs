@@ -113,6 +113,28 @@ public sealed partial class AppHost
         return PersonDetailOf(no);
     }
 
+    /// <summary>Thùng rác, newest first; Blocked says why a row cannot be restored under its own number right now.</summary>
+    private IReadOnlyList<TrashRow> TrashList() => Db.Trash.List().Select(t => new TrashRow(t.Id, t.EmployeeNo, t.FullName, t.GroupName,
+        t.HasFace, t.FingerCount, t.DeletedAt,
+        Db.Jobs.HasOpen(t.EmployeeNo) ? EnrollService.NumberBusyMessage
+            : Db.People.Get(t.EmployeeNo) is { } other ? $"Mã {t.EmployeeNo} đang là của {other.FullName}." : null)).ToList();
+
+    private object? TrashDelete(JsonElement a)
+    {
+        var id = Long(a, "id");
+        var t = Db.Trash.List().FirstOrDefault(x => x.Id == id);
+        Db.Trash.Remove(id);
+        if (t is not null) Db.Log.Add(t.EmployeeNo, null, "Xoá vĩnh viễn", true, $"Xoá vĩnh viễn {t.FullName} khỏi Thùng rác.");
+        return null;
+    }
+
+    private int TrashEmpty()
+    {
+        var n = Db.Trash.Clear();
+        if (n > 0) Db.Log.Add(null, null, "Dọn Thùng rác", true, $"Xoá vĩnh viễn {n} người khỏi Thùng rác.");
+        return n;
+    }
+
     private object? PeopleDelete(JsonElement a)
     {
         Enroll.Delete(Str(a, "employeeNo"));

@@ -68,15 +68,15 @@ Nên lấy 2 ngón, mỗi tay một ngón, để khi một ngón bị thương h
 
 <summary>Thêm người mới mà chụp mặt, quét vân tay đều lỗi, người đó có lên máy không?</summary>
 
-Từ bản 0.9.7 thì không. Phần mềm chỉ gửi người mới xuống máy khi đã có khuôn mặt hoặc ít nhất một vân tay. Trước đó người này chỉ nằm trong phần mềm với nhãn **Chưa gửi · cần mặt hoặc vân tay**: mở người đó để chụp, quét tiếp, hoặc **Xoá hẳn** nếu không cần nữa.
+Không. Phần mềm chỉ giữ và gửi người mới xuống máy khi đã có khuôn mặt hoặc ít nhất một vân tay. Rời các bước thêm người khi vẫn chưa có thì phần mềm bỏ người đó, kể cả khi tắt phần mềm giữa chừng.
 
 </details>
 
 <details>
 
-<summary>Sao mã nhân viên gợi ý nhảy số, ví dụ chưa có 173 mà đã gợi ý 174?</summary>
+<summary>Mã nhân viên gợi ý tính thế nào? Xoá người có mã cuối thì sao?</summary>
 
-Vì mã 173 từng được dùng rồi bị xoá. Phần mềm không gợi ý lại mã đã xoá, để người mới không bị lẫn với người cũ còn sót trên máy, trong bản sao lưu hay nhật ký. Muốn dùng lại mã đó, gõ tay vào ô **Mã nhân viên** khi thêm người. Để rà mã theo thứ tự, chọn **Sắp xếp → Mã NV tăng dần** ở danh sách.
+Từ bản 0.9.10, phần mềm gợi ý số lớn nhất đang dùng cộng 1. Xoá người có mã cuối (ví dụ 173) thì khi máy gỡ xong, mã đó được gợi ý lại. Bản 0.9.9 trở về trước không bao giờ gợi ý lại mã đã xoá, nên có lúc nhảy số. Bạn luôn gõ được mã khác khi thêm người. Để rà mã theo thứ tự, chọn **Sắp xếp → Mã NV tăng dần** ở danh sách.
 
 </details>
 
@@ -137,6 +137,14 @@ Thêm máy trong tab **Máy chấm công & cập nhật** (nếu là máy mới)
 <summary>Gỡ cài đặt phần mềm có xoá dữ liệu không?</summary>
 
 Không. Dữ liệu nằm ở `%LOCALAPPDATA%\AccessControlSystem`, tách khỏi thư mục cài. Gỡ hoặc cập nhật không đụng tới thư mục này. Muốn xoá hết, bạn tự xoá thư mục sau khi gỡ. Xem [Cài đặt](../bat-dau/cai-dat.md).
+
+</details>
+
+<details>
+
+<summary>Lỡ tay xoá hẳn một người thì lấy lại được không?</summary>
+
+Được. Người đã xoá nằm trong **Thùng rác** (nút ở tab **Người dùng**, cạnh các bộ lọc) cùng ảnh mặt và vân tay. Bấm **Khôi phục**: phần mềm đưa người đó lại vào danh sách và gửi lại xuống cả hai máy. Thùng rác giữ tới khi bạn bấm **Xoá vĩnh viễn** hoặc **Dọn sạch thùng rác**. Xem [Xoá hẳn một người](../nguoi-dung/xoa-han.md).
 
 </details>
 

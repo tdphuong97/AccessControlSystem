@@ -102,6 +102,7 @@ public sealed class EnrollServiceTests : IAsyncDisposable
     public void Number_still_waiting_to_be_removed_cannot_be_reused()
     {
         _svc.CreatePerson(new NewPerson("An", "2001", null, null));
+        _svc.SaveFace("2001", [0xFF, 0xD8, 0xFF, 0xD9], BiometricSource.File);
         _svc.Delete("2001");   // DeleteUser queued on both devices
         var ex = Assert.Throws<EnrollException>(() => _svc.CreatePerson(new NewPerson("Bình", "2001", null, null)));
         Assert.Equal(EnrollService.NumberBusyMessage, ex.Message);
@@ -109,16 +110,6 @@ public sealed class EnrollServiceTests : IAsyncDisposable
 
         Drain(_d1); Drain(_d2);   // the devices removed the old user
         Assert.Equal("Bình", _svc.CreatePerson(new NewPerson("Bình", "2001", null, null)).FullName);
-    }
-
-    [Fact]
-    public void Next_number_never_comes_back_after_a_delete()
-    {
-        _svc.CreatePerson(new NewPerson("An", "2001", null, null));
-        _svc.CreatePerson(new NewPerson("Bình", "2002", null, null));
-        _svc.Delete("2002");
-        Drain(_d1); Drain(_d2);
-        Assert.Equal("2003", _svc.NextEmployeeNo());
     }
 
     [Fact]

@@ -26,7 +26,7 @@ Chỉ hai nơi:
 
 - Có giấy đồng ý của nhân viên trước khi đăng ký khuôn mặt hoặc vân tay, nêu rõ mục đích (chấm công, kiểm soát ra vào).
 - Chỉ quản trị viên được dùng máy tính cài phần mềm. Đặt mật khẩu Windows và khoá màn hình khi rời máy.
-- **Xoá hẳn** người đã nghỉ việc khi không còn cần giữ. Phần mềm nhắc ở tab **Người dùng** khi có người đã khoá quá 6 tháng. Bản sao lưu cũ vẫn có thể còn dữ liệu của họ. Xem [Xoá hẳn một người](../nguoi-dung/xoa-han.md).
+- **Xoá hẳn** người đã nghỉ việc khi không còn cần giữ, rồi **Xoá vĩnh viễn** họ khỏi **Thùng rác**: thùng rác vẫn giữ ảnh mặt và vân tay cho tới khi bạn xoá vĩnh viễn. Phần mềm nhắc ở tab **Người dùng** khi có người đã khoá quá 6 tháng. Bản sao lưu cũ vẫn có thể còn dữ liệu của họ. Xem [Xoá hẳn một người](../nguoi-dung/xoa-han.md).
 - Cất file sao lưu ở nơi an toàn.
 
 Các yêu cầu cụ thể về giấy tờ, thời hạn lưu và thông báo nên hỏi bộ phận pháp chế hoặc nhân sự của bạn.

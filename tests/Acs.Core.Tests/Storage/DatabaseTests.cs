@@ -26,6 +26,30 @@ public sealed class DatabaseTests : IDisposable
         new(0, "Máy tầng trệt", "192.168.1.201", "admin", pw, 1, true, false, null, null, null, "device-1", false, null);
 
     [Fact]
+    public void Upgrading_a_version_1_database_marks_only_never_sent_people_without_face_or_finger_as_drafts()
+    {
+        using (var db = Open())
+        {
+            var dev = db.Devices.Insert(Dev());
+            foreach (var no in new[] { "1", "2", "3", "4" }) db.People.Insert(Person(no));
+            db.Biometrics.SetFace(new FaceRecord("2", [0xFF, 0xD8, 0xFF, 0xD9], BiometricSource.File, Now));          // has a face
+            db.Jobs.SetState(new DeviceStateRecord("3", dev, true, true, false, new HashSet<int>(), new HashSet<int>(), Now)); // on a device
+            db.Jobs.Enqueue(dev, "4", JobKind.UpsertUser, 0, Now);                                                       // was sent
+        }
+        using (var raw = new SqliteConnection($"Data Source={DbFile};Pooling=False"))
+        {
+            raw.Open();
+            using var cmd = raw.CreateCommand();
+            cmd.CommandText = "DROP TABLE trash; ALTER TABLE people DROP COLUMN draft; PRAGMA user_version=1;";
+            cmd.ExecuteNonQuery();
+        }
+
+        using var again = Open();
+        Assert.Equal(["1"], again.People.DraftNumbers().ToArray());
+        Assert.Empty(again.Trash.List());
+    }
+
+    [Fact]
     public void Device_password_is_not_stored_in_plain_text()
     {
         int id;
@@ -84,7 +108,7 @@ public sealed class DatabaseTests : IDisposable
     }
 
     [Fact]
-    public void Migration_sets_user_version_1_and_is_idempotent()
+    public void Migration_sets_the_current_user_version_and_is_idempotent()
     {
         using (var db = Open()) db.Settings.Set("k", "v");
         using (var db = Open()) Assert.Equal("v", db.Settings.Get("k"));
@@ -92,7 +116,7 @@ public sealed class DatabaseTests : IDisposable
         raw.Open();
         using var cmd = raw.CreateCommand();
         cmd.CommandText = "PRAGMA user_version";
-        Assert.Equal(1L, cmd.ExecuteScalar());
+        Assert.Equal(2L, cmd.ExecuteScalar());
     }
 
     [Fact]

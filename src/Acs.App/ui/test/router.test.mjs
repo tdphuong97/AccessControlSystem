@@ -31,3 +31,16 @@ test('malformed percent escape falls back to people without throwing', () => {
   assert.doesNotThrow(() => R.parse('#/person/%'));
   assert.equal(R.parse('#/person/%').name, 'people');
 });
+
+test('trash is a screen of its own', () => assert.deepEqual(R.parse('#/trash'), { name: 'trash', params: {} }));
+
+test('leftWizard: the person to drop when the "Thêm người mới" steps are left', () => {
+  const r = (h) => R.parse(h);
+  assert.equal(R.leftWizard(r('#/new/face/1137'), r('#/people')), '1137');
+  assert.equal(R.leftWizard(r('#/new/done/1137'), r('#/settings')), '1137');
+  assert.equal(R.leftWizard(r('#/new/face/1137'), r('#/new/finger/1137')), null);   // next step
+  assert.equal(R.leftWizard(r('#/new/info/1137'), r('#/new/face/1137')), null);
+  assert.equal(R.leftWizard(r('#/new/info'), r('#/people')), null);                  // nothing created yet
+  assert.equal(R.leftWizard(r('#/people'), r('#/settings')), null);
+  assert.equal(R.leftWizard(null, r('#/people')), null);
+});

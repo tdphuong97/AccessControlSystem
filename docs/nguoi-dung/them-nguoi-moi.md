@@ -27,7 +27,7 @@ description: Đăng ký một người mới qua 4 bước (Thông tin, Khuôn m
 | Ô | Điền gì |
 | --- | --- |
 | **Họ và tên** \* | Tối đa 32 ký tự, vì máy chấm công không nhận tên dài hơn. |
-| **Mã nhân viên** | Phần mềm tự điền số kế tiếp. Sửa lại nếu người này đã có mã. |
+| **Mã nhân viên** | Phần mềm điền sẵn số kế tiếp. Gõ số khác nếu người này đã có mã. |
 | **Nhóm / công ty** | Không bắt buộc. Chọn một công ty trong danh sách. Chưa có thì chọn **+ Nhóm mới…** rồi gõ tên vào ô hiện ra bên dưới. Họ tên bắt đầu bằng mã công ty và dấu chấm (ví dụ `ABC. Lan`) thì phần mềm tự chọn sẵn công ty `ABC`, nếu công ty đó đã có trong danh sách. |
 | **Được ra vào đến khi nào?** | Chọn **Không thời hạn** (nhân viên chính thức) hoặc **Đến một ngày** (thời vụ, khách, nhà thầu). Chọn **Đến một ngày** thì nhập thêm ô **Hết hạn vào ngày**. |
 
@@ -39,7 +39,7 @@ Người mới luôn được thêm vào tất cả các máy. Khung xanh **Đư
 {% step %}
 ### Lưu và sang bước khuôn mặt
 
-Bấm **Tiếp: Chụp khuôn mặt**. Phần mềm lưu người này vào bản gốc rồi mở bước **Khuôn mặt**. Lúc này **chưa gửi gì xuống máy**: phần mềm chỉ gửi người này xuống cả hai máy khi đã có khuôn mặt hoặc ít nhất một vân tay, để một lần đăng ký bỏ dở hay bị lỗi không để lại người "trống" trên máy.
+Bấm **Tiếp: Chụp khuôn mặt**. Phần mềm mở bước **Khuôn mặt**. Lúc này **chưa gửi gì xuống máy**: phần mềm chỉ giữ và gửi người này khi đã có khuôn mặt hoặc ít nhất một vân tay. Đăng ký bỏ dở hay bị lỗi thì không để lại gì, cả trong phần mềm lẫn trên máy.
 
 Nút **Tiếp** và **Huỷ** luôn nằm ở đáy cửa sổ, không cần cuộn xuống.
 {% endstep %}
@@ -51,7 +51,7 @@ Chụp hoặc chọn ảnh khuôn mặt, rồi bấm **Tiếp: Lấy vân tay**.
 
 Muốn bỏ qua, bấm **Bỏ qua bước này**. Bạn chụp lại sau được ở màn hình của người đó (xem [Sửa thông tin một người](sua-thong-tin.md)).
 
-Bỏ qua cả khuôn mặt lẫn vân tay thì bước cuối báo **Chưa gửi … xuống máy chấm công**, kèm nút **Chụp khuôn mặt** và **Quét vân tay** để làm tiếp. Trong danh sách, người này có nhãn **Chưa gửi · cần mặt hoặc vân tay** cho tới khi có một trong hai.
+Bỏ qua cả khuôn mặt lẫn vân tay thì bước cuối báo **Chưa đăng ký xong**, kèm nút **Chụp khuôn mặt** và **Quét vân tay** để làm tiếp. Rời các bước thêm người (bấm **Bỏ, về danh sách**, sang tab khác, hoặc tắt phần mềm) khi người đó vẫn chưa có khuôn mặt hay vân tay thì phần mềm bỏ người đó, không lưu và không gửi gì.
 {% endstep %}
 
 {% step %}
@@ -77,10 +77,10 @@ Màn hình **Hoàn tất** hiện dòng **Đã đăng ký xong** kèm tên ngư�
 
 ## Mã nhân viên gợi ý
 
-- Phần mềm lấy số lớn nhất từng dùng rồi cộng 1, giữ nguyên số chữ số 0 ở đầu. Chưa có ai thì gợi ý `1001`.
-- Mã đã xoá không bao giờ được gợi ý lại, để không lẫn với người cũ còn sót trên máy, trong bản sao lưu hay nhật ký. Vì vậy số gợi ý có thể nhảy cách: xoá 172 và 173 thì người tiếp theo được gợi ý 174. Muốn dùng lại mã cũ, gõ tay mã đó vào ô **Mã nhân viên** (được khi máy đã gỡ xong người cũ).
-- Mã chỉ gồm chữ và số, tối đa 32 ký tự, và không trùng người khác.
-- Mã không đổi được sau khi tạo. Nếu cần mã khác, tạo người mới.
+- Phần mềm lấy **số lớn nhất đang dùng rồi cộng 1**, giữ nguyên số chữ số 0 ở đầu. Chưa có ai thì gợi ý `1001`.
+- "Đang dùng" gồm người trong phần mềm, mã đang chờ gỡ khỏi máy, và mã máy đang có cho người mà phần mềm không có (người lạ khi So khớp). Mã xoá ở cuối được gợi ý lại khi máy gỡ xong: xoá 172 và 173 thì người tiếp theo lại được gợi ý 172.
+- Mã chỉ gồm chữ và số, tối đa 32 ký tự, và không trùng người khác. Bạn gõ số khác thoải mái khi tạo.
+- Bấm **Quay lại** từ bước Khuôn mặt vẫn sửa được mã, cho tới khi người đó có khuôn mặt hoặc vân tay. Sau đó mã không đổi được nữa, vì đã gửi xuống máy.
 
 ## Màn hình Hoàn tất cho từng máy
 

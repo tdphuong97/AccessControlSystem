@@ -171,7 +171,7 @@
   const HELP = {
     people: 'nguoi-dung/tim-va-xem', person: 'nguoi-dung/tim-va-xem',
     'new/info': 'nguoi-dung/them-nguoi-moi', 'new/face': 'nguoi-dung/chup-khuon-mat', 'new/finger': 'nguoi-dung/lay-van-tay', 'new/done': 'nguoi-dung/them-nguoi-moi',
-    settings: 'may-cham-cong/theo-doi-gui-xuong-may', reconcile: 'may-cham-cong/so-khop-2-may', setup: 'bat-dau/thiet-lap-lan-dau', log: 'may-cham-cong/xem-nhat-ky',
+    settings: 'may-cham-cong/theo-doi-gui-xuong-may', reconcile: 'may-cham-cong/so-khop-2-may', setup: 'bat-dau/thiet-lap-lan-dau', log: 'may-cham-cong/xem-nhat-ky', trash: 'nguoi-dung/xoa-han',
   };
   function helpPage(route) { return HELP[route] || ''; }
   function helpUrl(route) { return 'help/huong-dan.html#/' + helpPage(route); }

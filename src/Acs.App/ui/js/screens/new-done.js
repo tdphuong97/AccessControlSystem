@@ -69,10 +69,10 @@
       const sum = ['Mã NV ' + p.employeeNo, p.faceDataUrl ? '1 khuôn mặt' : 'chưa có khuôn mặt', nF ? nF + ' vân tay (' + fingerNames + ')' : 'chưa có vân tay'].join(' · ');
       if (p.devices.length && p.devices.every((d) => d.state === 'draft')) {
         host.innerHTML = '<div class="wiz">' + W.stepper(3, { 1: 'Bỏ qua', 2: 'Bỏ qua' }) +
-          '<div class="alert alert-wait" role="status">' + icon('clock', 20) + '<div><div class="fw6">Chưa gửi ' + esc(p.fullName) + ' xuống máy chấm công</div>' +
-          '<div class="small">Người này chưa có khuôn mặt hay vân tay nên máy chưa nhận ra được. App đã lưu thông tin và sẽ gửi xuống ' +
-          p.devices.length + ' máy ngay khi có khuôn mặt hoặc một vân tay.</div></div></div>' +
-          '<div class="wfoot"><a class="btn btn-48" href="#/people">Để sau</a><div class="wfoot-r">' +
+          '<div class="alert alert-wait" role="status">' + icon('clock', 20) + '<div><div class="fw6">Chưa đăng ký xong ' + esc(p.fullName) + '</div>' +
+          '<div class="small">Người này chưa có khuôn mặt hay vân tay nên máy chưa nhận ra được, app chưa lưu. Chụp khuôn mặt hoặc quét một vân tay để hoàn tất. ' +
+          'Rời màn hình này thì app bỏ người này, không gửi gì xuống máy.</div></div></div>' +
+          '<div class="wfoot"><a class="btn btn-48" href="#/people">Bỏ, về danh sách</a><div class="wfoot-r">' +
           '<a class="btn btn-48" href="' + ACS.router.href('new/finger', emp) + '">' + icon('fingerprint', 18) + 'Quét vân tay</a>' +
           '<a class="btn btn-primary btn-next" href="' + ACS.router.href('new/face', emp) + '">' + icon('camera', 18) + 'Chụp khuôn mặt</a></div></div></div>';
         return;

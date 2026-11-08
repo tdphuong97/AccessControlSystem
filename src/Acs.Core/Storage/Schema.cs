@@ -3,7 +3,7 @@ namespace Acs.Core.Storage;
 /// <summary>Schema v1 as a constant (an embedded Schema.sql would need a csproj edit).</summary>
 internal static class Schema
 {
-    public const int Version = 1;
+    public const int Version = 2;
 
     public const string V1 = """
 CREATE TABLE devices(
@@ -37,5 +37,21 @@ CREATE TABLE jobs(
 CREATE UNIQUE INDEX jobs_open ON jobs(device_id, employee_no, kind, finger_id) WHERE status IN ('pending','running','failed');
 CREATE TABLE log(id INTEGER PRIMARY KEY, at TEXT NOT NULL, employee_no TEXT, device_id INTEGER, action TEXT NOT NULL, ok INTEGER NOT NULL, message TEXT);
 CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT);
+""";
+
+    /// <summary>
+    /// v2 (0.9.10): people.draft = created in the app and not sent yet (no face, no finger); Thùng rác. Existing people
+    /// count as drafts only when nothing ever went to a device for them: no face, no finger, no device state, no job.
+    /// </summary>
+    public const string V2 = """
+ALTER TABLE people ADD COLUMN draft INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE trash(
+  id INTEGER PRIMARY KEY, employee_no TEXT NOT NULL, full_name TEXT NOT NULL, group_name TEXT,
+  has_face INTEGER NOT NULL DEFAULT 0, finger_count INTEGER NOT NULL DEFAULT 0, deleted_at TEXT NOT NULL, data BLOB NOT NULL);
+UPDATE people SET draft=1
+ WHERE NOT EXISTS (SELECT 1 FROM faces f WHERE f.employee_no=people.employee_no)
+   AND NOT EXISTS (SELECT 1 FROM fingerprints f WHERE f.employee_no=people.employee_no)
+   AND NOT EXISTS (SELECT 1 FROM device_state s WHERE s.employee_no=people.employee_no)
+   AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.employee_no=people.employee_no);
 """;
 }

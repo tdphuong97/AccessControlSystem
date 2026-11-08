@@ -1,3 +1,11 @@
+## 0.9.10
+
+- Mới: Thùng rác. "Xoá hẳn" gỡ người khỏi mọi máy như trước nhưng giữ thông tin, ảnh mặt và vân tay (mã hoá như dữ liệu chính) để Khôi phục: khôi phục đưa lại vào app và gửi lại xuống máy, hỏi mã mới khi mã cũ đã có người dùng hoặc máy chưa gỡ xong. Thùng rác giữ tới khi Xoá vĩnh viễn hoặc Dọn sạch (không tự xoá). Mọi thao tác được ghi Nhật ký.
+- Mã nhân viên gợi ý = số lớn nhất đang dùng + 1 (người trong app, mã đang chờ gỡ khỏi máy, mã máy có cho người app không có). Mã xoá ở cuối được gợi ý lại khi máy gỡ xong.
+- Ô Mã nhân viên khi thêm người không còn trông như bị khoá, và sửa được khi Quay lại cho tới khi có khuôn mặt hoặc vân tay.
+- Người mới chưa có khuôn mặt hay vân tay không được lưu: rời các bước thêm người (hoặc tắt app giữa chừng, dọn khi mở lại) là bỏ người đó, không vào Thùng rác, không gửi gì xuống máy.
+- Dữ liệu nâng lên phiên bản 2 (thêm thùng rác và cờ người mới); bản sao lưu cũ vẫn khôi phục được.
+
 ## 0.9.9
 
 - Mới: ô Sắp xếp ở danh sách người: Tên (A–Z), Mã NV tăng dần, Mã NV giảm dần (mới nhất trước). Mã so theo số (2 < 10 < 100), mã có chữ xếp sau; lựa chọn được nhớ trên máy tính.

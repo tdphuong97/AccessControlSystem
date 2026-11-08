@@ -12,7 +12,7 @@
   let mounter = null;
   let current = { name: 'people', params: {} };
 
-  const MAIN_TAB = ['people', 'person', 'new/info', 'new/face', 'new/finger', 'new/done'];
+  const MAIN_TAB = ['people', 'person', 'new/info', 'new/face', 'new/finger', 'new/done', 'trash'];
 
   // "Máy tầng trệt" -> "Tầng trệt"
   function shortName(name) {
@@ -97,7 +97,12 @@
     }
     ACS.bridge.on('devices.changed', (devices) => setState(Object.assign({}, ACS.state, { devices })));
     ACS.bridge.on('update.available', (update) => { updateDismissed = false; setState(Object.assign({}, ACS.state, { update })); });
+    let lastRoute = null;
     ACS.router.start((route) => {
+      // Left the "Thêm người mới" steps: a person still without face or finger is not kept (the host checks).
+      const drop = ACS.router.leftWizard(lastRoute, route);
+      lastRoute = route;
+      if (drop) ACS.bridge.call('people.discardDraft', { employeeNo: drop }).catch(() => {});
       if (ACS.state.firstRun && route.name === 'people' && ACS.screens.setup) { ACS.router.go('setup'); return; }
       mountScreen(route);
     });

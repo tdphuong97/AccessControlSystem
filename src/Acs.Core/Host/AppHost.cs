@@ -156,7 +156,7 @@ public sealed partial class AppHost
         if (_started) return;
         _started = true;
         Sync.Start();
-        await Task.Run(() => { DeleteOldInstallers(); GroupPeopleByName(); DailyBackup(); });
+        await Task.Run(() => { DeleteOldInstallers(); GroupPeopleByName(); Enroll.PurgeDrafts(); DailyBackup(); });
         StartUpdateTimer();
     }
 
@@ -239,6 +239,12 @@ public sealed partial class AppHost
         "people.lock" => PeopleAction(a, Enroll.Lock),
         "people.unlock" => PeopleAction(a, Enroll.Unlock),
         "people.delete" => PeopleDelete(a),
+        "people.discardDraft" => Enroll.DiscardDraft(Str(a, "employeeNo")),
+        "people.renumber" => PersonDetailOf(Enroll.Renumber(Str(a, "employeeNo"), Str(a, "newEmployeeNo")).EmployeeNo),
+        "trash.list" => TrashList(),
+        "trash.restore" => PersonDetailOf(Enroll.Restore(Long(a, "id"), OptStr(a, "employeeNo")).EmployeeNo),
+        "trash.delete" => TrashDelete(a),
+        "trash.empty" => TrashEmpty(),
         "face.capture" => await FaceCapture(a),
         "face.preview" => await FacePreview(a),
         "face.save" => FaceSave(a),
@@ -284,6 +290,9 @@ public sealed partial class AppHost
 
     private static int Int(JsonElement a, string name) =>
         OptInt(a, name) ?? throw new HostException("Thiếu thông tin cần thiết. Hãy thử lại.");
+
+    private static long Long(JsonElement a, string name) =>
+        Has(a, name) && a.GetProperty(name).TryGetInt64(out var n) ? n : throw new HostException("Thiếu thông tin cần thiết. Hãy thử lại.");
 
     private static bool Bool(JsonElement a, string name, bool dflt = false) =>
         Has(a, name) && a.GetProperty(name).ValueKind is JsonValueKind.True or JsonValueKind.False

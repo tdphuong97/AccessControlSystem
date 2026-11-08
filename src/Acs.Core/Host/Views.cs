@@ -38,6 +38,9 @@ public sealed record BackupStatus(bool HasPassword, string? LastAt, IReadOnlyLis
 public sealed record SettingsView(bool AutoCheckUpdates, bool StartWithWindows);
 
 /// <summary>import.status: lets a screen opened mid-import show its progress instead of a fresh "Lấy dữ liệu" button.</summary>
+public sealed record TrashRow(long Id, string EmployeeNo, string FullName, string? GroupName, bool HasFace, int FingerCount,
+    DateTime DeletedAt, string? Blocked);
+
 /// <summary>One step of devices.diagnose: State is ok, warn or err; Fix says what to do when it is not ok.</summary>
 public sealed record DiagCheck(string Name, string State, string Message, string? Fix);
 public sealed record DiagReport(int DeviceId, string DeviceName, string Summary, IReadOnlyList<DiagCheck> Checks);

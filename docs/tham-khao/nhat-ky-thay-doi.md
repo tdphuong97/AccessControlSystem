@@ -6,6 +6,15 @@ description: Các phiên bản đã phát hành và thay đổi trong từng b�
 
 {% updates format="full" %}
 {% update date="2026-11-08" %}
+## Phiên bản 0.9.10
+
+* Mới: **Thùng rác**. Xoá hẳn gỡ người đó khỏi máy nhưng giữ thông tin, ảnh mặt và vân tay để **Khôi phục**; thùng rác giữ tới khi bạn **Xoá vĩnh viễn**.
+* Mã nhân viên gợi ý: số lớn nhất đang dùng + 1. Mã xoá ở cuối được gợi ý lại khi máy gỡ xong.
+* Ô **Mã nhân viên** khi thêm người trông như ô nhập bình thường, và vẫn sửa được khi bấm **Quay lại**, cho tới khi có khuôn mặt hoặc vân tay.
+* Người mới chưa có khuôn mặt hay vân tay không còn được lưu: rời các bước thêm người là phần mềm bỏ người đó.
+{% endupdate %}
+
+{% update date="2026-11-08" %}
 ## Phiên bản 0.9.9
 
 * Mới: ô **Sắp xếp** ở danh sách người: theo tên, **Mã NV tăng dần** hoặc **Mã NV giảm dần**. Mã so theo số. Phần mềm nhớ lựa chọn.

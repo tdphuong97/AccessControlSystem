@@ -77,6 +77,7 @@
       fingers: p.fingers.map((f) => ({ fingerId: f[0], label: F().fingerLabel(f[0]), quality: f[1] })), devices: deviceSync(p) };
   }
   const find = (a) => people.find((p) => p.employeeNo === String(a.employeeNo));
+  const trash = []; let trashSeq = 0;
   const need = (a) => {
     const p = find(a);
     if (!p) throw new Error('Không tìm thấy người này. Hãy quay lại danh sách và thử lại.');
@@ -125,7 +126,17 @@
     },
     'people.lock': (a) => { const p = need(a); p.locked = true; return detail(p); },
     'people.unlock': (a) => { const p = need(a); p.locked = false; return detail(p); },
-    'people.delete': (a) => { people.splice(people.indexOf(need(a)), 1); return null; },
+    'people.delete': (a) => { const p = need(a); people.splice(people.indexOf(p), 1);
+      trash.unshift({ id: ++trashSeq, person: p, deletedAt: new Date().toISOString() }); return null; },
+    'people.discardDraft': () => false,
+    'people.renumber': (a) => { const p = need(a); p.employeeNo = String(a.newEmployeeNo); return detail(p); },
+    'trash.list': () => trash.map((t) => ({ id: t.id, employeeNo: t.person.employeeNo, fullName: t.person.fullName, groupName: t.person.groupName,
+      hasFace: t.person.hasFace, fingerCount: t.person.fingers.length, deletedAt: t.deletedAt,
+      blocked: people.some((x) => x.employeeNo === t.person.employeeNo) ? 'Mã ' + t.person.employeeNo + ' đang là của người khác.' : null })),
+    'trash.restore': (a) => { const t = trash.find((x) => x.id === a.id); trash.splice(trash.indexOf(t), 1);
+      if (a.employeeNo) t.person.employeeNo = String(a.employeeNo); people.push(t.person); return detail(t.person); },
+    'trash.delete': (a) => { trash.splice(trash.findIndex((x) => x.id === a.id), 1); return null; },
+    'trash.empty': () => { const n = trash.length; trash.length = 0; return n; },
     'face.capture': async (a) => {
       const p = need(a);
       await wait(1500);

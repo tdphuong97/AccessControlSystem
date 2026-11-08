@@ -52,8 +52,12 @@ public sealed class PeopleStore
 
     public void Delete(string employeeNo) => _db.Exec("DELETE FROM people WHERE employee_no=$e", ("$e", employeeNo));
 
-    /// <summary>Settings key: the highest all-digit employee number ever used here (created, imported or seen on a device).</summary>
-    public const string HighWaterKey = "employeeNo.highWater";
+    /// <summary>
+    /// Settings key: the highest all-digit number seen on a device for someone the app does not hold (So khớp strangers).
+    /// Before 0.9.10 "employeeNo.highWater" also kept every number ever created, so deleted numbers never came back;
+    /// that key is no longer read.
+    /// </summary>
+    public const string HighWaterKey = "employeeNo.deviceHighWater";
 
     private static bool IsNumber(string? s) => !string.IsNullOrEmpty(s) && s.All(char.IsAsciiDigit);
 
@@ -65,8 +69,8 @@ public sealed class PeopleStore
     }
 
     /// <summary>
-    /// Remembers <paramref name="employeeNo"/> as used, so a deleted or device-only number is never suggested again
-    /// (a reused number would merge a new person into an old device user). Call inside the caller's transaction.
+    /// Remembers a number a device holds for someone not in the app, so it is never suggested (a new person would be
+    /// merged into that device user). Call inside the caller's transaction.
     /// </summary>
     public void BumpHighWater(string employeeNo)
     {
@@ -75,11 +79,15 @@ public sealed class PeopleStore
         if (!IsNumber(cur) || Above(employeeNo, cur!)) _db.Settings.Set(HighWaterKey, employeeNo);
     }
 
-    /// <summary>max(highest all-digit number in the app, high-water mark) + 1, keeping the width of leading zeros.
-    /// No numeric id gives "1001".</summary>
+    /// <summary>
+    /// The highest all-digit number in use + 1, keeping the width of leading zeros (owner's rule, 0.9.10): in use = a
+    /// person in the app, a number still being removed from a device (open job), or one a device holds for someone else.
+    /// A deleted number at the end therefore comes back once the devices removed it. No numeric id gives "1001".
+    /// </summary>
     public string NextEmployeeNo()
     {
-        var ids = _db.Query("SELECT employee_no FROM people", r => r.GetString(0));
+        var ids = _db.Query("SELECT employee_no FROM people UNION SELECT employee_no FROM jobs WHERE status IN ('pending','running','failed')",
+            r => r.GetString(0));
         if (_db.Settings.Get(HighWaterKey) is { } hw) ids.Add(hw);
         string? best = null;
         foreach (var id in ids)
@@ -87,6 +95,14 @@ public sealed class PeopleStore
         if (best is null) return "1001";
         return (BigInteger.Parse(best) + 1).ToString().PadLeft(best.Length, '0');
     }
+
+    /// <summary>Draft = created in the app, nothing sent yet (EnrollService decides with the data, this is only the flag).</summary>
+    public void SetDraft(string employeeNo, bool draft) =>
+        _db.Exec("UPDATE people SET draft=$d WHERE employee_no=$e", ("$d", draft ? 1 : 0), ("$e", employeeNo));
+
+    public bool DraftFlag(string employeeNo) => Convert.ToInt32(_db.Scalar("SELECT draft FROM people WHERE employee_no=$e", ("$e", employeeNo)) ?? 0) != 0;
+
+    public IReadOnlyList<string> DraftNumbers() => _db.Query("SELECT employee_no FROM people WHERE draft=1 ORDER BY employee_no", r => r.GetString(0));
 
     public int GetOrCreateGroup(string name) => _db.Tx(() =>
     {

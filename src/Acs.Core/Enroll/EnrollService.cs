@@ -56,6 +56,84 @@ public sealed partial class EnrollService(Database db, IHikDeviceFactory factory
     private void SendPersonIfFirst(string no)
     {
         if (!Sendable(no) && db.People.Get(no) is { Status: PersonStatus.Active }) EnqueueAll(no, JobKind.UpsertUser);
+        db.People.SetDraft(no, false);
+    }
+
+    /// <summary>
+    /// A new person still without face or finger, never sent (the flag alone is not trusted: the data must agree).
+    /// Drafts are not kept: leaving the "Thêm người mới" steps drops them, and so does the next start.
+    /// </summary>
+    public bool IsDraft(string no) => db.People.DraftFlag(no) && !Sendable(no) && !db.Jobs.HasOpen(no);
+
+    /// <summary>Drops a draft (nothing on any device, nothing worth keeping in Thùng rác). False when it is not one.</summary>
+    public bool DiscardDraft(string no) => db.Tx(() =>
+    {
+        if (!IsDraft(no)) return false;
+        db.People.Delete(no);
+        return true;
+    });
+
+    /// <summary>At start: drafts left behind (the app was closed in the middle of "Thêm người mới").</summary>
+    public int PurgeDrafts() => db.Tx(() => db.People.DraftNumbers().Count(DiscardDraft));
+
+    /// <summary>A draft may still change its number (nothing was sent under the old one).</summary>
+    public PersonRecord Renumber(string employeeNo, string newEmployeeNo)
+    {
+        var to = (newEmployeeNo ?? "").Trim();
+        if (!NoRx().IsMatch(to)) throw new EnrollException("Mã nhân viên chỉ gồm chữ và số, tối đa 32 ký tự.");
+        return db.Tx(() =>
+        {
+            var cur = db.People.Get(employeeNo) ?? throw new EnrollException("Không tìm thấy nhân viên.");
+            if (to == cur.EmployeeNo) return cur;
+            if (!IsDraft(employeeNo)) throw new EnrollException(NumberFixedMessage);
+            if (db.People.Get(to) is not null) throw new EnrollException("Mã nhân viên đã có người dùng.");
+            if (db.Jobs.HasOpen(to)) throw new EnrollException(NumberBusyMessage);
+            var r = cur with { EmployeeNo = to, UpdatedAt = Now };
+            db.People.Delete(employeeNo);
+            db.People.Insert(r);
+            db.People.SetDraft(to, true);
+            return r;
+        });
+    }
+
+    public const string NumberFixedMessage = "Mã không đổi được: người này đã được gửi xuống máy chấm công.";
+
+    /// <summary>
+    /// Brings a person back from Thùng rác with their face and fingers, under their old number or <paramref name="newNo"/>,
+    /// and sends them to every device again (an active person with a face or finger).
+    /// </summary>
+    public PersonRecord Restore(long trashId, string? newNo)
+    {
+        var rec = db.Tx(() =>
+        {
+            var t = db.Trash.Get(trashId) ?? throw new EnrollException("Không thấy người này trong Thùng rác. Tải lại danh sách.");
+            var no = string.IsNullOrWhiteSpace(newNo) ? t.Person.EmployeeNo : newNo.Trim();
+            if (!NoRx().IsMatch(no)) throw new EnrollException("Mã nhân viên chỉ gồm chữ và số, tối đa 32 ký tự.");
+            if (db.People.Get(no) is { } other)
+                throw new EnrollException($"Mã {no} đang là của {other.FullName}. Nhập một mã khác để khôi phục.");
+            if (db.Jobs.HasOpen(no)) throw new EnrollException(NumberBusyMessage);
+            var now = Now;
+            var p = t.Person with
+            {
+                EmployeeNo = no,
+                GroupId = string.IsNullOrWhiteSpace(t.GroupName) ? null : db.People.GetOrCreateGroup(t.GroupName),
+                UpdatedAt = now,
+            };
+            db.People.Insert(p);
+            if (t.Face is { } f) db.Biometrics.SetFace(f with { EmployeeNo = no });
+            foreach (var fr in t.Fingers) db.Biometrics.SetFinger(fr with { EmployeeNo = no });
+            if (p.Status == PersonStatus.Active && (t.Face is not null || t.Fingers.Count > 0))
+            {
+                EnqueueAll(no, JobKind.UpsertUser);
+                if (t.Face is not null) EnqueueAll(no, JobKind.SetFace);
+                foreach (var id in t.Fingers.Select(x => x.FingerId).Distinct()) EnqueueAll(no, JobKind.SetFinger, id);
+            }
+            db.Trash.Remove(trashId);
+            db.Log.Add(no, null, "Khôi phục", true, $"Khôi phục {p.FullName} từ Thùng rác" + (no != t.Person.EmployeeNo ? $" với mã mới (mã cũ {t.Person.EmployeeNo})" : "") + ".");
+            return p;
+        });
+        sync.Wake();
+        return rec;
     }
 
     private void RequirePerson(string no)
@@ -75,11 +153,11 @@ public sealed partial class EnrollService(Database db, IHikDeviceFactory factory
             // A queued DeleteUser for this number would be cancelled by the new UpsertUser and the old device user
             // (face, fingers) would be merged into the new person.
             if (db.Jobs.HasOpen(no)) throw new EnrollException(NumberBusyMessage);
-            db.People.BumpHighWater(no);
             var now = Now;
             var r = new PersonRecord(no, name, GroupId(p.GroupName), DateOnly.FromDateTime(time.GetLocalNow().DateTime), p.ValidTo,
                 PersonStatus.Active, now, now, null);
             db.People.Insert(r);   // sent with the first face or finger (Sendable)
+            db.People.SetDraft(no, true);
             return r;
         });
         sync.Wake();
@@ -223,10 +301,21 @@ public sealed partial class EnrollService(Database db, IHikDeviceFactory factory
         sync.Wake();
     }
 
+    /// <summary>
+    /// "Xoá hẳn": off every device, and into Thùng rác with face and fingers so it can be restored. A draft (never sent)
+    /// is simply dropped.
+    /// </summary>
     public void Delete(string employeeNo)
     {
         db.Tx(() =>
         {
+            if (DiscardDraft(employeeNo)) return 0;
+            if (db.People.Get(employeeNo) is { } p)
+            {
+                db.Trash.Add(new TrashedPerson(p, db.People.GroupName(p.GroupId), db.Biometrics.GetFace(employeeNo),
+                    db.Biometrics.GetFingers(employeeNo)), Now);
+                db.Log.Add(employeeNo, null, "Chuyển vào Thùng rác", true, $"Xoá hẳn {p.FullName}: gỡ khỏi máy, giữ trong Thùng rác.");
+            }
             EnqueueAll(employeeNo, JobKind.DeleteUser);
             db.People.Delete(employeeNo);
             return 0;

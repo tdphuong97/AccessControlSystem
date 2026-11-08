@@ -118,7 +118,7 @@
       else if (act === 'unlock') guard(async () => { p = await ACS.bridge.call('people.unlock', { employeeNo: emp }); draw(); ACS.ui.toast('Đã mở lại. App đang gửi cho ' + nDev() + ' máy.'); });
       else if (act === 'delete') guard(async () => {
         const ok = await ACS.ui.confirm({ title: 'Xoá hẳn ' + p.fullName + '?',
-          body: 'App sẽ gỡ người này khỏi cả ' + nDev() + ' máy và xoá luôn mặt, vân tay trong app. Không khôi phục lại được.', okText: 'Xoá hẳn', danger: true });
+          body: 'App sẽ gỡ người này khỏi cả ' + nDev() + ' máy. Thông tin, ảnh mặt và vân tay được giữ trong Thùng rác, khôi phục được khi cần.', okText: 'Xoá hẳn', danger: true });
         if (ok) { await ACS.bridge.call('people.delete', { employeeNo: emp }); ACS.router.go('people'); }
       });
       else if (act === 'del-finger') guard(async () => {

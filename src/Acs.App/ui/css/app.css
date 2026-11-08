@@ -253,7 +253,9 @@ a:hover { color: var(--accent-hover); }
 .info-cols { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
 .info-form { flex: 999 1 520px; min-width: 0; padding: 24px; border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; gap: 18px; }
 .in-focus:focus { border: 2px solid var(--accent); outline: none; }
-.in-mono { font-family: var(--mono); background: var(--soft); }
+.in-mono { font-family: var(--mono); }
+.in-mono[readonly] { background: var(--soft); }
+.trash-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) auto; }
 .frow2 { display: flex; flex-wrap: wrap; gap: 16px; }
 .frow2 > div { flex: 1 1 200px; min-width: 0; }
 .fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }

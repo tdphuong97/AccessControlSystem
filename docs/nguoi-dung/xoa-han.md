@@ -1,29 +1,39 @@
 ---
-description: Xoá vĩnh viễn một người khỏi cả hai máy và khỏi phần mềm, và nên xoá khi nào để bảo vệ dữ liệu cá nhân.
+description: Gỡ một người khỏi cả hai máy, giữ trong Thùng rác để khôi phục khi cần, và xoá vĩnh viễn khi không còn cần giữ dữ liệu.
 ---
 
 # Xoá hẳn một người
 
 **Ai làm:** người phụ trách đăng ký nhân viên · **Mất khoảng:** 30 giây
 
-{% hint style="danger" %}
-Xoá hẳn không hoàn tác được. Phần mềm xoá luôn ảnh mặt và vân tay trong bản gốc. Chỉ cần ngừng cho người đó ra vào thì dùng [Khoá ra vào](khoa-va-mo-lai.md), mở lại được.
+{% hint style="info" %}
+Xoá hẳn gỡ người đó khỏi cả hai máy, nhưng phần mềm vẫn giữ thông tin, ảnh mặt và vân tay trong **Thùng rác**, khôi phục được bất cứ lúc nào cho tới khi bạn xoá vĩnh viễn. Chỉ cần tạm ngừng cho người đó ra vào thì dùng [Khoá ra vào](khoa-va-mo-lai.md).
 {% endhint %}
 
 1. Mở người cần xoá từ tab **Người dùng** (xem [Tìm và xem một người](tim-va-xem.md)). Người đã khoá cũng xoá hẳn được.
-2. Bấm **Xoá hẳn**. Hộp hỏi **Xoá hẳn** kèm tên người đó hiện ra, nói rõ phần mềm sẽ gỡ người này khỏi cả hai máy và xoá luôn mặt, vân tay trong phần mềm, không khôi phục lại được.
+2. Bấm **Xoá hẳn**. Hộp hỏi **Xoá hẳn** kèm tên người đó hiện ra, nói rõ phần mềm sẽ gỡ người này khỏi cả hai máy và giữ thông tin, ảnh mặt, vân tay trong Thùng rác.
 3. Bấm **Xoá hẳn** để xác nhận, hoặc **Thôi** để huỷ. Phần mềm quay về danh sách và người đó không còn ở đó.
 
 ## Điều gì xảy ra sau khi xoá
 
-- **Trong phần mềm:** người đó biến mất ngay khỏi danh sách, cùng ảnh mặt và mẫu vân tay trong bản gốc.
+- **Trong phần mềm:** người đó biến mất khỏi danh sách và chuyển vào **Thùng rác** cùng ảnh mặt và mẫu vân tay.
 - **Trên máy:** phần mềm xếp việc gỡ người đó vào hàng đợi của từng máy rồi đọc lại từ máy để chắc chắn đã gỡ. Máy mất kết nối thì việc gỡ chờ và làm khi máy có mạng lại, trong lúc đó người đó vẫn còn trên máy đó.
-- **Mã nhân viên:** mã vừa xoá chưa dùng lại được cho đến khi máy gỡ xong. Thêm người mới với mã đó sẽ báo **Mã này vừa xoá và đang chờ gỡ khỏi máy. Đợi máy gỡ xong hoặc dùng mã khác.**
+- **Mã nhân viên:** mã vừa xoá chưa dùng lại được cho đến khi máy gỡ xong. Thêm người mới với mã đó sẽ báo **Mã này vừa xoá và đang chờ gỡ khỏi máy. Đợi máy gỡ xong hoặc dùng mã khác.** Máy gỡ xong thì mã đó lại trống: nếu là mã lớn nhất, phần mềm gợi ý lại nó cho người mới.
 - **Bản sao lưu cũ:** các bản sao lưu đã tạo trước đó vẫn có thể chứa dữ liệu của người này. Xem [Sao lưu và khôi phục](../may-cham-cong/sao-luu-khoi-phuc.md).
 
-Phần mềm **không có thùng rác**: người đã xoá không nằm ở đâu để lấy lại. Dấu vết duy nhất là các dòng **Xoá khỏi máy** kèm mã nhân viên trong **Nhật ký**. Muốn lấy lại chỉ có cách khôi phục một bản sao lưu cũ, và việc này thay toàn bộ dữ liệu bằng bản đó.
+## Thùng rác: khôi phục hoặc xoá vĩnh viễn
 
-Khác với khoá ra vào, xoá hẳn gỡ khỏi máy mà không giữ lại gì, kể cả khi máy đang có ảnh mặt hay vân tay mà phần mềm không có bản sao.
+Ở tab **Người dùng**, khi có người đã xoá, cạnh các bộ lọc có nút **Thùng rác** kèm số người. Bấm vào để xem danh sách: tên, mã nhân viên, nhóm, lúc xoá, và người đó có ảnh mặt, mấy vân tay.
+
+- **Khôi phục:** đưa người đó lại vào danh sách với ảnh mặt và vân tay, rồi gửi lại xuống cả hai máy. Nếu mã cũ đã có người khác dùng, hoặc máy chưa gỡ xong mã đó, phần mềm hỏi một mã mới và gợi ý sẵn số kế tiếp.
+- **Xoá vĩnh viễn:** xoá luôn thông tin, ảnh mặt và vân tay khỏi phần mềm. Không lấy lại được.
+- **Dọn sạch thùng rác:** xoá vĩnh viễn tất cả người trong thùng rác.
+
+Thùng rác không tự xoá theo thời gian: người đã xoá nằm đó cho tới khi bạn xoá vĩnh viễn. Mọi thao tác chuyển vào thùng rác, khôi phục và xoá vĩnh viễn đều được ghi vào **Nhật ký**.
+
+Người mới thêm mà chưa có khuôn mặt hay vân tay thì không vào thùng rác: phần mềm bỏ luôn, vì chưa có gì trên máy.
+
+Khác với khoá ra vào, xoá hẳn gỡ người đó khỏi máy mà không để lại gì trên máy, kể cả khi máy đang có ảnh mặt hay vân tay mà phần mềm không có bản sao.
 
 ## Nên xoá khi nào
 

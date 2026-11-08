@@ -2,6 +2,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Acs.Core.Enroll;
 using Acs.Core.Host;
 using Acs.Core.Model;
 using Acs.Core.Security;
@@ -790,6 +791,51 @@ public sealed class AppHostTests : IAsyncDisposable
         var last = r.GetProperty("checks").EnumerateArray().Single(c => c.GetProperty("name").GetString() == "Lần chụp/quét lỗi gần nhất");
         Assert.Equal("warn", last.GetProperty("state").GetString());
         Assert.Contains(AppHost.CaptureFaceAction, last.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task trash_lists_restores_and_empties_deleted_people()
+    {
+        var h = NewHost();
+        await AddDevice(h);
+        await Create(h, "1001", "An");
+        await Create(h, "1002", "Bình");
+        await h.HandleAsync("people.delete", J("""{"employeeNo":"1001"}"""));
+        await h.HandleAsync("people.delete", J("""{"employeeNo":"1002"}"""));
+
+        var list = Out(await h.HandleAsync("trash.list", J()));
+        Assert.Equal(2, list.GetArrayLength());
+        var an = list.EnumerateArray().Single(t => t.GetProperty("employeeNo").GetString() == "1001");
+        Assert.True(an.GetProperty("hasFace").GetBoolean());
+        Assert.Equal(EnrollService.NumberBusyMessage, an.GetProperty("blocked").GetString());   // devices still removing it
+
+        h.Db.Jobs.ListOpen().ToList().ForEach(j => { h.Db.Jobs.MarkRunning(j, DateTime.UtcNow); h.Db.Jobs.MarkDone(j.Id, DateTime.UtcNow); });
+        var id = an.GetProperty("id").GetInt64();
+        var back = Out(await h.HandleAsync("trash.restore", J($$"""{"id":{{id}}}""")));
+        Assert.Equal("An", back.GetProperty("fullName").GetString());
+        Assert.Equal(1, Out(await h.HandleAsync("trash.list", J())).GetArrayLength());
+
+        Assert.Equal(1, Out(await h.HandleAsync("trash.empty", J())).GetInt32());
+        Assert.Equal(0, Out(await h.HandleAsync("trash.list", J())).GetArrayLength());
+    }
+
+    [Fact]
+    public async Task a_draft_can_be_renumbered_and_discarded_and_start_drops_drafts_left_behind()
+    {
+        var h = NewHost();
+        await AddDevice(h);
+        await Create(h, "1001", "An", face: false);
+        var moved = Out(await h.HandleAsync("people.renumber", J("""{"employeeNo":"1001","newEmployeeNo":"0990"}""")));
+        Assert.Equal("0990", moved.GetProperty("employeeNo").GetString());
+        Assert.True(Out(await h.HandleAsync("people.discardDraft", J("""{"employeeNo":"0990"}"""))).GetBoolean());
+        Assert.Equal(0, Out(await h.HandleAsync("people.list", J())).GetArrayLength());
+
+        await Create(h, "1002", "Bình", face: false);   // left behind: the app was closed mid-way
+        await Create(h, "1003", "Cường");
+        await h.StopAsync();
+        var again = NewHost();
+        await again.StartAsync();
+        Assert.Equal(["1003"], Out(await again.HandleAsync("people.list", J())).EnumerateArray().Select(r => r.GetProperty("employeeNo").GetString()).ToArray());
     }
 
     [Fact]

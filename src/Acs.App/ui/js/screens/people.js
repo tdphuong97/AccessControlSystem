@@ -88,7 +88,7 @@
   }
 
   function render(host, params, ctx) {
-    let filter = 'all', query = '', group = '', groups = [], noGroup = 0, rows = [], counts = null, seq = 0, timer = 0, size = F.pageSize(savedSize()), page = 1, sort = F.sortMode(savedSort());
+    let filter = 'all', query = '', group = '', groups = [], noGroup = 0, trashN = 0, rows = [], counts = null, seq = 0, timer = 0, size = F.pageSize(savedSize()), page = 1, sort = F.sortMode(savedSort());
     host.innerHTML = '<div class="pad stack">' +
       '<div id="p-upd"></div><div id="p-imp"></div><div id="p-rec"></div><div id="p-stale"></div>' +
       '<div class="pagehead"><div><h1 class="h1">Người dùng</h1><p class="sub" id="p-count"></p></div>' +
@@ -131,7 +131,7 @@
         const on_ = id === filter;
         return '<button type="button" class="chip' + (on_ ? ' on' : '') + '" data-chip="' + id + '" aria-pressed="' + on_ + '">' + esc(text) +
           '<span class="chip-n">' + counts[id] + '</span></button>';
-      }).join('');
+      }).join('') + (trashN ? '<a class="chip" href="#/trash">' + icon('trash', 16) + 'Thùng rác<span class="chip-n">' + trashN + '</span></a>' : '');
     }
 
     // "Công ty": only once someone has a group. A group that no longer has anyone falls back to everyone.
@@ -180,6 +180,7 @@
         notSynced: all.filter((r) => r.sync !== 'ok' && !r.locked).length };
       groups = F.groupList(all);
       noGroup = all.filter((r) => !r.groupName).length;
+      try { trashN = (await ACS.bridge.call('trash.list')).length; } catch (e) { trashN = 0; }
     }
 
     async function load() {

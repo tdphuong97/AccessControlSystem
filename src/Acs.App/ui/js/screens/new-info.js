@@ -9,7 +9,7 @@
     const emp = params.emp || null;
     const devs = W.currentDevices();
     const devNames = devs.map((d) => d.name);
-    const s = { fullName: '', employeeNo: '', groupName: '', groupTyped: '', groupPicked: false, limited: false, validTo: '', err: '', field: '', busy: false, groups: [], ready: false };
+    const s = { draft: false, fullName: '', employeeNo: '', groupName: '', groupTyped: '', groupPicked: false, limited: false, validTo: '', err: '', field: '', busy: false, groups: [], ready: false };
 
     host.innerHTML = '<div class="wiz"><p class="muted">Đang tải…</p></div>';
 
@@ -27,8 +27,8 @@
         (s.err && s.field === 'name' ? ' aria-invalid="true"' : '') + '>' +
         '<div class="hint">Tối đa 32 ký tự, máy chấm công không nhận tên dài hơn.</div></div>' +
         '<div class="frow2"><div><label class="field-lbl" for="ma-nv">Mã nhân viên</label>' +
-        '<input id="ma-nv" class="input in48 in-mono" type="text" inputmode="numeric" autocomplete="off" value="' + esc(s.employeeNo) + '"' + (emp ? ' readonly' : '') + '>' +
-        '<div class="hint">' + (emp ? 'Mã không đổi được sau khi tạo.' : 'Tự gợi ý — sửa nếu người này đã có mã.') + '</div></div>' +
+        '<input id="ma-nv" class="input in48 in-mono" type="text" inputmode="numeric" autocomplete="off" value="' + esc(s.employeeNo) + '"' + (emp && !s.draft ? ' readonly' : '') + '>' +
+        '<div class="hint">' + (emp && !s.draft ? 'Mã không đổi được: người này đã được gửi xuống máy.' : emp ? 'Sửa được cho tới khi có khuôn mặt hoặc vân tay.' : 'App gợi ý số kế tiếp, gõ số khác nếu cần.') + '</div></div>' +
         '<div><label class="field-lbl" for="nhom">Nhóm / công ty <span class="muted fw5" style="font-weight:400">(không bắt buộc)</span></label>' +
         ACS.ui.groupField('nhom', s.groupName, s.groups, 'input in48', s.groupTyped) + '</div></div>' +
         '<fieldset class="fieldset"><legend>Được ra vào đến khi nào?</legend><div class="radios">' +
@@ -74,6 +74,7 @@
         if (!ctx.alive()) return;
         s.groups = ACS.fmt.groupList(list).map((g) => g.name);
         s.employeeNo = String(nextNo);
+        if (person) s.draft = !person.faceDataUrl && !person.fingers.length && (person.devices || []).every((d) => d.state === 'draft');
         if (person) { s.fullName = person.fullName; s.groupName = person.groupName || ''; s.groupPicked = true; s.limited = !!person.validTo; s.validTo = person.validTo || ''; }
         s.ready = true;
         s.focus = '#ho-ten';
@@ -108,10 +109,12 @@
       const groupName = ACS.ui.groupValue(host, 'nhom') || null;
       const validTo = s.limited ? s.validTo : null;
       try {
-        if (emp) await ACS.bridge.call('people.update', { employeeNo: emp, fullName: name, groupName, validTo });
+        let target = emp || no;
+        if (emp && s.draft && no !== emp) await ACS.bridge.call('people.renumber', { employeeNo: emp, newEmployeeNo: no });
+        if (emp) await ACS.bridge.call('people.update', { employeeNo: target, fullName: name, groupName, validTo });
         else await ACS.bridge.call('people.create', { fullName: name, employeeNo: no, groupName, validTo });
         if (!ctx.alive()) return;
-        ACS.router.go('new/face', emp || no);
+        ACS.router.go('new/face', target);
       } catch (e) {
         if (!ctx.alive()) return;
         s.busy = false; s.err = ACS.ui.errMessage(e); s.field = ''; draw();
