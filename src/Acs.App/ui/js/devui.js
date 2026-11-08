@@ -52,5 +52,45 @@
       ' · ' + r.users + ' người trên máy<div class="small">Chụp mặt qua mạng: ' + yn(r.canCaptureFace) + ' · Quét vân tay qua mạng: ' + yn(r.canCaptureFinger) + '</div></div></div>';
   }
 
-  ACS.devui = { formHtml, readForm, testHtml };
+  // "Chẩn đoán": devices.diagnose checks the device step by step and says what to do for each problem.
+  const DIAG = { ok: ['ok', 'checkCircle'], warn: ['wait', 'clock'], err: ['err', 'alertCircle'] };
+  function diagHtml(r) {
+    const bad = r.checks.some((c) => c.state === 'err'), warn = r.checks.some((c) => c.state === 'warn');
+    return '<div class="alert ' + (bad ? 'alert-err' : warn ? 'alert-wait' : 'notice-ok') + '" role="status">' +
+      icon(bad ? 'alertCircle' : warn ? 'clock' : 'checkCircle', 18) + '<span class="fw6">' + esc(r.summary) + '</span></div>' +
+      '<ul class="diag">' + r.checks.map((c) => {
+        const [cls, ic] = DIAG[c.state] || DIAG.warn;
+        return '<li class="diag-row"><span class="st st-' + cls + '">' + icon(ic, 20) + '</span><div class="diag-b"><div class="fw6">' + esc(c.name) + '</div>' +
+          '<div class="small">' + esc(c.message) + '</div>' + (c.fix ? '<div class="small diag-fix"><strong>Cách xử lý:</strong> ' + esc(c.fix) + '</div>' : '') + '</div></li>';
+      }).join('') + '</ul>';
+  }
+  function diagnose(deviceId) {
+    const d = ((ACS.state && ACS.state.devices) || []).find((x) => x.id === deviceId);
+    const html = '<div class="dlg-body"><h2 class="dlg-title">Chẩn đoán ' + esc(d ? d.name : 'máy chấm công') + '</h2><div data-diag></div>' +
+      '<div class="dlg-actions"><button type="button" class="btn" data-again>' + icon('refresh', 18) + 'Chẩn đoán lại</button>' +
+      '<button type="button" class="btn btn-primary" data-no>Đóng</button></div></div>';
+    return ACS.ui.dialog(html, {
+      onOpen(dlg) {
+        dlg.classList.add('dlg-wide');
+        const box = dlg.querySelector('[data-diag]'), again = dlg.querySelector('[data-again]');
+        const run = async () => {
+          again.disabled = true;
+          box.innerHTML = '<div class="alert alert-info" role="status">' + icon('spinner', 18).replace('class="ic"', 'class="ic xoay"') +
+            '<span>Đang kiểm tra máy: kết nối, đăng nhập, camera, việc gửi… (vài giây)</span></div>';
+          try { box.innerHTML = diagHtml(await ACS.bridge.call('devices.diagnose', { id: deviceId })); }
+          catch (e) { box.innerHTML = '<div class="alert alert-err" role="alert">' + icon('alertCircle', 18) + '<span>' + esc(ACS.ui.errMessage(e)) + '</span></div>'; }
+          again.disabled = false;
+        };
+        dlg.querySelector('[data-no]').addEventListener('click', () => dlg.finish(null));
+        again.addEventListener('click', run);
+        run();
+      },
+    });
+  }
+  document.addEventListener('click', (ev) => {
+    const b = ev.target.closest && ev.target.closest('[data-act="diagnose"][data-dev]');
+    if (b) diagnose(+b.dataset.dev);
+  });
+
+  ACS.devui = { formHtml, readForm, testHtml, diagnose };
 })();

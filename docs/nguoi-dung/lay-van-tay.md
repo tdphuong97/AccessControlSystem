@@ -85,9 +85,17 @@ Chất lượng dưới 40 nên phần mềm không lưu ngón này. Lau sạch 
 
 <details>
 
+<summary>Máy chờ khoảng 15 giây mà không thấy ngón tay</summary>
+
+Sau khi bấm quét, máy chỉ chờ ngón tay khoảng 15 giây. Bấm quét lại, khi màn hình máy báo thì đặt ngón tay ngay giữa cảm biến và giữ yên tới khi xong. Lỗi lặp lại thì bấm **Chẩn đoán máy** ngay trong thông báo lỗi.
+
+</details>
+
+<details>
+
 <summary>Máy chưa quét được vân tay. Đặt ngón tay lên cảm biến, giữ yên rồi bấm lại.</summary>
 
-Máy không đọc được ngón trong thời gian chờ. Đặt ngón lên cảm biến sớm hơn và bấm lại.
+Máy không đọc được ngón. Lau ngón tay nếu quá khô hoặc ướt, đặt ngay giữa cảm biến và bấm lại.
 
 </details>
 

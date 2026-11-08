@@ -249,6 +249,7 @@ public sealed partial class AppHost
         "devices.list" => DeviceViews(),
         "devices.save" => DevicesSave(a),
         "devices.test" => await DevicesTest(a),
+        "devices.diagnose" => await DevicesDiagnose(a),
         "devices.delete" => DevicesDelete(a),
         "reconcile.plan" => await ReconcilePlanAsync(),
         "reconcile.apply" => await ReconcileApplyAsync(a),

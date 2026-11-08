@@ -39,7 +39,9 @@ Người mới luôn được thêm vào tất cả các máy. Khung xanh **Đư
 {% step %}
 ### Lưu và sang bước khuôn mặt
 
-Bấm **Tiếp: Chụp khuôn mặt**. Phần mềm lưu người này vào bản gốc, xếp việc gửi xuống cả hai máy vào hàng đợi, rồi mở bước **Khuôn mặt**.
+Bấm **Tiếp: Chụp khuôn mặt**. Phần mềm lưu người này vào bản gốc rồi mở bước **Khuôn mặt**. Lúc này **chưa gửi gì xuống máy**: phần mềm chỉ gửi người này xuống cả hai máy khi đã có khuôn mặt hoặc ít nhất một vân tay, để một lần đăng ký bỏ dở hay bị lỗi không để lại người "trống" trên máy.
+
+Nút **Tiếp** và **Huỷ** luôn nằm ở đáy cửa sổ, không cần cuộn xuống.
 {% endstep %}
 
 {% step %}
@@ -48,6 +50,8 @@ Bấm **Tiếp: Chụp khuôn mặt**. Phần mềm lưu người này vào bả
 Chụp hoặc chọn ảnh khuôn mặt, rồi bấm **Tiếp: Lấy vân tay**. Chi tiết ở [Chụp khuôn mặt](chup-khuon-mat.md).
 
 Muốn bỏ qua, bấm **Bỏ qua bước này**. Bạn chụp lại sau được ở màn hình của người đó (xem [Sửa thông tin một người](sua-thong-tin.md)).
+
+Bỏ qua cả khuôn mặt lẫn vân tay thì bước cuối báo **Chưa gửi … xuống máy chấm công**, kèm nút **Chụp khuôn mặt** và **Quét vân tay** để làm tiếp. Trong danh sách, người này có nhãn **Chưa gửi · cần mặt hoặc vân tay** cho tới khi có một trong hai.
 {% endstep %}
 
 {% step %}

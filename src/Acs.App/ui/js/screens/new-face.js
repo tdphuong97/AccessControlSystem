@@ -18,6 +18,11 @@
     const devName = () => { const d = devs.find((x) => x.id === s.devId); return d ? d.name : 'máy chấm công'; };
 
     function stage() {
+      if (s.tt === 'dang' && s.capturing && s.live) {
+        return '<div class="stage-photo stage-live"><img id="live-img" alt="Hình trực tiếp từ camera của ' + esc(devName()) + ' trong lúc chụp" src="' + esc(s.live) + '">' +
+          '<span class="badge-live"><i class="live-dot"></i>Đang chụp · ' + esc(devName()) + '</span>' +
+          '<span class="live-cap" role="status">' + esc(s.busyText) + '</span></div>';
+      }
       if (s.tt === 'dang') {
         return '<div class="stage stage-busy"><span class="stage-pulse nhip">' + icon(CAMERA, 52, 1.5) + '</span><div role="status">' +
           '<div class="scan-t" style="color:var(--accent-ink)">Đang chụp…</div><div class="scan-s">' + esc(s.busyText) + '</div></div></div>';
@@ -46,7 +51,7 @@
         (done ? '<button type="button" class="btn btn-xl btn-outline-xl" data-act="capture"' + off + '>' + icon('refresh', 20) + 'Chụp lại</button>'
           : '<button type="button" class="btn btn-primary btn-xl' + (s.busy ? ' is-busy' : '') + '" data-act="capture"' + off + '>' +
             icon(CAMERA, 22) + (s.busy ? 'Đang chụp…' : 'Chụp ngay') + '</button>') +
-        '<div id="err">' + W.errBox(s.err) + '</div>' +
+        '<div id="err">' + W.errDiag(s.err, s.devId) + '</div>' +
         '<p class="small" style="margin:0;font-size:14px;color:var(--text-2)">Mời người này đứng trước máy, cách khoảng nửa mét, nhìn thẳng vào camera. Máy tự chụp và app gửi ảnh lên cả ' + (devs.length || 2) + ' máy.</p></div>' +
         '<div class="or">hoặc</div><div class="alt-btns">' +
         '<button type="button" class="btn" data-act="webcam"' + off + '>' + icon('webcam', 18) + 'Webcam máy tính</button>' +
@@ -72,7 +77,7 @@
         if (!ctx.alive()) return;
         s.tt = s.img ? 'xong' : 'cho'; s.err = ACS.ui.errMessage(e);
       }
-      s.busy = false; draw();
+      s.busy = false; s.capturing = false; draw();
     }
 
     const save = (dataUrl, source) => ACS.bridge.call('face.save', { employeeNo: emp, imageDataUrl: dataUrl, source });
@@ -143,12 +148,14 @@
       liveOn = true;
       try {
         while (ctx.alive()) {
-          if (s.tt !== 'cho' || s.busy || document.hidden || !s.devId) { await sleep(400); continue; }
+          // Before the capture and during it (the device camera keeps answering while it captures).
+          const wanted = s.tt === 'cho' ? !s.busy : s.tt === 'dang' && s.capturing;
+          if (!wanted || document.hidden || !s.devId) { await sleep(400); continue; }
           const dev = s.devId;
           try {
             const r = await ACS.bridge.call('face.preview', { deviceId: dev });
             if (!ctx.alive()) return;
-            if (r && r.imageDataUrl && s.tt === 'cho' && dev === s.devId) {
+            if (r && r.imageDataUrl && (s.tt === 'cho' || s.capturing) && dev === s.devId) {
               const img = host.querySelector('#live-img');
               s.live = r.imageDataUrl; s.liveErr = '';
               if (img) img.src = r.imageDataUrl; else redrawStage();
@@ -171,7 +178,7 @@
 
     on(host, 'click', '[data-act]', (el) => {
       const act = el.dataset.act;
-      if (act === 'capture') run('Mời nhìn thẳng vào camera của ' + devName(), () => ACS.bridge.call('face.capture', { employeeNo: emp, deviceId: s.devId }));
+      if (act === 'capture') { if (!s.busy) s.capturing = true; run('Mời nhìn thẳng vào camera của ' + devName(), () => ACS.bridge.call('face.capture', { employeeNo: emp, deviceId: s.devId })); }
       else if (act === 'webcam') openWebcam();
       else if (act === 'file') { const f = host.querySelector('#f-file'); if (f) f.click(); }
     });

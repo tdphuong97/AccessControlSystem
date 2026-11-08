@@ -17,6 +17,7 @@
 
   function syncCell(r, n) {
     if (r.locked) return '<span class="pill pill-grey">Đã khoá ra vào</span>';
+    if (r.sync === 'draft') return '<span class="pill pill-grey">' + icon('clock', 16) + 'Chưa gửi · cần mặt hoặc vân tay</span>';
     if (r.sync === 'ok') return '<span class="st st-ok">' + icon('check', 18) + 'Đủ ' + n + ' máy</span>';
     if (r.sync === 'error') return '<span class="pill pill-err">' + icon('alertCircle', 16) + 'Lỗi gửi, mở để xem</span>';
     const names = (r.waitingDevices || []).join(', ');

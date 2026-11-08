@@ -34,11 +34,53 @@ public sealed class EnrollServiceTests : IAsyncDisposable
     }
 
     [Fact]
-    public void Create_stores_and_enqueues_upsert_on_every_device()
+    public void Create_stores_the_person_but_sends_nothing_before_a_face_or_finger()
     {
         var p = _svc.CreatePerson(new NewPerson("  Nguyễn An ", "2001", "Kho", null));
         Assert.Equal("Nguyễn An", p.FullName);
         Assert.NotNull(p.GroupId);
+        Assert.Empty(Jobs(_d1));
+        Assert.Empty(Jobs(_d2));
+    }
+
+    [Fact]
+    public void The_first_face_sends_the_person_then_the_face_and_a_second_face_only_the_face()
+    {
+        _svc.CreatePerson(new NewPerson("An", "2001", null, null));
+        _svc.SaveFace("2001", [0xFF, 0xD8, 0xFF, 0xD9], BiometricSource.File);
+        foreach (var d in new[] { _d1, _d2 })
+            Assert.Equal([JobKind.UpsertUser, JobKind.SetFace], Jobs(d).OrderBy(j => j.Id).Select(j => j.Kind).ToArray());
+
+        Drain(_d1); Drain(_d2);
+        _svc.SaveFace("2001", [0xFF, 0xD8, 0xFF, 0xD9], BiometricSource.File);
+        Assert.Equal([JobKind.SetFace], Jobs(_d1).Select(j => j.Kind).ToArray());
+    }
+
+    [Fact]
+    public async Task The_first_finger_sends_the_person_then_the_finger()
+    {
+        _svc.CreatePerson(new NewPerson("An", "2001", null, null));
+        _h.Factory.For(_d1).NextFinger = new CapturedFinger(SyncHarness.Tpl("ModelA", "F1"), 80);
+        await _svc.CaptureFingerAsync("2001", _d1, 1, CancellationToken.None);
+        foreach (var d in new[] { _d1, _d2 })
+            Assert.Equal([JobKind.UpsertUser, JobKind.SetFinger], Jobs(d).OrderBy(j => j.Id).Select(j => j.Kind).ToArray());
+    }
+
+    [Fact]
+    public void Editing_a_person_not_sent_yet_sends_nothing()
+    {
+        _svc.CreatePerson(new NewPerson("An", "2001", null, null));
+        _svc.UpdatePerson(new PersonEdit("2001", "An Nguyễn", null, null));
+        Assert.Empty(Jobs(_d1));
+        Assert.Empty(Jobs(_d2));
+    }
+
+    [Fact]
+    public void Editing_a_person_already_on_a_device_sends_the_change_even_without_face_or_finger()
+    {
+        _svc.CreatePerson(new NewPerson("An", "2001", null, null));
+        _h.Db.Jobs.SetState(new DeviceStateRecord("2001", _d1, true, true, false, new HashSet<int>(), new HashSet<int>(), _h.Now));
+        _svc.UpdatePerson(new PersonEdit("2001", "An Nguyễn", null, null));
         Assert.Contains(Jobs(_d1), j => j.Kind == JobKind.UpsertUser);
         Assert.Contains(Jobs(_d2), j => j.Kind == JobKind.UpsertUser);
     }

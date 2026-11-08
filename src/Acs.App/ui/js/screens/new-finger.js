@@ -78,7 +78,7 @@
         '<div class="got-box"><strong>Đã lấy ' + s.got.length + ' ngón:</strong> ' + esc(gotList) + '</div></div>' +
         '<div class="fin-scan"><div><label class="field-lbl" for="may-quet">Quét ở máy</label>' + W.deviceSelect('may-quet', devs, s.devId).replace('<select', '<select' + (s.busy ? ' disabled' : '')) + '</div>' +
         '<div class="scan-mid">' + ring + '<div class="scan-status" role="status">' + status + '</div></div>' +
-        '<div id="err">' + W.errBox(s.err) + '</div>' + btn + '</div></div>' +
+        '<div id="err">' + W.errDiag(s.err, s.devId) + '</div>' + btn + '</div></div>' +
         '<div class="wfoot"><a class="btn btn-48" href="' + ACS.router.href('new/face', emp) + '">' + icon('chevronLeft', 18) + 'Quay lại</a>' +
         '<a class="btn btn-primary btn-next" href="' + ACS.router.href('new/done', emp) + '">Tiếp: Hoàn tất' + icon('chevronRight', 18) + '</a></div></div>';
     }

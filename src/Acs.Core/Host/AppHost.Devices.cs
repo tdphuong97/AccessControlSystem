@@ -142,6 +142,108 @@ public sealed partial class AppHost
         }
     }
 
+    public const string DiagAllGood = "Máy hoạt động bình thường.";
+
+    /// <summary>
+    /// "Chẩn đoán": checks one device step by step (login, what it can do over the network, camera, the send queue, the
+    /// last failed capture) and says what to do for each problem. Stops at the first step the rest depends on.
+    /// Never logs in to a device paused for a wrong password, and never runs beside a capture on that device.
+    /// </summary>
+    private async Task<DiagReport> DevicesDiagnose(JsonElement a)
+    {
+        var dev = Db.Devices.Get(Int(a, "id")) ?? throw new HostException("Không tìm thấy máy chấm công.");
+        var checks = new List<DiagCheck>();
+        DiagReport Done()
+        {
+            var bad = checks.FirstOrDefault(c => c.State == "err");
+            var summary = bad is not null ? $"Có vấn đề: {bad.Name.ToLowerInvariant()}."
+                : checks.Any(c => c.State == "warn") ? "Máy dùng được, có điểm cần để ý." : DiagAllGood;
+            return new DiagReport(dev.Id, dev.Name, summary, checks);
+        }
+
+        if (dev.AuthPaused)
+        {
+            checks.Add(new("Kết nối và đăng nhập", "err", "App đang dừng gửi cho máy này vì máy báo sai mật khẩu.",
+                "Bấm Sửa mật khẩu, nhập đúng mật khẩu của máy rồi Lưu máy. Không thử nhiều lần: máy khoá đăng nhập sau 5 lần sai."));
+            return Done();
+        }
+        if (Enroll.IsCapturing(dev.Id))
+        {
+            checks.Add(new("Máy đang bận", "warn", "Máy đang chụp mặt hoặc quét vân tay.", "Đợi xong rồi bấm Chẩn đoán lại."));
+            return Done();
+        }
+
+        var hik = _factory.Create(dev);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            var info = await hik.GetDeviceInfoAsync(_cts.Token);
+            Db.Devices.SetSeen(dev.Id, info, Now);
+            checks.Add(new("Kết nối và đăng nhập", sw.ElapsedMilliseconds > 3000 ? "warn" : "ok",
+                $"Máy trả lời sau {sw.ElapsedMilliseconds} ms: {info.Model}, firmware {info.Firmware}.",
+                sw.ElapsedMilliseconds > 3000 ? "Mạng tới máy đang chậm. Kiểm tra dây mạng hoặc switch giữa máy tính và máy." : null));
+        }
+        catch (HikAuthException ex)
+        {
+            AuthGuard.Pause(Db, dev.Id, Sync);
+            Emit("devices.changed", DeviceViews());
+            checks.Add(new("Kết nối và đăng nhập", "err", ex.Message, "Bấm Sửa mật khẩu, nhập đúng mật khẩu của máy rồi Lưu máy."));
+            return Done();
+        }
+        catch (HikException ex)
+        {
+            checks.Add(new("Kết nối và đăng nhập", "err", ex.Message,
+                $"Kiểm tra máy có điện, dây mạng cắm chắc, và máy tính này cùng mạng với địa chỉ {dev.Host}. Xong bấm Chẩn đoán lại."));
+            return Done();
+        }
+
+        try
+        {
+            var caps = await hik.GetCapabilitiesAsync(_cts.Token);
+            checks.Add(caps.CaptureFace == false
+                ? new("Chụp mặt qua mạng", "err", "Máy không cho chụp mặt qua mạng.", "Chụp bằng webcam máy tính hoặc chọn ảnh có sẵn, hoặc cập nhật firmware máy.")
+                : new("Chụp mặt qua mạng", "ok", "Máy cho chụp mặt qua mạng.", null));
+            checks.Add(caps.CaptureFingerprint == false
+                ? new("Quét vân tay qua mạng", "err", "Máy không cho quét vân tay qua mạng.", "Quét vân tay ở máy khác có cảm biến, hoặc cập nhật firmware máy.")
+                : new("Quét vân tay qua mạng", "ok", "Máy cho quét vân tay qua mạng.", null));
+        }
+        catch (HikException ex)
+        {
+            checks.Add(new("Chụp mặt và quét vân tay qua mạng", "warn", ex.Message, "Vẫn thử chụp, quét được; nếu lỗi thì khởi động lại máy."));
+        }
+
+        sw.Restart();
+        try
+        {
+            var frame = await hik.SnapshotAsync(_cts.Token);
+            checks.Add(new("Camera", "ok", $"Camera gửi hình ({frame.Length / 1024} KB, {sw.ElapsedMilliseconds} ms).", null));
+        }
+        catch (HikException ex)
+        {
+            checks.Add(new("Camera", "warn", "Không lấy được hình camera: " + ex.Message,
+                "Vẫn bấm Chụp ngay được. Nếu chụp cũng lỗi, khởi động lại máy chấm công."));
+        }
+
+        var open = Db.Jobs.ListOpen(dev.Id);
+        var failed = open.Where(j => j.Status == JobStatus.Failed).ToList();
+        checks.Add(failed.Count > 0
+            ? new("Việc gửi xuống máy", "err", $"{failed.Count} việc gửi bị lỗi, ví dụ: {failed[0].ErrorMessage}",
+                "Ở tab Người dùng, bấm bộ lọc Chưa đủ 2 máy, mở người có dấu Lỗi gửi để xem cách xử lý, rồi bấm Thử lại.")
+            : open.Count > 0
+                ? new("Việc gửi xuống máy", "warn", $"Còn {open.Count} việc đang chờ gửi.", "App tự gửi tiếp. Nếu số này không giảm sau vài phút, bấm Thử lại trên thẻ máy.")
+                : new("Việc gửi xuống máy", "ok", "Không có việc nào đang chờ hay bị lỗi.", null));
+
+        var lastCapture = Db.Log.List(null, dev.Id, 200)
+            .FirstOrDefault(l => l.Action is CaptureFaceAction or CaptureFingerAction && l.At > Now.AddDays(-1));
+        if (lastCapture is { Ok: false })
+            checks.Add(new("Lần chụp/quét lỗi gần nhất", "warn",
+                $"{lastCapture.Action} lúc {lastCapture.At.ToLocalTime():HH:mm}: {lastCapture.Message}",
+                lastCapture.Action == CaptureFingerAction
+                    ? "Bấm Quét, khi máy báo thì đặt ngón tay ngay giữa cảm biến và giữ yên. Ngón khô quá hoặc ướt quá thì lau rồi quét lại."
+                    : "Mời đứng thẳng trước camera, cách khoảng nửa mét, đủ sáng, bỏ khẩu trang, kính râm, mũ."));
+        return Done();
+    }
+
     private object? DevicesDelete(JsonElement a)
     {
         Db.Devices.Delete(Int(a, "id"));

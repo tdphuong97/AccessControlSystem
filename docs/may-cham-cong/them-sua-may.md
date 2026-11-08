@@ -96,6 +96,20 @@ Tên máy, **Số cửa** và hai ô vai trò đổi tự do, không cần So kh
 {% endtab %}
 {% endtabs %}
 
+## Chẩn đoán máy
+
+Khi một máy chụp, quét hoặc gửi bị lỗi mà chưa rõ vì sao, bấm **Chẩn đoán** trên thẻ máy, hoặc **Chẩn đoán máy** ngay trong thông báo lỗi lúc chụp mặt, quét vân tay. Phần mềm kiểm tra lần lượt và đánh dấu từng mục đạt (xanh), cần để ý (vàng) hoặc lỗi (đỏ), kèm **Cách xử lý**:
+
+| Mục | Phần mềm kiểm tra |
+| --- | --- |
+| **Kết nối và đăng nhập** | Máy có trả lời không, nhanh hay chậm, mật khẩu có đúng không. Lỗi ở đây thì dừng, các mục sau phụ thuộc vào nó. |
+| **Chụp mặt qua mạng**, **Quét vân tay qua mạng** | Máy có nhận lệnh chụp, quét từ phần mềm không. |
+| **Camera** | Máy có gửi hình camera không (dùng cho hình trực tiếp). |
+| **Việc gửi xuống máy** | Còn việc đang chờ hay bị lỗi không. |
+| **Lần chụp/quét lỗi gần nhất** | Lỗi chụp mặt, quét vân tay trong 24 giờ qua, kèm câu trả lời của máy. |
+
+Bấm **Chẩn đoán lại** sau khi đã xử lý. Chẩn đoán không đổi gì trên máy. Máy đang dừng vì sai mật khẩu thì phần mềm không đăng nhập thử lại, chỉ nhắc sửa mật khẩu.
+
 ## Xoá máy
 
 1. Trên thẻ máy, bấm **Xoá máy**.

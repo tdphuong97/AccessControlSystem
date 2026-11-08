@@ -6,6 +6,15 @@ description: Các phiên bản đã phát hành và thay đổi trong từng b�
 
 {% updates format="full" %}
 {% update date="2026-11-08" %}
+## Phiên bản 0.9.7
+
+* Thêm người mới: phần mềm chỉ gửi người đó xuống máy khi đã có khuôn mặt hoặc một vân tay. Đăng ký bỏ dở hay bị lỗi không còn để lại người "trống" trên máy; trong danh sách họ có nhãn **Chưa gửi · cần mặt hoặc vân tay**.
+* Hình trực tiếp từ camera máy vẫn hiện trong lúc máy đang chụp.
+* Mới: **Chẩn đoán** máy, trên thẻ máy và ngay trong thông báo lỗi lúc chụp, quét. Lỗi chụp mặt, quét vân tay được ghi vào **Nhật ký** và giải thích rõ hơn, ví dụ máy chờ 15 giây không thấy ngón tay.
+* Nút **Tiếp**, **Lưu** luôn nằm ở đáy cửa sổ, không phải cuộn xuống mới bấm được.
+{% endupdate %}
+
+{% update date="2026-11-08" %}
 ## Phiên bản 0.9.6
 
 * Mới: khi chụp khuôn mặt bằng camera máy chấm công, khung bên trái hiện hình **trực tiếp** từ camera của máy để canh mặt trước khi bấm **Chụp ngay**.

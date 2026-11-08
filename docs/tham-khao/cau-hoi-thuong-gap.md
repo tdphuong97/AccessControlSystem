@@ -66,6 +66,14 @@ Nên lấy 2 ngón, mỗi tay một ngón, để khi một ngón bị thương h
 
 <details>
 
+<summary>Thêm người mới mà chụp mặt, quét vân tay đều lỗi, người đó có lên máy không?</summary>
+
+Từ bản 0.9.7 thì không. Phần mềm chỉ gửi người mới xuống máy khi đã có khuôn mặt hoặc ít nhất một vân tay. Trước đó người này chỉ nằm trong phần mềm với nhãn **Chưa gửi · cần mặt hoặc vân tay**: mở người đó để chụp, quét tiếp, hoặc **Xoá hẳn** nếu không cần nữa.
+
+</details>
+
+<details>
+
 <summary>Sao không xem được hình vân tay như ảnh khuôn mặt?</summary>
 
 Máy chấm công không lưu hình chụp ngón tay. Khi quét, máy chuyển ngón tay thành một chuỗi dữ liệu đã mã hoá rồi chỉ gửi chuỗi đó, kèm số ngón và chất lượng. Phần mềm vì vậy chỉ cho biết ngón nào đã lấy và chất lượng bao nhiêu: bấm số ngón ở cột **Vân tay** trong danh sách để xem.

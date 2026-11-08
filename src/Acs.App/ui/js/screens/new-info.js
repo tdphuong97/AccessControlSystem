@@ -44,7 +44,7 @@
         '<aside class="info-aside" aria-label="Các bước tiếp theo"><h2>Sau bước này</h2><ol>' +
         asideItem('camera', 'Chụp khuôn mặt', 'Bằng camera của máy chấm công, khoảng 10 giây.') +
         asideItem('fingerprint', 'Quét vân tay', 'Nên lấy 2 ngón, mỗi tay một ngón.') +
-        asideItem('refresh', 'App tự gửi lên ' + nDev + ' máy', 'Và đọc lại từ máy để chắc chắn máy đã nhận.') + '</ol></aside></div>' +
+        asideItem('refresh', 'App tự gửi lên ' + nDev + ' máy', 'Khi đã có khuôn mặt hoặc vân tay, rồi đọc lại từ máy để chắc chắn máy đã nhận.') + '</ol></aside></div>' +
         '<div class="wfoot"><a class="btn btn-48" href="#/people">Huỷ</a>' +
         '<button type="submit" form="f" class="btn btn-primary btn-next" id="go"' + (s.busy ? ' disabled' : '') + '>' +
         (s.busy ? 'Đang lưu…' : 'Tiếp: Chụp khuôn mặt' + icon('chevronRight', 18)) + '</button></div></div>';

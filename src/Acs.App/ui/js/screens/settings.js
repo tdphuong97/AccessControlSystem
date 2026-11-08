@@ -99,6 +99,7 @@
         (d.message && !ok ? '<div class="alert ' + (d.authPaused ? 'alert-err' : 'alert-wait') + '">' + icon('alertCircle', 18) + '<span>' + esc(d.message) + (since ? ' ' + esc(since) + '.' : '') + '</span></div>' : '') +
         '<div data-test>' + D.testHtml(t) + '</div>' +
         '<div class="rowwrap"><button type="button" class="btn" data-act="test" data-id="' + d.id + '"' + (t && t.busy ? ' disabled' : '') + '>' + icon('refresh', 18) + 'Kiểm tra kết nối</button>' +
+        '<button type="button" class="btn" data-act="diagnose" data-dev="' + d.id + '">' + icon('search', 18) + 'Chẩn đoán</button>' +
         '<button type="button" class="btn" data-act="edit" data-id="' + d.id + '">' + icon('edit', 18) + (d.authPaused ? 'Sửa mật khẩu' : 'Sửa') + '</button>' +
         '<button type="button" class="btn btn-danger-o" data-act="del" data-id="' + d.id + '"' + (s.deleting[d.id] ? ' disabled' : '') + '>' + icon('trash', 18) + 'Xoá máy</button></div></div>';
     }

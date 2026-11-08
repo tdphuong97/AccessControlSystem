@@ -21,6 +21,8 @@ Xoá hẳn không hoàn tác được. Phần mềm xoá luôn ảnh mặt và v
 - **Mã nhân viên:** mã vừa xoá chưa dùng lại được cho đến khi máy gỡ xong. Thêm người mới với mã đó sẽ báo **Mã này vừa xoá và đang chờ gỡ khỏi máy. Đợi máy gỡ xong hoặc dùng mã khác.**
 - **Bản sao lưu cũ:** các bản sao lưu đã tạo trước đó vẫn có thể chứa dữ liệu của người này. Xem [Sao lưu và khôi phục](../may-cham-cong/sao-luu-khoi-phuc.md).
 
+Phần mềm **không có thùng rác**: người đã xoá không nằm ở đâu để lấy lại. Dấu vết duy nhất là các dòng **Xoá khỏi máy** kèm mã nhân viên trong **Nhật ký**. Muốn lấy lại chỉ có cách khôi phục một bản sao lưu cũ, và việc này thay toàn bộ dữ liệu bằng bản đó.
+
 Khác với khoá ra vào, xoá hẳn gỡ khỏi máy mà không giữ lại gì, kể cả khi máy đang có ảnh mặt hay vân tay mà phần mềm không có bản sao.
 
 ## Nên xoá khi nào

@@ -35,6 +35,7 @@ public sealed partial class AppHost
     };
 
     /// <summary>Shown when nothing is queued but the device never confirmed this part (first import, added device, restore).</summary>
+    public const string DraftMessage = "Chưa gửi xuống máy: app gửi người này khi đã có khuôn mặt hoặc vân tay.";
     public const string NotOnDeviceMessage = "Chưa có trên máy này — chạy So khớp 2 máy.";
     public const string DisabledOnDeviceMessage = "Đang bị tắt trên máy này — chạy So khớp 2 máy.";
     public const string LockedUnknownMessage = "Chưa kiểm tra trên máy này — chạy So khớp 2 máy.";
@@ -56,6 +57,9 @@ public sealed partial class AppHost
         var items = new List<SyncItem>();
         var used = new HashSet<long>();
         var locked = p.Status == PersonStatus.Locked;
+        // Not sent yet: no face, no finger, nothing queued and the device does not hold them (EnrollService.Sendable).
+        if (!locked && !hasFace && fingers.Count == 0 && mine.Count == 0 && state is not { UserPresent: true })
+            return new DeviceSync(d.Id, d.Name, "draft", [new SyncItem("Thông tin", "draft", DraftMessage, null)]);
         static SyncItem Ok(string label) => new(label, "ok", null, null);
         static SyncItem Unconfirmed(string label) => new(label, "pending", NotOnDeviceMessage, null);
 

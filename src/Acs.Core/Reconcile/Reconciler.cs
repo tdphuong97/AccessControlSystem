@@ -82,7 +82,9 @@ public sealed class Reconciler(Database db, IHikDeviceFactory factory, SyncEngin
 
             if (!users.TryGetValue(p.EmployeeNo, out var du))
             {
-                if (p.Status == PersonStatus.Active) items.Add(new DiffItem(p.EmployeeNo, p.FullName, DiffKind.MissingPerson, appFingers));
+                // Nothing to recognise them by (a new person whose capture failed or was skipped): not sent (EnrollService.Sendable).
+                if (p.Status == PersonStatus.Active && (appFace || appFingers.Count > 0))
+                    items.Add(new DiffItem(p.EmployeeNo, p.FullName, DiffKind.MissingPerson, appFingers));
                 states.Add(new DeviceStateRecord(p.EmployeeNo, dev.Id, false, false, false, new HashSet<int>(), new HashSet<int>(), Now));
                 continue;
             }

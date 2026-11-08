@@ -43,6 +43,21 @@ public sealed partial class EnrollService(Database db, IHikDeviceFactory factory
         foreach (var d in db.Devices.List()) db.Jobs.Enqueue(d.Id, no, kind, finger, Now);
     }
 
+    /// <summary>
+    /// A person goes to the devices once a device can recognise them (a face or a finger in the app) or once a device
+    /// already holds them (imported, sent before). A new person whose capture failed or was skipped stays in the app only,
+    /// so an unfinished registration never reaches a device. The first face or finger sends the person first.
+    /// </summary>
+    private bool Sendable(string no) =>
+        db.Biometrics.HasFace(no) || db.Biometrics.FingerGroups(no).Count > 0
+        || db.Devices.List().Any(d => db.Jobs.GetState(no, d.Id)?.UserPresent == true);
+
+    /// <summary>Call before storing a face or finger: queues the person ahead of it when this is their first one.</summary>
+    private void SendPersonIfFirst(string no)
+    {
+        if (!Sendable(no) && db.People.Get(no) is { Status: PersonStatus.Active }) EnqueueAll(no, JobKind.UpsertUser);
+    }
+
     private void RequirePerson(string no)
     {
         if (db.People.Get(no) is null) throw new EnrollException("Không tìm thấy nhân viên.");
@@ -64,8 +79,7 @@ public sealed partial class EnrollService(Database db, IHikDeviceFactory factory
             var now = Now;
             var r = new PersonRecord(no, name, GroupId(p.GroupName), DateOnly.FromDateTime(time.GetLocalNow().DateTime), p.ValidTo,
                 PersonStatus.Active, now, now, null);
-            db.People.Insert(r);
-            EnqueueAll(no, JobKind.UpsertUser);
+            db.People.Insert(r);   // sent with the first face or finger (Sendable)
             return r;
         });
         sync.Wake();
@@ -81,7 +95,7 @@ public sealed partial class EnrollService(Database db, IHikDeviceFactory factory
             var r = cur with { FullName = name, GroupId = GroupId(e.GroupName), ValidTo = e.ValidTo, UpdatedAt = Now };
             db.People.Update(r);
             // A locked person is not pushed: an UpsertUser would supersede the pending DeleteUser/DisableUser.
-            if (cur.Status == PersonStatus.Active) EnqueueAll(r.EmployeeNo, JobKind.UpsertUser);
+            if (cur.Status == PersonStatus.Active && Sendable(r.EmployeeNo)) EnqueueAll(r.EmployeeNo, JobKind.UpsertUser);
             return r;
         });
         sync.Wake();
@@ -105,17 +119,19 @@ public sealed partial class EnrollService(Database db, IHikDeviceFactory factory
 
     private DeviceRecord Device(int id) => db.Devices.Get(id) ?? throw new EnrollException("Không tìm thấy máy chấm công.");
 
+    /// <summary>True while a face or finger capture runs on this device.</summary>
+    public bool IsCapturing(int deviceId) => _busy.TryGetValue(deviceId, out var gate) && gate.CurrentCount == 0;
+
     /// <summary>
-    /// One frame of the device camera for the live view, or null while that device is capturing: the preview never makes a
-    /// capture wait. A device paused for a wrong password is not asked (AuthGuard), and a wrong password pauses it.
+    /// One frame of the device camera for the live view, also while the device is capturing (on site the camera keeps
+    /// answering, about 4 frames/s). A device paused for a wrong password is not asked (AuthGuard). A refused login here
+    /// never pauses the device: the live view only loses that frame, and real wrong passwords are caught by the sync.
     /// </summary>
-    public async Task<byte[]?> PreviewAsync(int deviceId, CancellationToken ct)
+    public Task<byte[]> PreviewAsync(int deviceId, CancellationToken ct)
     {
         var dev = Device(deviceId);
         AuthGuard.Require(dev);
-        if (_busy.TryGetValue(dev.Id, out var gate) && gate.CurrentCount == 0) return null;
-        try { return await factory.Create(dev).SnapshotAsync(ct); }
-        catch (HikAuthException) { AuthGuard.Pause(db, dev.Id, sync); throw; }
+        return factory.Create(dev).SnapshotAsync(ct);
     }
 
     public async Task<byte[]> CaptureFaceAsync(string employeeNo, int deviceId, CancellationToken ct)
@@ -135,6 +151,7 @@ public sealed partial class EnrollService(Database db, IHikDeviceFactory factory
         db.Tx(() =>
         {
             RequirePerson(employeeNo);
+            SendPersonIfFirst(employeeNo);
             db.Biometrics.SetFace(new FaceRecord(employeeNo, jpeg, source, Now));
             EnqueueAll(employeeNo, JobKind.SetFace);
             return 0;
@@ -153,6 +170,7 @@ public sealed partial class EnrollService(Database db, IHikDeviceFactory factory
         db.Tx(() =>
         {
             RequirePerson(employeeNo);
+            SendPersonIfFirst(employeeNo);
             // A rescan replaces every copy of the finger, whatever the sensor group.
             db.Biometrics.DeleteFinger(employeeNo, fingerId);
             db.Biometrics.SetFinger(new FingerRecord(employeeNo, fingerId, dev.FpGroup, cap.TemplateBase64, cap.Quality,
@@ -195,6 +213,7 @@ public sealed partial class EnrollService(Database db, IHikDeviceFactory factory
         {
             var p = db.People.Get(employeeNo) ?? throw new EnrollException("Không tìm thấy nhân viên.");
             db.People.Update(p with { Status = PersonStatus.Active, LockedAt = null, UpdatedAt = Now });
+            if (!Sendable(employeeNo)) return 0;   // never sent: stays in the app until a face or finger
             EnqueueAll(employeeNo, JobKind.UpsertUser);
             if (db.Biometrics.GetFace(employeeNo) is not null) EnqueueAll(employeeNo, JobKind.SetFace);
             foreach (var id in db.Biometrics.GetFingers(employeeNo).Select(f => f.FingerId).Distinct())

@@ -33,6 +33,7 @@
     ok: { cls: 'ok', icon: 'checkCircle', text: 'Đã nhận' },
     pending: { cls: 'wait', icon: 'clock', text: 'Chờ — tự gửi khi máy có mạng' },
     error: { cls: 'err', icon: 'alertCircle', text: 'Có lỗi' },
+    draft: { cls: 'wait', icon: 'clock', text: 'Chưa gửi' },
   };
 
   // The item of a device that matches a label ("Khuôn mặt", "Vân tay Trỏ phải"); falls back to the device's own state.
@@ -89,5 +90,11 @@
       '<div class="hand"><div class="hand-t">Tay phải</div><div class="hand-row">' + [1, 2, 3, 4, 5].map(one).join('') + '</div></div></div>';
   }
 
-  ACS.wizard = { stepper, personHead, deviceRows, deviceSelect, defaultDevice, currentDevices, errBox, itemState, handsView };
+  // A capture error, with a button that checks the device and says what to do (devui.diagnose).
+  function errDiag(msg, deviceId) {
+    return msg ? '<div class="alert alert-err" role="alert">' + icon('alertCircle', 18) + '<span>' + esc(msg) +
+      (deviceId ? ' <button type="button" class="linkbtn" data-act="diagnose" data-dev="' + deviceId + '">Chẩn đoán máy</button>' : '') + '</span></div>' : '';
+  }
+
+  ACS.wizard = { errDiag, stepper, personHead, deviceRows, deviceSelect, defaultDevice, currentDevices, errBox, itemState, handsView };
 })();

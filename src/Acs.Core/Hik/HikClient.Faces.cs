@@ -10,6 +10,7 @@ public sealed partial class HikClient
     public const int MaxFaceBytes = 200 * 1024;
     private const string CapturePath = "/ISAPI/AccessControl/CaptureFaceData";
     private const string FdSearchPath = "/ISAPI/Intelligent/FDLib/FDSearch?format=json";
+    public const string FaceTimeoutMessage = "Máy không thấy khuôn mặt nào trong thời gian chờ. Mời đứng thẳng trước camera, cách khoảng nửa mét, bỏ khẩu trang rồi bấm Chụp lại.";
     private const string CaptureFailedMessage = "Máy chưa chụp được. Mời đứng thẳng trước camera rồi bấm lại.";
 
     private static readonly string[] CaptureBodies =
@@ -31,10 +32,17 @@ public sealed partial class HikClient
     private const string SnapshotPath = "/ISAPI/Streaming/channels/101/picture";
     public static readonly TimeSpan SnapshotTimeout = TimeSpan.FromSeconds(5);
 
-    /// <summary>On site (DS-K1T9342, V4.39) one 768x432 frame takes about 0.3 s: enough for a live view at ~3 frames/s.</summary>
+    /// <summary>
+    /// On site (DS-K1T9342, V4.39) one 768x432 frame takes about 0.3 s: enough for a live view at ~3 frames/s, and the
+    /// camera keeps answering while the device captures. During a capture the gate is held for up to a minute and nothing
+    /// else talks to this device, so the frame goes over the live view's own connection (no login race with queued work);
+    /// otherwise it queues behind the gate like any call.
+    /// </summary>
     public async Task<byte[]> SnapshotAsync(CancellationToken ct)
     {
-        var bytes = await SendRawAsync(HttpMethod.Get, SnapshotPath, null, SnapshotTimeout, ct);
+        var bytes = Volatile.Read(ref _capturing) > 0
+            ? await SendOneAsync(HttpMethod.Get, SnapshotPath, null, SnapshotTimeout, ct, _camHttp)
+            : await SendRawAsync(HttpMethod.Get, SnapshotPath, null, SnapshotTimeout, ct);
         if (IsJpeg(bytes)) return bytes;
         throw new HikRejectedException("noSnapshot", "Máy không gửi hình camera.", $"{bytes.Length} B");
     }
@@ -48,7 +56,7 @@ public sealed partial class HikClient
             try
             {
                 var body = new StringContent(xml, Encoding.UTF8, "application/xml");
-                var bytes = await SendRawAsync(HttpMethod.Post, CapturePath, body, CaptureTimeout, ct);
+                var bytes = await SendRawAsync(HttpMethod.Post, CapturePath, body, CaptureTimeout, ct, capture: true);
                 var jpeg = ExtractJpeg(bytes);
                 if (jpeg is not null) return jpeg;
                 attempts.Add($"{bytes.Length}B không có ảnh: {Decode(bytes)[..Math.Min(120, Decode(bytes).Length)]}");
@@ -56,6 +64,8 @@ public sealed partial class HikClient
             catch (HikNotSupportedException e) { notSupported++; attempts.Add(e.Detail ?? "notSupport"); }
             catch (HikRejectedException e) { attempts.Add(e.Detail ?? e.Code); }
         }
+        if (attempts.Any(a => a.Contains("captureTimeout", StringComparison.OrdinalIgnoreCase)))
+            throw new HikRejectedException("captureTimeout", FaceTimeoutMessage, HikErrorMap.Trim(string.Join(" || ", attempts)));
         if (notSupported == CaptureBodies.Length) throw new HikNotSupportedException("Máy này không hỗ trợ chụp khuôn mặt. Kiểm tra model máy hoặc cập nhật firmware.", HikErrorMap.Trim(string.Join(" || ", attempts)));
         throw new HikRejectedException("captureFailed", CaptureFailedMessage, HikErrorMap.Trim(string.Join(" || ", attempts)));
     }

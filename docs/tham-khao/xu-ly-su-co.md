@@ -6,6 +6,10 @@ description: Tra cứu thông báo lỗi hoặc triệu chứng thường gặp,
 
 Tìm thông báo bạn thấy trên màn hình trong danh sách dưới đây. Các lỗi gửi xuống máy hiện ở trang của từng người (tab **Người dùng**, mở người có dấu **Lỗi gửi, mở để xem**), kèm nút **Thử lại ngay** và mục **Chi tiết**. Mọi thao tác và lỗi cũng được ghi trong **Nhật ký**.
 
+{% hint style="info" %}
+Không rõ máy lỗi vì sao: bấm **Chẩn đoán** trên thẻ máy ở tab **Máy chấm công & cập nhật**. Phần mềm kiểm tra kết nối, đăng nhập, camera, việc gửi và lần chụp/quét lỗi gần nhất, rồi nói cách xử lý. Xem [Chẩn đoán máy](../may-cham-cong/them-sua-may.md#chan-doan-may).
+{% endhint %}
+
 ## Kết nối và đăng nhập máy
 
 <details>

@@ -65,6 +65,16 @@ public sealed class ReconcilerTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Plan_does_not_send_a_person_who_has_no_face_and_no_finger()
+    {
+        _h.AddPerson("1001", "An");   // a new person whose capture failed or was skipped
+
+        var plan = await _rec.BuildAsync(null, Ct);
+
+        Assert.DoesNotContain(plan.Devices.Single().Items, i => i.EmployeeNo == "1001");
+    }
+
+    [Fact]
     public async Task Plan_lists_missing_person_face_fingers()
     {
         _h.AddPerson("1001", "An");                      // absent on device
@@ -240,7 +250,7 @@ public sealed class ReconcilerTests : IAsyncDisposable
     [Fact]
     public async Task Apply_leaves_people_locked_or_unlocked_since_the_plan_alone()
     {
-        _h.AddPerson("1001", "An");                           // missing on the device...
+        _h.AddPerson("1001", "An"); _h.AddFace("1001");      // missing on the device...
         _h.AddPerson("1002", "Bình", PersonStatus.Locked);    // ...and locked but still enabled there
         await _dev1.UpsertUserAsync(W("1002", "Bình"), Ct);
         var plan = await _rec.BuildAsync(null, Ct);

@@ -132,6 +132,19 @@
       const d = devices.find((x) => x.id === a.deviceId);
       if (d && !d.online) throw new Error(d.name + ' đang mất kết nối nên chưa chụp được. Hãy chọn máy khác hoặc kiểm tra dây mạng và nguồn của máy.');
       p.hasFace = true; return { imageDataUrl: portrait, devices: deviceSync(p) }; },
+    'devices.diagnose': async (a) => {
+      await wait(900);
+      const d = devices.find((x) => x.id === a.id);
+      if (d && !d.online) return { deviceId: a.id, deviceName: d.name, summary: 'Có vấn đề: kết nối và đăng nhập.', checks: [
+        { name: 'Kết nối và đăng nhập', state: 'err', message: 'Không kết nối được máy. Kiểm tra dây mạng, địa chỉ IP và nguồn của máy, app sẽ tự thử lại.', fix: 'Kiểm tra máy có điện, dây mạng cắm chắc, và máy tính này cùng mạng với địa chỉ ' + d.host + '. Xong bấm Chẩn đoán lại.' }] };
+      return { deviceId: a.id, deviceName: d ? d.name : '', summary: 'Máy dùng được, có điểm cần để ý.', checks: [
+        { name: 'Kết nối và đăng nhập', state: 'ok', message: 'Máy trả lời sau 84 ms: DS-K1T342MFWX, firmware V4.39.180.', fix: null },
+        { name: 'Chụp mặt qua mạng', state: 'ok', message: 'Máy cho chụp mặt qua mạng.', fix: null },
+        { name: 'Quét vân tay qua mạng', state: 'ok', message: 'Máy cho quét vân tay qua mạng.', fix: null },
+        { name: 'Camera', state: 'ok', message: 'Camera gửi hình (123 KB, 240 ms).', fix: null },
+        { name: 'Việc gửi xuống máy', state: 'ok', message: 'Không có việc nào đang chờ hay bị lỗi.', fix: null },
+        { name: 'Lần chụp/quét lỗi gần nhất', state: 'warn', message: 'Quét vân tay lúc 08:31: Máy chờ khoảng 15 giây mà không thấy ngón tay. Bấm Quét lại, khi máy báo thì đặt ngón tay lên cảm biến ngay và giữ yên tới khi xong.', fix: 'Bấm Quét, khi máy báo thì đặt ngón tay ngay giữa cảm biến và giữ yên. Ngón khô quá hoặc ướt quá thì lau rồi quét lại.' }] };
+    },
     'face.preview': async (a) => {
       await wait(250);
       const d = devices.find((x) => x.id === a.deviceId);

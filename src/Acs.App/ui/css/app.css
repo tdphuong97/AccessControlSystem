@@ -180,12 +180,13 @@ a:hover { color: var(--accent-hover); }
 .check input { width: 20px; height: 20px; }
 
 /* Dialog and toast */
-.dlg { border: 0; border-radius: 14px; padding: 0; width: min(440px, calc(100vw - 32px)); box-shadow: 0 20px 50px rgba(15, 27, 45, 0.3); color: var(--text); font-family: var(--font); }
+.dlg { border: 0; border-radius: 14px; padding: 0; width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; box-shadow: 0 20px 50px rgba(15, 27, 45, 0.3); color: var(--text); font-family: var(--font); }
 .dlg::backdrop { background: rgba(15, 27, 45, 0.45); }
 .dlg-body { padding: 22px; }
 .dlg-title { margin: 0 0 8px; font-size: 18px; font-weight: 700; }
 .dlg-text { margin: 0 0 4px; color: var(--text-2); }
-.dlg-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.dlg-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; padding: 10px 0 2px;
+  position: sticky; bottom: -22px; background: #FFFFFF; }
 .dlg .alert { margin-top: 12px; }
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); max-width: min(560px, calc(100vw - 32px)); padding: 12px 18px; border-radius: 10px; font-size: 14px; z-index: 50;
   box-shadow: 0 8px 24px rgba(15, 27, 45, 0.2); }
@@ -229,7 +230,9 @@ a:hover { color: var(--accent-hover); }
 .step-s { display: block; font-size: 13px; color: var(--muted); }
 .step-done .step-s { color: #1F3A2C; }
 .step-on .step-s { color: var(--text-2); }
-.wfoot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding-top: 8px; border-top: 1px solid var(--line-row); }
+/* Save / Next stay at the bottom of the window: no scrolling down to reach them, whatever the window size. */
+.wfoot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line-row);
+  position: sticky; bottom: 0; z-index: 5; background: #FFFFFF; box-shadow: 0 -10px 16px -14px rgba(15, 27, 45, 0.35); }
 .wfoot-r { display: flex; flex-wrap: wrap; gap: 10px; }
 .btn-48 { height: 48px; padding: 0 20px; }
 .btn-next { height: 48px; padding: 0 22px; font-size: 16px; }
@@ -288,6 +291,13 @@ a:hover { color: var(--accent-hover); }
 .live-dot { width: 9px; height: 9px; border-radius: 50%; background: #E5484D; animation: nhay 1.2s ease-in-out infinite; }
 @keyframes nhay { 50% { opacity: 0.25; } }
 .live-note { margin: 10px 2px 0; font-size: 14px; }
+.live-cap { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); max-width: calc(100% - 28px); padding: 8px 14px; border-radius: 999px;
+  background: rgba(29, 95, 209, 0.92); color: #FFFFFF; font-size: 15px; font-weight: 600; text-align: center; }
+.linkbtn { padding: 0; border: 0; background: none; font: inherit; font-weight: 600; color: inherit; text-decoration: underline; cursor: pointer; }
+.diag { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.diag-row { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.diag-b { min-width: 0; }
+.diag-fix { margin-top: 4px; color: var(--text-2); }
 .peek-btn { padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; border-radius: 6px; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 4px; }
 .peek-btn:hover { text-decoration-style: solid; }
 .dlg.dlg-wide { width: min(780px, calc(100vw - 32px)); }
@@ -407,7 +417,8 @@ a:hover { color: var(--accent-hover); }
 .dl dd { margin: 0; overflow-wrap: anywhere; }
 .formgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 16px; margin: 12px 0; }
 .devform, .pwform { display: flex; flex-direction: column; gap: 4px; margin-bottom: 4px; }
-.formbtns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.formbtns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 10px; padding: 10px 0;
+  position: sticky; bottom: 0; z-index: 5; background: #FFFFFF; box-shadow: 0 -10px 16px -14px rgba(15, 27, 45, 0.35); }
 .devform .check { margin-top: 2px; }
 .recentry { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
 .baknote { display: flex; flex-direction: column; gap: 10px; }

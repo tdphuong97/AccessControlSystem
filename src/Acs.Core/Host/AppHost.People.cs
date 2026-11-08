@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Acs.Core.Enroll;
+using Acs.Core.Hik;
 using Acs.Core.Model;
 using Acs.Core.Sync;
 
@@ -72,7 +73,8 @@ public sealed partial class AppHost
             var ids = fingerIds.GetValueOrDefault(p.EmployeeNo) ?? [];
             var perDevice = devices.Select(d => DeviceSyncOf(d, p, hasFace, ids, states.GetValueOrDefault((p.EmployeeNo, d.Id)),
                 mine.Where(j => j.DeviceId == d.Id).ToList())).ToList();
-            var sync = perDevice.Any(x => x.State == "error") ? "error" : perDevice.Any(x => x.State == "pending") ? "pending" : "ok";
+            var sync = perDevice.Any(x => x.State == "error") ? "error" : perDevice.Any(x => x.State == "pending") ? "pending"
+                : perDevice.Any(x => x.State == "draft") ? "draft" : "ok";
             var waiting = perDevice.Where(x => x.State != "ok").Select(x => x.DeviceName).ToList();
             var fingers = ids.Count;
             var row = new PersonRow(p.EmployeeNo, p.FullName, Initials(p.FullName), p.GroupId is { } g ? groups.GetValueOrDefault(g) : null, hasFace, fingers,
@@ -133,14 +135,30 @@ public sealed partial class AppHost
     private async Task<FaceResult> FaceCapture(JsonElement a)
     {
         var no = Str(a, "employeeNo");
-        var jpeg = await Enroll.CaptureFaceAsync(no, Int(a, "deviceId"), _cts.Token);
+        var dev = Int(a, "deviceId");
+        var jpeg = await Logged(no, dev, CaptureFaceAction, () => Enroll.CaptureFaceAsync(no, dev, _cts.Token));
         return new FaceResult(DataUrl(jpeg), SyncPerson(no));
     }
 
     private async Task<FacePreviewView> FacePreview(JsonElement a)
     {
-        var jpeg = await Enroll.PreviewAsync(Int(a, "deviceId"), _cts.Token);
-        return new FacePreviewView(jpeg is null ? null : DataUrl(jpeg), jpeg is null);
+        var id = Int(a, "deviceId");
+        var jpeg = await Enroll.PreviewAsync(id, _cts.Token);
+        return new FacePreviewView(DataUrl(jpeg), Enroll.IsCapturing(id));
+    }
+
+    public const string CaptureFaceAction = "Chụp khuôn mặt", CaptureFingerAction = "Quét vân tay";
+
+    /// <summary>A capture that fails is written to Nhật ký (with the device's own answer), so it can be looked up later.</summary>
+    private async Task<T> Logged<T>(string no, int deviceId, string action, Func<Task<T>> capture)
+    {
+        try { return await capture(); }
+        catch (Exception e) when (e is EnrollException or HikException)
+        {
+            var detail = (e as HikException)?.Detail;
+            try { Db.Log.Add(no, deviceId, action, false, e.Message + (string.IsNullOrEmpty(detail) ? "" : $" ({detail})")); } catch { /* never hide the capture error */ }
+            throw;
+        }
     }
 
     private FaceResult FaceSave(JsonElement a)
@@ -162,7 +180,8 @@ public sealed partial class AppHost
     {
         var no = Str(a, "employeeNo");
         var id = Int(a, "fingerId");
-        var cap = await Enroll.CaptureFingerAsync(no, Int(a, "deviceId"), id, _cts.Token);
+        var dev = Int(a, "deviceId");
+        var cap = await Logged(no, dev, CaptureFingerAction, () => Enroll.CaptureFingerAsync(no, dev, id, _cts.Token));
         return new FingerResult(id, FingerLabel(id), cap.Quality, SyncPerson(no));
     }
 

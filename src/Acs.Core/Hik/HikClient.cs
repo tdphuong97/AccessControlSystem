@@ -11,16 +11,25 @@ public sealed partial class HikClient : IHikDevice, IDisposable
     public static readonly TimeSpan CaptureTimeout = TimeSpan.FromSeconds(60);
 
     private readonly HttpClient _http;
+    private readonly HttpClient _camHttp;   // the live view's own login, used only while a capture holds the gate
     private readonly SemaphoreSlim _gate = new(1, 1);   // never disposed: no wait handle is ever created
+    private int _capturing;                 // > 0 while a capture call holds the gate
 
     public HikClient(string host, string user, string password, HttpMessageHandler? inner = null, TimeProvider? time = null)
     {
         // The devices sit on the local network: never route their traffic (and the digest login) through a system proxy.
         inner ??= new HttpClientHandler { UseProxy = false, ServerCertificateCustomValidationCallback = (_, _, _, _) => true };
+        var baseUri = new Uri(host.Contains("://") ? host.TrimEnd('/') : "http://" + host.TrimEnd('/'));
         _http = new HttpClient(new DigestHandler(user, password, inner, time), disposeHandler: true)
         {
-            BaseAddress = new Uri(host.Contains("://") ? host.TrimEnd('/') : "http://" + host.TrimEnd('/')),
+            BaseAddress = baseUri,
             Timeout = Timeout.InfiniteTimeSpan,   // per-call timeouts are applied in SendRawAsync
+        };
+        var camInner = inner is HttpClientHandler ? new HttpClientHandler { UseProxy = false, ServerCertificateCustomValidationCallback = (_, _, _, _) => true } : inner;
+        _camHttp = new HttpClient(new DigestHandler(user, password, camInner, time), disposeHandler: true)
+        {
+            BaseAddress = baseUri,
+            Timeout = Timeout.InfiniteTimeSpan,
         };
     }
 
@@ -31,7 +40,7 @@ public sealed partial class HikClient : IHikDevice, IDisposable
     /// <summary>Drops a leading BOM and whitespace so { and < sniffing works.</summary>
     internal static string StripBom(string s) => s.TrimStart((char)0xFEFF).TrimStart();
 
-    public void Dispose() => _http.Dispose();
+    public void Dispose() { _http.Dispose(); _camHttp.Dispose(); }
 
     /// <summary>Sends a request and returns the body as text. Every response goes through HikErrorMap.</summary>
     internal async Task<string> SendAsync(HttpMethod method, string path, HttpContent? body, TimeSpan? timeout, CancellationToken ct)
@@ -51,21 +60,28 @@ public sealed partial class HikClient : IHikDevice, IDisposable
     /// OperationCanceledException; 401 (after the Digest handler's single re-challenge) becomes HikAuthException, never
     /// retried; other failures (including HTTP 200 with statusCode != 1) are mapped by HikErrorMap.
     /// </summary>
-    internal async Task<byte[]> SendRawAsync(HttpMethod method, string path, HttpContent? body, TimeSpan? timeout, CancellationToken ct)
+    internal async Task<byte[]> SendRawAsync(HttpMethod method, string path, HttpContent? body, TimeSpan? timeout, CancellationToken ct,
+        bool capture = false)
     {
         // One call at a time per device: on site, logins in flight together made the device refuse one of them (401
         // invalidOperation), which read as a wrong password and paused the device. The wait for the gate is not part
         // of the call's timeout, so a ping queued behind a 60 s capture does not report the device as offline.
         await _gate.WaitAsync(ct);
+        if (capture) Interlocked.Increment(ref _capturing);
         try { return await SendOneAsync(method, path, body, timeout, ct); }
-        finally { _gate.Release(); }
+        finally
+        {
+            if (capture) Interlocked.Decrement(ref _capturing);
+            _gate.Release();
+        }
     }
 
     /// <summary>For a caller that already holds the gate: a multi-page read that nothing may land in between.</summary>
     private async Task<string> SendHeldAsync(HttpMethod method, string path, HttpContent? body, CancellationToken ct)
         => Decode(await SendOneAsync(method, path, body, null, ct));
 
-    private async Task<byte[]> SendOneAsync(HttpMethod method, string path, HttpContent? body, TimeSpan? timeout, CancellationToken ct)
+    private async Task<byte[]> SendOneAsync(HttpMethod method, string path, HttpContent? body, TimeSpan? timeout, CancellationToken ct,
+        HttpClient? http = null)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(timeout ?? DefaultTimeout);
@@ -74,7 +90,7 @@ public sealed partial class HikClient : IHikDevice, IDisposable
         byte[] bytes;
         try
         {
-            resp = await _http.SendAsync(req, cts.Token);
+            resp = await (http ?? _http).SendAsync(req, cts.Token);
             using (resp) bytes = await resp.Content.ReadAsByteArrayAsync(cts.Token);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)

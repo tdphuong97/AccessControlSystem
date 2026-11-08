@@ -26,6 +26,35 @@ public class HikFacesTests
     }
 
     [Fact]
+    public async Task Snapshot_does_not_wait_behind_a_capture()
+    {
+        using var release = new ManualResetEventSlim();
+        var h = new FakeIsapiHandler()
+            .On(HttpMethod.Post, Capture, _ => { release.Wait(TimeSpan.FromSeconds(10)); return Bin(Jpeg); })
+            .On(HttpMethod.Get, "/ISAPI/Streaming/channels/101/picture", _ => Bin(Jpeg));
+        var c = Make(h);
+        var capture = Task.Run(() => c.CaptureFaceAsync(default));
+        await Task.Delay(300);
+
+        var snap = c.SnapshotAsync(default);
+        Assert.Same(snap, await Task.WhenAny(snap, Task.Delay(3000)));
+        Assert.Equal(Jpeg, await snap);
+        Assert.False(capture.IsCompleted);
+        release.Set();
+        Assert.Equal(Jpeg, await capture);
+    }
+
+    [Fact]
+    public async Task Capture_timeout_says_the_device_saw_no_face_in_time()
+    {
+        var h = new FakeIsapiHandler().On(HttpMethod.Post, Capture,
+            "<ResponseStatus><statusCode>4</statusCode><subStatusCode>captureTimeout</subStatusCode></ResponseStatus>", HttpStatusCode.OK, "application/xml");
+        var e = await Assert.ThrowsAsync<HikRejectedException>(() => Make(h).CaptureFaceAsync(default));
+        Assert.Equal("captureTimeout", e.Code);
+        Assert.Contains("không thấy khuôn mặt", e.Message);
+    }
+
+    [Fact]
     public async Task Snapshot_that_is_not_a_picture_is_rejected()
     {
         var h = new FakeIsapiHandler().On(HttpMethod.Get, "/ISAPI/Streaming/channels/101/picture", _ => Bin([1, 2, 3], "application/octet-stream"));

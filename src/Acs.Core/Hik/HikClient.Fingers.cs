@@ -12,6 +12,7 @@ public sealed partial class HikClient
     private const int FpPageSize = 30;
     private const int FpMaxPages = 20;
     private const int FpIdlePages = 3;
+    public const string FpTimeoutMessage = "Máy chờ khoảng 15 giây mà không thấy ngón tay. Bấm Quét lại, khi máy báo thì đặt ngón tay lên cảm biến ngay và giữ yên tới khi xong.";
     private const string FpCaptureFailedMessage = "Máy chưa quét được vân tay. Đặt ngón tay lên cảm biến, giữ yên rồi bấm lại.";
     private const string FpUnconfirmedMessage = "Máy chưa xác nhận đã lưu vân tay. Bấm Thử lại; nếu vẫn không được, kiểm tra máy rồi gửi lại.";
     public const string FpUnreadableMessage = "Máy trả về danh sách vân tay không đọc được. Bấm Thử lại; nếu vẫn lỗi, xem Chi tiết và báo lại cho người làm phần mềm.";
@@ -52,6 +53,9 @@ public sealed partial class HikClient
         var detail = HikErrorMap.Trim(string.Join(" || ", attempts));
         if (notSupported == 2)
             throw new HikNotSupportedException("Máy này không hỗ trợ quét vân tay. Kiểm tra model máy hoặc cập nhật firmware.", detail);
+        // On site the device waits about 15 s for a finger, then answers captureTimeout.
+        if (detail.Contains("captureTimeout", StringComparison.OrdinalIgnoreCase))
+            throw new HikRejectedException("captureTimeout", FpTimeoutMessage, detail);
         throw new HikRejectedException("captureFailed", FpCaptureFailedMessage, detail);
     }
 

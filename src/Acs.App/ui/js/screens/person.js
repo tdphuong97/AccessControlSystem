@@ -9,6 +9,7 @@
     ok: { cls: 'ok', text: 'Đã đủ', icon: 'check' },
     pending: { cls: 'wait', text: 'Đang chờ gửi', icon: 'clock' },
     error: { cls: 'err', text: 'Có lỗi', icon: 'alertCircle' },
+    draft: { cls: 'wait', text: 'Chưa gửi', icon: 'clock' },
   };
 
   function itemHtml(it) {
@@ -25,7 +26,7 @@
       '<div class="dcard-t"><div class="fw6">' + esc(d.deviceName) + '</div></div>' +
       '<span class="pill pill-' + s.cls + '">' + icon(s.icon, 14) + s.text + '</span></div>' +
       '<ul class="sitems">' + d.items.map(itemHtml).join('') + '</ul>' +
-      (d.state !== 'ok' ? '<div class="dcard-f"><button type="button" class="btn btn-sm" data-act="retry" data-dev="' + d.deviceId + '">' + icon('refresh', 16) + 'Thử lại ngay</button></div>' : '') +
+      (d.state !== 'ok' && d.state !== 'draft' ? '<div class="dcard-f"><button type="button" class="btn btn-sm" data-act="retry" data-dev="' + d.deviceId + '">' + icon('refresh', 16) + 'Thử lại ngay</button></div>' : '') +
       '</section>';
   }
 

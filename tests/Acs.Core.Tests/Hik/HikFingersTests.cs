@@ -42,6 +42,19 @@ public class HikFingersTests
     }
 
     [Fact]
+    public async Task Capture_timeout_says_the_device_saw_no_finger_in_time()
+    {
+        // As on site: the JSON form is refused at once, the XML form waits ~15 s and answers captureTimeout.
+        var h = new FakeIsapiHandler()
+            .On(HttpMethod.Post, Capture, r => r.PathAndQuery.Contains("format=json")
+                ? new(HttpStatusCode.OK, "{\"statusCode\":4,\"subStatusCode\":\"badXmlContent\"}")
+                : new(HttpStatusCode.OK, "<ResponseStatus><statusCode>4</statusCode><subStatusCode>captureTimeout</subStatusCode></ResponseStatus>", "application/xml"));
+        var e = await Assert.ThrowsAsync<HikRejectedException>(() => Make(h).CaptureFingerprintAsync(1, default));
+        Assert.Equal("captureTimeout", e.Code);
+        Assert.Contains("15 giây", e.Message);
+    }
+
+    [Fact]
     public async Task Capture_nothing_is_rejected_with_vietnamese_message()
     {
         var h = new FakeIsapiHandler().On(HttpMethod.Post, Capture, "{\"CaptureFingerPrint\":{}}");

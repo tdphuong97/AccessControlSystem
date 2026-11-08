@@ -1,3 +1,10 @@
+## 0.9.7
+
+- Thêm người mới: chỉ gửi người đó xuống máy khi đã có khuôn mặt hoặc một vân tay (bước 1 chỉ lưu trong app). Đăng ký bỏ dở hay bị lỗi không còn để lại người không có gì trên máy; danh sách ghi "Chưa gửi · cần mặt hoặc vân tay". So khớp cũng không đẩy người như vậy xuống máy.
+- Hình trực tiếp vẫn chạy trong lúc máy chụp mặt: lúc chụp, hình lấy qua kết nối riêng, nên không phải chờ lệnh chụp (đã thử trên máy thật: khoảng 4 hình/giây suốt lúc chụp). Xem hình trực tiếp không bao giờ tự dừng máy vì sai mật khẩu.
+- Mới: Chẩn đoán máy (kết nối và đăng nhập, chụp mặt và quét vân tay qua mạng, camera, việc gửi, lần chụp/quét lỗi gần nhất, kèm cách xử lý), trên thẻ máy và trong thông báo lỗi lúc chụp, quét. Lỗi chụp mặt, quét vân tay được ghi vào Nhật ký kèm câu trả lời của máy; máy chờ 15 giây không thấy ngón tay hoặc khuôn mặt thì báo đúng như vậy.
+- Nút Tiếp / Lưu luôn ở đáy cửa sổ (form thêm người, form máy chấm công, các hộp sửa): không phải cuộn mới bấm được.
+
 ## 0.9.6
 
 - Mới: chụp khuôn mặt bằng camera máy chấm công có khung hình trực tiếp (khoảng 3 hình/giây) để canh mặt trước khi chụp. Hình lấy từ camera của chính máy, không ảnh hưởng việc chụp: lúc máy đang chụp thì app tạm dừng lấy hình.

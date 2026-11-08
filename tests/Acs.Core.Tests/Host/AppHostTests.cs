@@ -73,17 +73,23 @@ public sealed class AppHostTests : IAsyncDisposable
         return v.GetProperty("id").GetInt32();
     }
 
-    private static Task<object?> Create(AppHost h, string no, string name) =>
-        h.HandleAsync("people.create", J($$"""{"fullName":"{{name}}","employeeNo":"{{no}}"}"""));
+    /// <summary>Creates a person with a face (so the app sends them to the devices); face: false leaves one not sent yet.</summary>
+    private static async Task<object?> Create(AppHost h, string no, string name, bool face = true)
+    {
+        var r = await h.HandleAsync("people.create", J($$"""{"fullName":"{{name}}","employeeNo":"{{no}}"}"""));
+        if (face) await h.HandleAsync("face.save", J($$"""{"employeeNo":"{{no}}","imageDataUrl":"data:image/jpeg;base64,/9j/2Q=="}"""));
+        return r;
+    }
 
     [Fact]
     public async Task people_create_then_list_shows_pending_until_worker_runs()
     {
         var h = NewHost();
         await AddDevice(h);
-        var detail = Out(await Create(h, "1001", "Nguyễn Văn An"));
+        var detail = Out(await Create(h, "1001", "Nguyễn Văn An", face: false));
         Assert.Equal("1001", detail.GetProperty("employeeNo").GetString());
-        Assert.Equal("pending", detail.GetProperty("devices")[0].GetProperty("state").GetString());
+        Assert.Equal("draft", detail.GetProperty("devices")[0].GetProperty("state").GetString());   // nothing sent before a face
+        await h.HandleAsync("face.save", J("""{"employeeNo":"1001","imageDataUrl":"data:image/jpeg;base64,/9j/2Q=="}"""));
 
         var rows = Out(await h.HandleAsync("people.list", J("""{"filter":"all","query":""}""")));
         Assert.Equal("pending", rows[0].GetProperty("sync").GetString());
@@ -724,6 +730,69 @@ public sealed class AppHostTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task a_new_person_without_face_or_finger_shows_as_not_sent_yet()
+    {
+        var h = NewHost();
+        await AddDevice(h);
+        await Create(h, "1001", "An", face: false);
+
+        var row = Out(await h.HandleAsync("people.list", J()))[0];
+        Assert.Equal("draft", row.GetProperty("sync").GetString());
+        var dev = Out(await h.HandleAsync("sync.person", J("""{"employeeNo":"1001"}""")))[0];
+        Assert.Equal("draft", dev.GetProperty("state").GetString());
+        Assert.Equal(AppHost.DraftMessage, dev.GetProperty("items")[0].GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task diagnose_runs_every_check_on_a_working_device()
+    {
+        var h = NewHost();
+        var dev = await AddDevice(h);
+
+        var r = Out(await h.HandleAsync("devices.diagnose", J($$"""{"id":{{dev}}}""")));
+
+        var checks = r.GetProperty("checks").EnumerateArray().ToList();
+        Assert.Equal(["Kết nối và đăng nhập", "Chụp mặt qua mạng", "Quét vân tay qua mạng", "Camera", "Việc gửi xuống máy"],
+            checks.Select(c => c.GetProperty("name").GetString()).ToArray());
+        Assert.All(checks, c => Assert.Equal("ok", c.GetProperty("state").GetString()));
+        Assert.Equal(AppHost.DiagAllGood, r.GetProperty("summary").GetString());
+    }
+
+    [Fact]
+    public async Task diagnose_of_an_offline_device_stops_at_the_connection_and_says_what_to_check()
+    {
+        var h = NewHost();
+        var dev = await AddDevice(h);
+        _factory.For(dev).Offline = true;
+
+        var r = Out(await h.HandleAsync("devices.diagnose", J($$"""{"id":{{dev}}}""")));
+
+        var c = Assert.Single(r.GetProperty("checks").EnumerateArray());
+        Assert.Equal("err", c.GetProperty("state").GetString());
+        Assert.Contains("192.168.1.201", c.GetProperty("fix").GetString());
+    }
+
+    [Fact]
+    public async Task a_failed_capture_is_logged_and_shown_by_the_diagnosis()
+    {
+        var h = NewHost();
+        var dev = await AddDevice(h);
+        await Create(h, "1001", "An", face: false);
+        _factory.For(dev).Offline = true;
+        await Assert.ThrowsAnyAsync<Exception>(() => h.HandleAsync("face.capture", J($$"""{"employeeNo":"1001","deviceId":{{dev}}}""")));
+        _factory.For(dev).Offline = false;
+
+        var log = Out(await h.HandleAsync("log.list", J()))[0];
+        Assert.Equal(AppHost.CaptureFaceAction, log.GetProperty("action").GetString());
+        Assert.False(log.GetProperty("ok").GetBoolean());
+
+        var r = Out(await h.HandleAsync("devices.diagnose", J($$"""{"id":{{dev}}}""")));
+        var last = r.GetProperty("checks").EnumerateArray().Single(c => c.GetProperty("name").GetString() == "Lần chụp/quét lỗi gần nhất");
+        Assert.Equal("warn", last.GetProperty("state").GetString());
+        Assert.Contains(AppHost.CaptureFaceAction, last.GetProperty("message").GetString());
+    }
+
+    [Fact]
     public async Task face_preview_gives_a_frame_of_the_device_camera()
     {
         var h = NewHost();
@@ -737,7 +806,7 @@ public sealed class AppHostTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task face_preview_leaves_the_camera_alone_while_the_device_is_capturing()
+    public async Task face_preview_keeps_giving_frames_while_the_device_is_capturing()
     {
         var h = NewHost();
         var dev = await AddDevice(h);
@@ -749,21 +818,23 @@ public sealed class AppHostTests : IAsyncDisposable
         var r = Out(await h.HandleAsync("face.preview", J($$"""{"deviceId":{{dev}}}""")));
 
         Assert.True(r.GetProperty("busy").GetBoolean());
-        Assert.Equal(JsonValueKind.Null, r.GetProperty("imageDataUrl").ValueKind);
-        Assert.DoesNotContain("SnapshotAsync", _factory.For(dev).Calls);
+        Assert.StartsWith("data:image/jpeg;base64,", r.GetProperty("imageDataUrl").GetString());
+        Assert.False(capture.IsCompleted);
         await capture;
     }
 
     [Fact]
-    public async Task face_preview_never_logs_in_again_to_a_device_paused_for_a_wrong_password()
+    public async Task face_preview_never_pauses_a_device_and_never_asks_one_already_paused()
     {
         var h = NewHost();
         var dev = await AddDevice(h);
         _factory.For(dev).WrongPassword = true;
 
         await Assert.ThrowsAnyAsync<Exception>(() => h.HandleAsync("face.preview", J($$"""{"deviceId":{{dev}}}""")));
-        await Assert.ThrowsAnyAsync<Exception>(() => h.HandleAsync("face.preview", J($$"""{"deviceId":{{dev}}}""")));
+        Assert.False(h.Db.Devices.Get(dev)!.AuthPaused);   // the live view alone never stops the device
 
+        h.Db.Devices.SetAuthPaused(dev, true);
+        await Assert.ThrowsAnyAsync<Exception>(() => h.HandleAsync("face.preview", J($$"""{"deviceId":{{dev}}}""")));
         Assert.Single(_factory.For(dev).Calls, c => c == "SnapshotAsync");
     }
 
@@ -886,8 +957,8 @@ public sealed class AppHostTests : IAsyncDisposable
     public async Task problem_filters_skip_locked_people_and_inputs_are_validated()
     {
         var h = NewHost();
-        await Create(h, "1", "An");
-        await Create(h, "2", "Bình");
+        await Create(h, "1", "An", face: false);
+        await Create(h, "2", "Bình", face: false);
         await h.HandleAsync("people.lock", J("""{"employeeNo":"2"}"""));
         Assert.Equal(1, Out(await h.HandleAsync("people.list", J("""{"filter":"noFace"}"""))).GetArrayLength());
         Assert.Equal(1, Out(await h.HandleAsync("people.list", J("""{"filter":"noFinger"}"""))).GetArrayLength());

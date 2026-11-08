@@ -38,8 +38,12 @@ public sealed record BackupStatus(bool HasPassword, string? LastAt, IReadOnlyLis
 public sealed record SettingsView(bool AutoCheckUpdates, bool StartWithWindows);
 
 /// <summary>import.status: lets a screen opened mid-import show its progress instead of a fresh "Lấy dữ liệu" button.</summary>
-/// <summary>face.preview: a camera frame, or Busy while the device is capturing (no frame then).</summary>
-public sealed record FacePreviewView(string? ImageDataUrl, bool Busy);
+/// <summary>One step of devices.diagnose: State is ok, warn or err; Fix says what to do when it is not ok.</summary>
+public sealed record DiagCheck(string Name, string State, string Message, string? Fix);
+public sealed record DiagReport(int DeviceId, string DeviceName, string Summary, IReadOnlyList<DiagCheck> Checks);
+
+/// <summary>face.preview: a camera frame; Busy while that device is capturing (the frames keep coming).</summary>
+public sealed record FacePreviewView(string ImageDataUrl, bool Busy);
 
 public sealed record ImportStatusView(bool Running, int? DeviceId, string? DeviceName, int Done, int Total, string? CurrentName);
 
