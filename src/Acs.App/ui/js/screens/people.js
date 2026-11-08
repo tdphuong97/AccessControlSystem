@@ -7,6 +7,9 @@
   const SIZE_KEY = 'acs.people.pageSize';   // per-PC convenience only: lost storage just means the default 50
   const savedSize = () => { try { return localStorage.getItem(SIZE_KEY); } catch (e) { return null; } };
   const saveSize = (n) => { try { localStorage.setItem(SIZE_KEY, String(n)); } catch (e) { /* not kept */ } };
+  const SORT_KEY = 'acs.people.sort';
+  const savedSort = () => { try { return localStorage.getItem(SORT_KEY); } catch (e) { return null; } };
+  const saveSort = (m) => { try { localStorage.setItem(SORT_KEY, m); } catch (e) { /* not kept */ } };
 
   const CHIPS = [
     ['all', 'Tất cả'], ['noFace', 'Chưa có khuôn mặt'], ['noFinger', 'Chưa có vân tay'], ['notSynced', null], ['locked', 'Đã khoá'],
@@ -85,7 +88,7 @@
   }
 
   function render(host, params, ctx) {
-    let filter = 'all', query = '', group = '', groups = [], noGroup = 0, rows = [], counts = null, seq = 0, timer = 0, size = F.pageSize(savedSize()), page = 1;
+    let filter = 'all', query = '', group = '', groups = [], noGroup = 0, rows = [], counts = null, seq = 0, timer = 0, size = F.pageSize(savedSize()), page = 1, sort = F.sortMode(savedSort());
     host.innerHTML = '<div class="pad stack">' +
       '<div id="p-upd"></div><div id="p-imp"></div><div id="p-rec"></div><div id="p-stale"></div>' +
       '<div class="pagehead"><div><h1 class="h1">Người dùng</h1><p class="sub" id="p-count"></p></div>' +
@@ -95,6 +98,8 @@
       '<span class="search-ic">' + icon('search', 18) + '</span>' +
       '<input id="tim" class="input" type="text" autocomplete="off" placeholder="Gõ tên hoặc mã nhân viên…"></div></div>' +
       '<div class="grp" id="p-grp"></div>' +
+      '<div class="grp"><label class="lbl" for="p-sort">Sắp xếp</label><select id="p-sort" class="input">' +
+      F.SORTS.map(([k, t]) => '<option value="' + k + '"' + (k === sort ? ' selected' : '') + '>' + esc(t) + '</option>').join('') + '</select></div>' +
       '<div class="chips" role="group" aria-label="Lọc danh sách" id="p-chips"></div></div>' +
       '<div class="tablebox"><div class="tscroll"><div class="table" id="p-table"></div></div>' +
       '<div class="tfoot"><span class="sub" id="p-note"></span><div class="pager" id="p-pager"></div></div></div></div>';
@@ -140,19 +145,20 @@
 
     function drawTable() {
       const n = nMachines();
-      const list = F.byGroup(rows, group);
+      const list = F.sortRows(F.byGroup(rows, group), sort);
       const pg = F.paginate(list.length, size, page);
       page = pg.page;
       const shown = list.slice(pg.from, pg.to);
       $('p-table').innerHTML = '<div class="thead"><div>Người</div><div>Khuôn mặt</div><div>Vân tay</div><div>Có trên ' + n + ' máy</div><div></div></div>' +
         (shown.length ? shown.map((r) => rowHtml(r, n)).join('')
           : '<div class="empty-row">' + (query || filter !== 'all' || group ? 'Không có ai khớp. Thử bỏ bớt bộ lọc hoặc gõ tên khác.' : 'Chưa có ai. Bấm "Thêm người mới" để bắt đầu.') + '</div>');
-      // The list is sorted by name (vi-VN), so the first page is not "the newest people".
+      // The host sorts by name (vi-VN); "Sắp xếp" can order by employee number instead (F.sortRows).
       const of = !group ? '' : group === F.NO_GROUP ? ' chưa có nhóm' : ' của ' + group;
+      const order = sort === 'noAsc' ? ', theo mã NV tăng dần' : sort === 'noDesc' ? ', mã NV mới nhất trước' : '';
       const what = of + (filter === 'all' ? (query ? ' khớp tìm kiếm' : of ? '' : ', theo tên') : ' cần bổ sung');
       $('p-note').textContent = !shown.length ? '' : (pg.pages > 1
-        ? 'Đang hiện ' + (pg.from + 1) + '–' + pg.to + ' trong ' + list.length + ' người' + what
-        : 'Đang hiện ' + list.length + ' người' + (what === ', theo tên' ? '' : what));
+        ? 'Đang hiện ' + (pg.from + 1) + '–' + pg.to + ' trong ' + list.length + ' người' + (order && what === ', theo tên' ? order : what + order)
+        : 'Đang hiện ' + list.length + ' người' + (what === ', theo tên' ? order : what + order));
       // The page-size choice only matters once there is more than the smallest page.
       $('p-pager').innerHTML = list.length <= F.PAGE_SIZES[0] ? '' :
         '<label class="pager-size" for="p-size">Mỗi trang<select id="p-size" class="input pager-sel">' +
@@ -195,6 +201,7 @@
       try { await peekDialog(el.dataset.emp); } catch (e) { ACS.ui.toast(ACS.ui.errMessage(e), 'error'); }
     });
     on(host, 'change', '#p-group', (el) => { group = el.value; page = 1; drawTable(); });
+    on(host, 'change', '#p-sort', (el) => { sort = F.sortMode(el.value); saveSort(sort); page = 1; drawTable(); });
     on(host, 'change', '#p-size', (el) => { size = F.pageSize(el.value); saveSize(size); page = 1; drawTable(); });
     on(host, 'click', '[data-act="pg-prev"]', () => goPage(page - 1));
     on(host, 'click', '[data-act="pg-next"]', () => goPage(page + 1));

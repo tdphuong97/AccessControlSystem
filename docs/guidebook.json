@@ -2,10 +2,10 @@
   "title": "Hướng dẫn sử dụng Access Control System",
   "subtitle": "Đăng ký khuôn mặt và vân tay cho máy kiểm soát ra vào Hikvision",
   "org": "Access Control System",
-  "version": "0.9.8",
+  "version": "0.9.9",
   "updated": "08/11/2026",
   "accent": "#1D5FD1",
   "logo": ".gitbook/assets/logo.svg",
-  "footer": "Access Control System 0.9.8 · Mã nguồn mở, giấy phép MIT",
+  "footer": "Access Control System 0.9.9 · Mã nguồn mở, giấy phép MIT",
   "lang": "vi"
 }

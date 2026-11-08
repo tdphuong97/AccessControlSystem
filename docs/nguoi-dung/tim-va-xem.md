@@ -41,6 +41,18 @@ Bộ lọc, ô **Công ty** và ô tìm kiếm dùng cùng lúc được. Không
 Danh sách xếp theo tên và chia trang, mặc định 50 người mỗi trang. Ở cuối bảng, chọn **Mỗi trang** là 20, 50, 100 hoặc **Tất cả**; bấm **Trước** / **Sau** để chuyển trang. Phần mềm nhớ lựa chọn này trên máy tính, và quay về trang 1 khi bạn đổi nhóm hoặc gõ tìm kiếm.
 {% endhint %}
 
+## Sắp xếp
+
+Ô **Sắp xếp** cạnh ô **Công ty** đổi thứ tự danh sách:
+
+| Lựa chọn | Thứ tự |
+| --- | --- |
+| **Tên (A–Z)** | Theo họ tên, mặc định. |
+| **Mã NV tăng dần** | Theo mã nhân viên từ nhỏ đến lớn, so theo số (2, 10, 100). Dễ thấy mã nào còn trống. |
+| **Mã NV giảm dần (mới nhất trước)** | Mã lớn nhất lên đầu, thường là người mới thêm gần đây. |
+
+Phần mềm nhớ lựa chọn này trên máy tính, như ô **Mỗi trang**.
+
 ## Xem nhanh ảnh mặt và vân tay
 
 Trong danh sách, chữ **Có** ở cột **Khuôn mặt** và chữ **2 ngón** (hay số ngón khác) ở cột **Vân tay** bấm được. Bấm vào, một hộp hiện ra ngay trên danh sách với:

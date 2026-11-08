@@ -6,6 +6,12 @@ description: Các phiên bản đã phát hành và thay đổi trong từng b�
 
 {% updates format="full" %}
 {% update date="2026-11-08" %}
+## Phiên bản 0.9.9
+
+* Mới: ô **Sắp xếp** ở danh sách người: theo tên, **Mã NV tăng dần** hoặc **Mã NV giảm dần**. Mã so theo số. Phần mềm nhớ lựa chọn.
+{% endupdate %}
+
+{% update date="2026-11-08" %}
 ## Phiên bản 0.9.8
 
 * Hình trực tiếp khi chụp khuôn mặt có **vòng canh mặt** như trên màn hình máy: nét đứt khi canh, chuyển xanh trong lúc máy chụp.

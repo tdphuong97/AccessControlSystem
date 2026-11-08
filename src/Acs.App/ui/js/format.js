@@ -77,5 +77,22 @@
     return rows.filter((r) => (group === NO_GROUP ? !r.groupName : r.groupName === group));
   }
 
-  return { initials, fingerLabel, durationText, timeAgo, plural, fmtDate, PAGE_SIZES, pageSize, paginate, groupFromName, NO_GROUP, groupList, byGroup };
+  // People list order: the host sorts by name; "Mã NV" compares the numbers as numbers (2 < 10 < 0012 < 100),
+  // any code that is not all digits after them.
+  const SORTS = [['name', 'Tên (A–Z)'], ['noAsc', 'Mã NV tăng dần'], ['noDesc', 'Mã NV giảm dần (mới nhất trước)']];
+  function sortMode(saved) { return SORTS.some(([k]) => k === saved) ? saved : 'name'; }
+  function compareNo(a, b) {
+    const na = /^\d+$/.test(a), nb = /^\d+$/.test(b);
+    if (na && nb) { const x = BigInt(a), y = BigInt(b); return x < y ? -1 : x > y ? 1 : (a < b ? -1 : a > b ? 1 : 0); }
+    if (na !== nb) return na ? -1 : 1;
+    return a.localeCompare(b, 'vi', { numeric: true });
+  }
+  function sortRows(rows, mode) {
+    if (mode === 'noAsc') return rows.slice().sort((x, y) => compareNo(x.employeeNo, y.employeeNo));
+    if (mode === 'noDesc') return rows.slice().sort((x, y) => compareNo(y.employeeNo, x.employeeNo));
+    return rows;
+  }
+
+  return { initials, fingerLabel, durationText, timeAgo, plural, fmtDate, PAGE_SIZES, pageSize, paginate, groupFromName, NO_GROUP, groupList, byGroup,
+    SORTS, sortMode, sortRows };
 });

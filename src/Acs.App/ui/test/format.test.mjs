@@ -80,3 +80,17 @@ test('byGroup: all, one group, or the people without a group', () => {
   assert.deepEqual(F.byGroup(rows, 'XYZ').map((r) => r.n), [1]);
   assert.deepEqual(F.byGroup(rows, F.NO_GROUP).map((r) => r.n), [2, 4]);
 });
+
+test('sortRows: by employee number as numbers, both ways; name keeps the server order', () => {
+  const rows = [{ employeeNo: '100' }, { employeeNo: '2' }, { employeeNo: 'A7' }, { employeeNo: '10' }, { employeeNo: '0012' }, { employeeNo: '99999999999999999999' }];
+  assert.deepEqual(F.sortRows(rows, 'noAsc').map((r) => r.employeeNo), ['2', '10', '0012', '100', '99999999999999999999', 'A7']);
+  assert.deepEqual(F.sortRows(rows, 'noDesc').map((r) => r.employeeNo), ['A7', '99999999999999999999', '100', '0012', '10', '2']);
+  assert.deepEqual(F.sortRows(rows, 'name'), rows);
+  assert.notEqual(F.sortRows(rows, 'noAsc'), rows);   // never sorts the caller's array in place
+});
+
+test('sortMode: a saved choice or the name order', () => {
+  assert.equal(F.sortMode('noAsc'), 'noAsc');
+  assert.equal(F.sortMode('noDesc'), 'noDesc');
+  for (const v of [null, '', 'bogus']) assert.equal(F.sortMode(v), 'name');
+});

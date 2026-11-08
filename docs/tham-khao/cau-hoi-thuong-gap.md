@@ -74,6 +74,14 @@ Từ bản 0.9.7 thì không. Phần mềm chỉ gửi người mới xuống m�
 
 <details>
 
+<summary>Sao mã nhân viên gợi ý nhảy số, ví dụ chưa có 173 mà đã gợi ý 174?</summary>
+
+Vì mã 173 từng được dùng rồi bị xoá. Phần mềm không gợi ý lại mã đã xoá, để người mới không bị lẫn với người cũ còn sót trên máy, trong bản sao lưu hay nhật ký. Muốn dùng lại mã đó, gõ tay vào ô **Mã nhân viên** khi thêm người. Để rà mã theo thứ tự, chọn **Sắp xếp → Mã NV tăng dần** ở danh sách.
+
+</details>
+
+<details>
+
 <summary>Sao không xem được hình vân tay như ảnh khuôn mặt?</summary>
 
 Máy chấm công không lưu hình chụp ngón tay. Khi quét, máy chuyển ngón tay thành một chuỗi dữ liệu đã mã hoá rồi chỉ gửi chuỗi đó, kèm số ngón và chất lượng. Phần mềm vì vậy chỉ cho biết ngón nào đã lấy và chất lượng bao nhiêu: bấm số ngón ở cột **Vân tay** trong danh sách để xem.

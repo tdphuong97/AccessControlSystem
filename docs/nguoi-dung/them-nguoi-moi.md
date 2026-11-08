@@ -78,7 +78,7 @@ Màn hình **Hoàn tất** hiện dòng **Đã đăng ký xong** kèm tên ngư�
 ## Mã nhân viên gợi ý
 
 - Phần mềm lấy số lớn nhất từng dùng rồi cộng 1, giữ nguyên số chữ số 0 ở đầu. Chưa có ai thì gợi ý `1001`.
-- Mã đã xoá không bao giờ được gợi ý lại, để không lẫn với người cũ còn sót trên máy.
+- Mã đã xoá không bao giờ được gợi ý lại, để không lẫn với người cũ còn sót trên máy, trong bản sao lưu hay nhật ký. Vì vậy số gợi ý có thể nhảy cách: xoá 172 và 173 thì người tiếp theo được gợi ý 174. Muốn dùng lại mã cũ, gõ tay mã đó vào ô **Mã nhân viên** (được khi máy đã gỡ xong người cũ).
 - Mã chỉ gồm chữ và số, tối đa 32 ký tự, và không trùng người khác.
 - Mã không đổi được sau khi tạo. Nếu cần mã khác, tạo người mới.
 

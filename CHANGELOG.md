@@ -1,3 +1,8 @@
+## 0.9.9
+
+- Mới: ô Sắp xếp ở danh sách người: Tên (A–Z), Mã NV tăng dần, Mã NV giảm dần (mới nhất trước). Mã so theo số (2 < 10 < 100), mã có chữ xếp sau; lựa chọn được nhớ trên máy tính.
+- Hướng dẫn giải thích vì sao mã gợi ý nhảy số (mã đã xoá không được gợi ý lại) và cách gõ tay để dùng lại.
+
 ## 0.9.8
 
 - Hình trực tiếp khi chụp khuôn mặt có vòng canh mặt như trên màn hình máy chấm công: nét đứt khi canh mặt, chuyển xanh và nhấp nháy nhẹ trong lúc máy chụp; vùng ngoài vòng tối đi. Dòng "Mời nhìn thẳng vào camera" lên phía trên khung để thanh nút ở đáy không che.
