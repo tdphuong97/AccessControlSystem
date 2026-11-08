@@ -6,6 +6,12 @@ description: Các phiên bản đã phát hành và thay đổi trong từng b�
 
 {% updates format="full" %}
 {% update date="2026-11-08" %}
+## Phiên bản 0.9.8
+
+* Hình trực tiếp khi chụp khuôn mặt có **vòng canh mặt** như trên màn hình máy: nét đứt khi canh, chuyển xanh trong lúc máy chụp.
+{% endupdate %}
+
+{% update date="2026-11-08" %}
 ## Phiên bản 0.9.7
 
 * Thêm người mới: phần mềm chỉ gửi người đó xuống máy khi đã có khuôn mặt hoặc một vân tay. Đăng ký bỏ dở hay bị lỗi không còn để lại người "trống" trên máy; trong danh sách họ có nhãn **Chưa gửi · cần mặt hoặc vân tay**.

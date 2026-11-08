@@ -19,9 +19,9 @@ Màn hình có ba cách lấy ảnh. Chọn cách phù hợp.
 Cách này có nhãn **Nên dùng**. Ảnh chụp ngay tại máy chấm công nên khớp nhất với cách máy nhận diện sau này.
 
 1. Trong ô **Chụp ở máy**, chọn máy sẽ chụp. Máy dùng để chụp mặt đã được chọn sẵn. Máy mất kết nối hoặc sai mật khẩu vẫn nằm trong danh sách, có ghi chú kèm theo tên.
-2. Khung bên trái hiện hình camera của máy đó, có nhãn **Trực tiếp** và tên máy, hình tự cập nhật vài lần mỗi giây. Nhìn khung này để canh cho mặt người đó nằm giữa và đủ sáng.
+2. Khung bên trái hiện hình camera của máy đó, có nhãn **Trực tiếp** và tên máy, hình tự cập nhật vài lần mỗi giây. Giữa khung có một **vòng canh mặt** nét đứt: canh cho mặt người đó nằm gọn trong vòng và đủ sáng.
 3. Bấm **Chụp ngay**. Màn hình hiện **Đang chụp…** và dòng mời người đó nhìn thẳng vào camera của máy đã chọn.
-4. Trong lúc máy chụp, khung bên trái vẫn hiện hình trực tiếp, nhãn đổi thành **Đang chụp** kèm dòng mời nhìn thẳng vào camera.
+4. Trong lúc máy chụp, khung bên trái vẫn hiện hình trực tiếp: nhãn đổi thành **Đang chụp**, vòng canh mặt chuyển sang màu xanh, kèm dòng mời nhìn thẳng vào camera.
 5. Máy tự chụp. Ảnh hiện ở khung bên trái kèm nhãn **Đã chụp · ảnh rõ nét**, bên dưới là trạng thái từng máy.
 
 Chụp chưa đẹp thì bấm **Chụp lại**. Ảnh mới thay ảnh cũ.
@@ -30,7 +30,7 @@ Khung báo **Chưa xem được hình trực tiếp** khi máy mất kết nối
 
 Chụp bị lỗi thì dưới nút có thông báo lỗi kèm nút **Chẩn đoán máy**: bấm vào để phần mềm kiểm tra máy và nói cách xử lý (xem [Chẩn đoán máy](../may-cham-cong/them-sua-may.md#chan-doan-may)). Mỗi lần chụp lỗi cũng được ghi vào **Nhật ký**.
 
-<figure><img src="../.gitbook/assets/chup-khuon-mat.png" alt="Bước Khuôn mặt: khung hình trực tiếp từ camera máy bên trái, nút Chụp ngay, Webcam máy tính và Chọn ảnh có sẵn bên phải"><figcaption></figcaption></figure>
+<figure><img src="../.gitbook/assets/chup-khuon-mat.png" alt="Bước Khuôn mặt: khung hình trực tiếp từ camera máy với vòng canh mặt bên trái, nút Chụp ngay, Webcam máy tính và Chọn ảnh có sẵn bên phải"><figcaption></figcaption></figure>
 {% endtab %}
 
 {% tab title="Webcam" %}

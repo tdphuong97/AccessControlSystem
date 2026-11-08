@@ -20,6 +20,7 @@
     function stage() {
       if (s.tt === 'dang' && s.capturing && s.live) {
         return '<div class="stage-photo stage-live"><img id="live-img" alt="Hình trực tiếp từ camera của ' + esc(devName()) + ' trong lúc chụp" src="' + esc(s.live) + '">' +
+          '<span class="face-guide on" aria-hidden="true"></span>' +
           '<span class="badge-live"><i class="live-dot"></i>Đang chụp · ' + esc(devName()) + '</span>' +
           '<span class="live-cap" role="status">' + esc(s.busyText) + '</span></div>';
       }
@@ -33,8 +34,9 @@
       }
       if (s.live) {
         return '<div class="stage-photo stage-live"><img id="live-img" alt="Hình trực tiếp từ camera của ' + esc(devName()) + '" src="' + esc(s.live) + '">' +
+          '<span class="face-guide" aria-hidden="true"></span>' +
           '<span class="badge-live"><i class="live-dot"></i>Trực tiếp · ' + esc(devName()) + '</span></div>' +
-          '<p class="small muted live-note">Canh cho mặt người này nằm giữa khung, rồi bấm “Chụp ngay”.</p>';
+          '<p class="small muted live-note">Canh cho mặt người này nằm trong vòng, rồi bấm “Chụp ngay”.</p>';
       }
       return '<div class="stage stage-wait"><span class="stage-ic">' + icon('faceScan', 72, 1.2) + '</span>' +
         '<div class="fw6" style="font-size:16px">' + (s.liveErr ? 'Chưa xem được hình trực tiếp' : 'Đang mở camera của ' + esc(devName()) + '…') + '</div>' +

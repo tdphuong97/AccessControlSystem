@@ -1,3 +1,7 @@
+## 0.9.8
+
+- Hình trực tiếp khi chụp khuôn mặt có vòng canh mặt như trên màn hình máy chấm công: nét đứt khi canh mặt, chuyển xanh và nhấp nháy nhẹ trong lúc máy chụp; vùng ngoài vòng tối đi. Dòng "Mời nhìn thẳng vào camera" lên phía trên khung để thanh nút ở đáy không che.
+
 ## 0.9.7
 
 - Thêm người mới: chỉ gửi người đó xuống máy khi đã có khuôn mặt hoặc một vân tay (bước 1 chỉ lưu trong app). Đăng ký bỏ dở hay bị lỗi không còn để lại người không có gì trên máy; danh sách ghi "Chưa gửi · cần mặt hoặc vân tay". So khớp cũng không đẩy người như vậy xuống máy.
