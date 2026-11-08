@@ -58,6 +58,19 @@ public sealed class DeviceImporterTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Import_puts_people_in_the_group_named_by_their_name_prefix()
+    {
+        await Seed("2", "ABC. Lan");
+        await Seed("3", "ABC. Minh");
+        await Seed("4", "Tran Thi Mai");
+        await _imp.ImportAllAsync(_d1, null, Ct);
+
+        Assert.Equal("ABC", _h.Db.People.GroupName(_h.Db.People.Get("2")!.GroupId));
+        Assert.Equal(_h.Db.People.Get("2")!.GroupId, _h.Db.People.Get("3")!.GroupId);
+        Assert.Null(_h.Db.People.Get("4")!.GroupId);
+    }
+
+    [Fact]
     public async Task Device_default_2037_end_date_means_no_end_date()
     {
         await _dev.UpsertUserAsync(new HikUserWrite("1001", "An", "2026-03-01T00:00:00", "2037-12-31T23:59:59", true, 1), Ct);

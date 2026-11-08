@@ -71,11 +71,11 @@
     }
     const guard = async (fn) => { try { await fn(); } catch (e) { if (ctx.alive()) ACS.ui.toast(ACS.ui.errMessage(e), 'error'); } };
 
-    function editDialog() {
+    function editDialog(groups) {
       const noEnd = !p.validTo;
       const html = '<form class="dlg-body" novalidate><h2 class="dlg-title">Sửa thông tin</h2>' +
         '<label class="lbl" for="e-name">Họ tên</label><input id="e-name" class="input" maxlength="32" value="' + esc(p.fullName) + '">' +
-        '<label class="lbl" for="e-group">Nhóm (không bắt buộc)</label><input id="e-group" class="input" value="' + esc(p.groupName || '') + '">' +
+        '<label class="lbl" for="e-group">Nhóm / công ty (không bắt buộc)</label>' + ACS.ui.groupField('e-group', p.groupName || '', groups, 'input') +
         '<label class="check"><input type="checkbox" id="e-open"' + (noEnd ? ' checked' : '') + '> Không thời hạn</label>' +
         '<label class="lbl" for="e-to">Hết hạn ra vào</label><input id="e-to" type="date" class="input" value="' + esc(p.validTo || '') + '"' + (noEnd ? ' disabled' : '') + '>' +
         '<div class="alert alert-err" id="e-err" hidden></div>' +
@@ -84,13 +84,14 @@
         onOpen(d) {
           const q = (s) => d.querySelector(s);
           q('[data-no]').addEventListener('click', () => d.finish(null));
+          ACS.ui.wireGroup(d, 'e-group');
           q('#e-open').addEventListener('change', (ev) => { q('#e-to').disabled = ev.target.checked; });
           q('form').addEventListener('submit', async (ev) => {
             ev.preventDefault();
             const fullName = q('#e-name').value.trim();
             if (!fullName) { const b = q('#e-err'); b.hidden = false; b.textContent = 'Hãy nhập họ tên rồi bấm Lưu.'; return; }
             try {
-              const r = await ACS.bridge.call('people.update', { employeeNo: emp, fullName, groupName: q('#e-group').value.trim() || null,
+              const r = await ACS.bridge.call('people.update', { employeeNo: emp, fullName, groupName: ACS.ui.groupValue(d, 'e-group') || null,
                 validTo: q('#e-open').checked ? null : (q('#e-to').value || null) });
               d.finish(r);
             } catch (e) { const b = q('#e-err'); b.hidden = false; b.textContent = ACS.ui.errMessage(e); }
@@ -104,7 +105,10 @@
       const act = el.dataset.act;
       if (act === 'face') ACS.router.go('new/face', emp);
       else if (act === 'finger') ACS.router.go('new/finger', emp);
-      else if (act === 'edit') guard(async () => { const r = await editDialog(); if (r) { p = r; draw(); ACS.ui.toast('Đã lưu thông tin.'); } });
+      else if (act === 'edit') guard(async () => {
+        const groups = ACS.fmt.groupList(await ACS.bridge.call('people.list', { filter: 'all', query: '' })).map((g) => g.name);
+        if (!ctx.alive()) return;
+        const r = await editDialog(groups); if (r) { p = r; draw(); ACS.ui.toast('Đã lưu thông tin.'); } });
       else if (act === 'lock') guard(async () => {
         const ok = await ACS.ui.confirm({ title: 'Khoá ra vào cho ' + p.fullName + '?',
           body: 'Người này sẽ không ra vào được nữa. App vẫn giữ mặt và vân tay, bấm "Mở lại" bất cứ lúc nào để dùng tiếp.', okText: 'Khoá ra vào' });

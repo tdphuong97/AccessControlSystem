@@ -60,5 +60,22 @@
     return size > 0 ? { page: p, pages, from: (p - 1) * size, to: Math.min(total, p * size) } : { page: 1, pages: 1, from: 0, to: total };
   }
 
-  return { initials, fingerLabel, durationText, timeAgo, plural, fmtDate, PAGE_SIZES, pageSize, paginate };
+  // On site names start with the company code ("ABC. Lan"): the code before the first dot is the group (as GroupRules in the core).
+  function groupFromName(name) {
+    const m = /^\s*([\p{L}\p{Nd}]{1,6})\s*\./u.exec(name || '');
+    return m ? m[1].toUpperCase() : null;
+  }
+
+  const NO_GROUP = '-';
+  function groupList(rows) {
+    const n = new Map();
+    for (const r of rows) if (r.groupName) n.set(r.groupName, (n.get(r.groupName) || 0) + 1);
+    return Array.from(n, ([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+  }
+  function byGroup(rows, group) {
+    if (!group) return rows;
+    return rows.filter((r) => (group === NO_GROUP ? !r.groupName : r.groupName === group));
+  }
+
+  return { initials, fingerLabel, durationText, timeAgo, plural, fmtDate, PAGE_SIZES, pageSize, paginate, groupFromName, NO_GROUP, groupList, byGroup };
 });

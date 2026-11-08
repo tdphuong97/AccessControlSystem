@@ -60,3 +60,23 @@ test('pageSize: a remembered choice from PAGE_SIZES, otherwise 50', () => {
   assert.equal(F.pageSize('37'), 50);
   assert.equal(F.pageSize(null), 50);
 });
+
+test('groupFromName: the code before the first dot', () => {
+  assert.equal(F.groupFromName('ABC. Lan'), 'ABC');
+  assert.equal(F.groupFromName('XYZ.KT.Minh'), 'XYZ');
+  assert.equal(F.groupFromName('  deF . Minh'), 'DEF');
+  for (const n of ['BAOVE', 'Tran Thi Mai', 'Nguyen Van A. B', 'TOOLONG. An', '. An', 'A-B. An', '', null]) assert.equal(F.groupFromName(n), null, String(n));
+});
+
+test('groupList: every group once with its head count, sorted by name', () => {
+  const rows = [{ groupName: 'XYZ' }, { groupName: 'ABC' }, { groupName: 'XYZ' }, { groupName: null }, { groupName: 'Đông Á' }, { groupName: 'Bảo vệ' }];
+  assert.deepEqual(F.groupList(rows), [{ name: 'ABC', count: 1 }, { name: 'Bảo vệ', count: 1 }, { name: 'Đông Á', count: 1 }, { name: 'XYZ', count: 2 }]);
+  assert.deepEqual(F.groupList([]), []);
+});
+
+test('byGroup: all, one group, or the people without a group', () => {
+  const rows = [{ n: 1, groupName: 'XYZ' }, { n: 2, groupName: null }, { n: 3, groupName: 'ABC' }, { n: 4 }];
+  assert.deepEqual(F.byGroup(rows, '').map((r) => r.n), [1, 2, 3, 4]);
+  assert.deepEqual(F.byGroup(rows, 'XYZ').map((r) => r.n), [1]);
+  assert.deepEqual(F.byGroup(rows, F.NO_GROUP).map((r) => r.n), [2, 4]);
+});

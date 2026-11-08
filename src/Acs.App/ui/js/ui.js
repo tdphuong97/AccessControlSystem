@@ -57,5 +57,29 @@
     return (e && e.message) || 'Có lỗi xảy ra. Hãy thử lại, nếu vẫn lỗi thì mở Nhật ký để xem chi tiết.';
   }
 
-  ACS.ui = { esc, on, dialog, confirm: confirmBox, toast, errMessage };
+  // "Nhóm / công ty": pick one of the groups people already have, or "+ Nhóm mới…" to type one (shown in the box below).
+  const NEW_GROUP = '__new';
+  function groupField(id, value, names, cls, typed) {
+    const list = value && value !== NEW_GROUP && !names.includes(value) ? names.concat(value) : names;
+    const opt = (v, t) => '<option value="' + esc(v) + '"' + (v === (value || '') ? ' selected' : '') + '>' + esc(t) + '</option>';
+    return '<select id="' + id + '" class="' + cls + '">' + opt('', '— Không thuộc nhóm nào —') + list.map((n) => opt(n, n)).join('') +
+      opt(NEW_GROUP, '+ Nhóm mới…') + '</select>' +
+      '<input id="' + id + '-new" class="' + cls + ' group-new" type="text" maxlength="40" autocomplete="off" placeholder="Gõ tên nhóm mới, ví dụ: ABC"' +
+      ' aria-label="Tên nhóm mới" value="' + esc(typed || '') + '"' + (value === NEW_GROUP ? '' : ' hidden') + '>';
+  }
+  function wireGroup(root, id) {
+    root.addEventListener('change', (ev) => {
+      if (ev.target.id !== id) return;
+      const box = root.querySelector('#' + id + '-new');
+      box.hidden = ev.target.value !== NEW_GROUP;
+      if (!box.hidden) box.focus();
+    });
+  }
+  function groupValue(root, id) {
+    const sel = root.querySelector('#' + id);
+    if (!sel) return '';
+    return (sel.value === NEW_GROUP ? root.querySelector('#' + id + '-new').value : sel.value).trim();
+  }
+
+  ACS.ui = { esc, on, dialog, confirm: confirmBox, toast, errMessage, NEW_GROUP, groupField, wireGroup, groupValue };
 })();

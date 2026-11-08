@@ -9,7 +9,7 @@
     const emp = params.emp || null;
     const devs = W.currentDevices();
     const devNames = devs.map((d) => d.name);
-    const s = { fullName: '', employeeNo: '', groupName: '', limited: false, validTo: '', err: '', field: '', busy: false, groups: [], ready: false };
+    const s = { fullName: '', employeeNo: '', groupName: '', groupTyped: '', groupPicked: false, limited: false, validTo: '', err: '', field: '', busy: false, groups: [], ready: false };
 
     host.innerHTML = '<div class="wiz"><p class="muted">Đang tải…</p></div>';
 
@@ -30,8 +30,7 @@
         '<input id="ma-nv" class="input in48 in-mono" type="text" inputmode="numeric" autocomplete="off" value="' + esc(s.employeeNo) + '"' + (emp ? ' readonly' : '') + '>' +
         '<div class="hint">' + (emp ? 'Mã không đổi được sau khi tạo.' : 'Tự gợi ý — sửa nếu người này đã có mã.') + '</div></div>' +
         '<div><label class="field-lbl" for="nhom">Nhóm / công ty <span class="muted fw5" style="font-weight:400">(không bắt buộc)</span></label>' +
-        '<input id="nhom" class="input in48" type="text" list="nhom-list" autocomplete="off" placeholder="— Chưa chọn —" value="' + esc(s.groupName) + '">' +
-        '<datalist id="nhom-list">' + s.groups.map((g) => '<option value="' + esc(g) + '">').join('') + '</datalist></div></div>' +
+        ACS.ui.groupField('nhom', s.groupName, s.groups, 'input in48', s.groupTyped) + '</div></div>' +
         '<fieldset class="fieldset"><legend>Được ra vào đến khi nào?</legend><div class="radios">' +
         '<label class="radio' + (s.limited ? '' : ' on') + '"><input type="radio" name="han" value="open"' + (s.limited ? '' : ' checked') + '>' +
         '<span><span class="rt">Không thời hạn</span><span class="rs">Nhân viên chính thức</span></span></label>' +
@@ -59,7 +58,7 @@
     function readForm() {
       const q = (x) => host.querySelector(x);
       if (!q('#ho-ten')) return;
-      s.fullName = q('#ho-ten').value; s.employeeNo = q('#ma-nv').value; s.groupName = q('#nhom').value;
+      s.fullName = q('#ho-ten').value; s.employeeNo = q('#ma-nv').value; s.groupName = q('#nhom').value; s.groupTyped = q('#nhom-new').value;
       const han = host.querySelector('input[name="han"]:checked');
       s.limited = !!han && han.value === 'limited';
       const to = q('#han-den'); if (to) s.validTo = to.value;
@@ -73,9 +72,9 @@
           emp ? ACS.bridge.call('people.get', { employeeNo: emp }) : Promise.resolve(null),
         ]);
         if (!ctx.alive()) return;
-        s.groups = Array.from(new Set(list.map((r) => r.groupName).filter(Boolean)));
+        s.groups = ACS.fmt.groupList(list).map((g) => g.name);
         s.employeeNo = String(nextNo);
-        if (person) { s.fullName = person.fullName; s.groupName = person.groupName || ''; s.limited = !!person.validTo; s.validTo = person.validTo || ''; }
+        if (person) { s.fullName = person.fullName; s.groupName = person.groupName || ''; s.groupPicked = true; s.limited = !!person.validTo; s.validTo = person.validTo || ''; }
         s.ready = true;
         s.focus = '#ho-ten';
         draw();
@@ -86,6 +85,15 @@
     }
 
     on(host, 'change', 'input[name="han"]', () => { readForm(); s.err = ''; draw(); });
+    ACS.ui.wireGroup(host, 'nhom');
+    on(host, 'change', '#nhom', () => { s.groupPicked = true; });
+    // Names on site start with the company code ("ABC. Lan"): pick that group until the user picks one themselves.
+    on(host, 'input', '#ho-ten', (el) => {
+      const sel = host.querySelector('#nhom');
+      if (s.groupPicked || !sel) return;
+      const g = ACS.fmt.groupFromName(el.value);
+      sel.value = (g && s.groups.find((x) => x.toUpperCase() === g)) || '';
+    });
 
     host.addEventListener('submit', async (ev) => {
       ev.preventDefault();
@@ -97,7 +105,7 @@
       if (!no) { s.err = 'Hãy nhập mã nhân viên, hoặc bấm vào ô mã để dùng số app gợi ý.'; s.field = 'no'; s.focus = '#ma-nv'; draw(); return; }
       if (s.limited && !s.validTo) { s.err = 'Hãy chọn ngày hết hạn, hoặc chọn "Không thời hạn".'; s.field = 'to'; s.focus = '#han-den'; draw(); return; }
       s.err = ''; s.busy = true; draw();
-      const groupName = s.groupName.trim() || null;
+      const groupName = ACS.ui.groupValue(host, 'nhom') || null;
       const validTo = s.limited ? s.validTo : null;
       try {
         if (emp) await ACS.bridge.call('people.update', { employeeNo: emp, fullName: name, groupName, validTo });

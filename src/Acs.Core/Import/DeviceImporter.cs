@@ -167,7 +167,9 @@ public sealed class DeviceImporter(Database db, IHikDeviceFactory factory, TimeP
                 var from = ParseDate(u.BeginTime) ?? DateOnly.FromDateTime(now);
                 var to = JobRules.IsNoEnd(u.EndTime) ? null : ParseDate(u.EndTime);   // 2037-12-31 = "không thời hạn" too
                 var locked = !u.Enabled;
-                db.People.Insert(new PersonRecord(no, string.IsNullOrWhiteSpace(u.Name) ? no : u.Name.Trim(), null, from, to,
+                var name = string.IsNullOrWhiteSpace(u.Name) ? no : u.Name.Trim();
+                int? group = GroupRules.FromName(name) is { } code ? db.People.GetOrCreateGroup(code) : null;
+                db.People.Insert(new PersonRecord(no, name, group, from, to,
                     locked ? PersonStatus.Locked : PersonStatus.Active, now, now, locked ? now : null));
             }
             var stored = false;

@@ -15,6 +15,8 @@ public partial class MainWindow : Window
         _app = app;
         InitializeComponent();
         Bridge = new WebHost(Web, host.HandleAsync);
+        // The whole page grows and shrinks with the window (UiScale: 100% at the default size, 80–150%).
+        Web.SizeChanged += (_, e) => Web.ZoomFactor = UiScale.Fit(e.NewSize.Width, e.NewSize.Height);
         if (startHidden)
         {
             // The browser control only starts once the window has been shown, so show it

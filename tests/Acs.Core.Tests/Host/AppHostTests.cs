@@ -695,6 +695,35 @@ public sealed class AppHostTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task start_puts_people_without_a_group_in_the_group_of_their_name_prefix_once()
+    {
+        var h = NewHost();
+        var at = new DateTime(2026, 11, 7, 0, 0, 0, DateTimeKind.Utc);
+        void Add(string no, string name, int? group = null) =>
+            h.Db.People.Insert(new PersonRecord(no, name, group, new DateOnly(2026, 1, 1), null, PersonStatus.Active, at, at, null));
+        Add("2", "ABC. Lan");
+        Add("6", "XYZ. Minh");
+        Add("7", "Tran Thi Mai");
+        Add("8", "ABC. Hoa", h.Db.People.GetOrCreateGroup("Kế toán"));   // a group chosen by hand is kept
+
+        await h.StartAsync();
+
+        string? G(string no) => h.Db.People.GroupName(h.Db.People.Get(no)!.GroupId);
+        Assert.Equal("ABC", G("2"));
+        Assert.Equal("XYZ", G("6"));
+        Assert.Null(G("7"));
+        Assert.Equal("Kế toán", G("8"));
+        Assert.Equal(at, h.Db.People.Get("2")!.UpdatedAt);
+
+        // Done once: a group cleared by hand afterwards is not put back on the next start.
+        h.Db.People.Update(h.Db.People.Get("2")! with { GroupId = null });
+        await h.StopAsync();
+        var again = NewHost();
+        await again.StartAsync();
+        Assert.Null(again.Db.People.Get("2")!.GroupId);
+    }
+
+    [Fact]
     public async Task start_skips_an_installer_that_is_still_running()
     {
         var updates = Path.Combine(_folder, "updates");

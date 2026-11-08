@@ -156,7 +156,7 @@ public sealed partial class AppHost
         if (_started) return;
         _started = true;
         Sync.Start();
-        await Task.Run(() => { DeleteOldInstallers(); DailyBackup(); });
+        await Task.Run(() => { DeleteOldInstallers(); GroupPeopleByName(); DailyBackup(); });
         StartUpdateTimer();
     }
 
@@ -169,6 +169,25 @@ public sealed partial class AppHost
         if (!Directory.Exists(_updatesFolder)) return;
         foreach (var f in Directory.GetFiles(_updatesFolder))
             try { File.Delete(f); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+    }
+
+    public const string GroupsFromNamesKey = "groups.fromNames";
+
+    /// <summary>
+    /// Once (0.9.6): people imported before the app read groups from names get the group of their name's code. Later
+    /// imports do it themselves, and a group cleared or changed by hand afterwards stays as it is.
+    /// </summary>
+    private void GroupPeopleByName()
+    {
+        if (Db.Settings.Get(GroupsFromNamesKey) == "1") return;
+        Db.Tx(() =>
+        {
+            foreach (var p in Db.People.List())
+                if (p.GroupId is null && GroupRules.FromName(p.FullName) is { } code)
+                    Db.People.Update(p with { GroupId = Db.People.GetOrCreateGroup(code) });
+            Db.Settings.Set(GroupsFromNamesKey, "1");
+            return 0;
+        });
     }
 
     public async Task StopAsync()
