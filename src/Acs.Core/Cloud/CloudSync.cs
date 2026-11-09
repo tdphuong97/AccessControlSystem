@@ -123,8 +123,20 @@ public sealed class CloudSync(Database db, CloudClient client, byte[] key, strin
     private bool ApplyRow(CloudRow row)
     {
         if (row.Data is null) return false;
-        var payload = JsonNode.Parse(CloudCrypto.Open(key, row.Tbl, row.Rid, row.Data))!.AsObject();
-        var k = payload["_k"]!.GetValue<string>();
+        JsonObject payload;
+        string k;
+        try
+        {
+            if (!SyncTables.All.Any(t => t.Name == row.Tbl)) throw new CloudException("unknown table " + row.Tbl);
+            payload = JsonNode.Parse(CloudCrypto.Open(key, row.Tbl, row.Rid, row.Data))!.AsObject();
+            k = payload["_k"]!.GetValue<string>();
+        }
+        catch (Exception e) when (e is CloudException or System.Text.Json.JsonException or InvalidOperationException or NullReferenceException)
+        {
+            // Written with another key or by something else: one bad row must not stop every pull after it.
+            db.Log.Add(null, null, LogAction, false, $"Bỏ qua một dòng dữ liệu chung không đọc được ({row.Tbl}, phiên bản {row.Ver}).");
+            return false;
+        }
         if (db.Outbox.IsPending(row.Tbl, k))
         {
             // This PC changed the same row and has not pushed yet: its change is the later one and will win.

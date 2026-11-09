@@ -84,13 +84,22 @@ public sealed class CloudClient(HttpClient http, CloudCode code)
         catch (OperationCanceledException e) when (!ct.IsCancellationRequested) { throw new CloudOfflineException(Offline, e); }
         catch (HttpRequestException e) { throw new CloudOfflineException(Offline, e); }
         if (res.StatusCode == HttpStatusCode.Unauthorized) { res.Dispose(); throw new CloudException("Mã kết nối không đúng hoặc đã được đổi."); }
-        if ((int)res.StatusCode >= 500) { res.Dispose(); throw new CloudOfflineException(Offline); }
+        if ((int)res.StatusCode >= 500)
+        {
+            var text = await res.Content.ReadAsStringAsync(ct);
+            res.Dispose();
+            throw new CloudOfflineException(Offline, new HttpRequestException($"HTTP {(int)res.StatusCode}: {text[..Math.Min(200, text.Length)]}"));
+        }
         return res;
     }
 
     private static async Task<T> ReadAsync<T>(HttpResponseMessage r, CancellationToken ct)
     {
-        if (!r.IsSuccessStatusCode) throw new CloudOfflineException(Offline);
+        if (!r.IsSuccessStatusCode)
+        {
+            var text = await r.Content.ReadAsStringAsync(ct);
+            throw new CloudOfflineException(Offline, new HttpRequestException($"HTTP {(int)r.StatusCode}: {text[..Math.Min(200, text.Length)]}"));
+        }
         try { return JsonSerializer.Deserialize<T>(await r.Content.ReadAsStringAsync(ct), Json) ?? throw new JsonException("empty"); }
         catch (JsonException e) { throw new CloudOfflineException(Offline, e); }
     }

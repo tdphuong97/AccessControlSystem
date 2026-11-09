@@ -214,6 +214,20 @@ public sealed class CloudSyncTests : IDisposable
     }
 
     [Fact]
+    public async Task unreadable_or_unknown_rows_are_skipped_not_fatal()
+    {
+        await PublishAndJoin();
+        _cloud.Rows[("probe", "x1")] = new FakeCloud.Row("probe", "x1", 9001, false, "AAAA", "other", "now");
+        _cloud.Rows[("people", "x2")] = new FakeCloud.Row("people", "x2", 9002, false, Convert.ToBase64String(new byte[64]), "other", "now");
+        _nhien.People.Update(_nhien.People.Get("101")! with { FullName = "Sau rác" });
+        await _a.PushAsync(default);
+        await _b.PullAsync(default);
+        Assert.Equal("Sau rác", _huong.People.Get("101")!.FullName);
+        Assert.Contains(_huong.Log.List(null, null, 50), e => e.Action == "Dữ liệu chung" && !e.Ok);
+        await _b.PullAsync(default);   // and the next pull does not trip on them again
+    }
+
+    [Fact]
     public async Task offline_push_keeps_outbox_and_retries()
     {
         await PublishAndJoin();

@@ -260,6 +260,7 @@ public sealed partial class AppHost
     private async Task CloudLoopAsync(CloudRuntime rt, CancellationToken ct)
     {
         var tick = 0;
+        string? lastWhy = null;   // log each distinct network fault once
         while (!ct.IsCancellationRequested)
         {
             try
@@ -269,7 +270,11 @@ public sealed partial class AppHost
                 if (tick % 15 == 0) { await rt.Sync.PullAsync(ct); EmitCloud(); }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
-            catch (Exception e) when (e is CloudException or CloudOfflineException) { EmitCloud(); }
+            catch (Exception e) when (e is CloudException or CloudOfflineException)
+            {
+                if (e.InnerException?.Message is { } why && why != lastWhy) { lastWhy = why; try { Db.Log.Add(null, null, CloudSync.LogAction, false, e.Message + " (" + why + ")"); } catch { } }
+                EmitCloud();
+            }
             catch (Exception e) { try { Db.Log.Add(null, null, CloudSync.LogAction, false, e.GetType().Name + ": " + e.Message); } catch { } }
             tick++;
             try { await Task.Delay(TimeSpan.FromSeconds(1), ct); } catch (OperationCanceledException) { return; }
