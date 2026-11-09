@@ -19,6 +19,7 @@ public sealed class Database : IDisposable
     public LogStore Log { get; }
     public SettingsStore Settings { get; }
     public TrashStore Trash { get; }
+    public OutboxStore Outbox { get; }
 
     public Database(string file, DataProtector protector)
     {
@@ -37,6 +38,7 @@ public sealed class Database : IDisposable
         Log = new LogStore(this);
         Settings = new SettingsStore(this);
         Trash = new TrashStore(this);
+        Outbox = new OutboxStore(this);
     }
 
     private void Migrate()
@@ -46,6 +48,7 @@ public sealed class Database : IDisposable
             var v = Convert.ToInt32(Scalar("PRAGMA user_version") ?? 0, CultureInfo.InvariantCulture);
             if (v < 1) Exec(Schema.V1);
             if (v < 2) Exec(Schema.V2);
+            if (v < 3) Exec(Schema.V3);
             if (v < Schema.Version) Exec($"PRAGMA user_version={Schema.Version}");
             return 0;
         });

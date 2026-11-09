@@ -19,6 +19,7 @@ public sealed class DatabaseTests : IDisposable
         try { Directory.Delete(_dir, true); } catch { /* best effort */ }
     }
 
+    private static List<string> ReadAll(SqliteCommand q) { using var r = q.ExecuteReader(); var l = new List<string>(); while (r.Read()) l.Add(r.GetString(0)); return l; }
     private static DateTime Now => DateTime.UtcNow;
     private static PersonRecord Person(string no, string name = "Nguyễn Văn A") =>
         new(no, name, null, new DateOnly(2026, 1, 1), null, PersonStatus.Active, Now, Now, null);
@@ -40,7 +41,10 @@ public sealed class DatabaseTests : IDisposable
         {
             raw.Open();
             using var cmd = raw.CreateCommand();
-            cmd.CommandText = "DROP TABLE trash; ALTER TABLE people DROP COLUMN draft; PRAGMA user_version=1;";
+            cmd.CommandText = string.Concat(raw.CreateCommand() is var q && (q.CommandText = "SELECT name FROM sqlite_master WHERE type='trigger'") != null
+                ? ReadAll(q).Select(t => $"DROP TRIGGER {t};") : []) +
+                "DROP TABLE outbox; DROP TABLE sync_rows; DROP TABLE sync_deferred; DROP TABLE sync_flags; ALTER TABLE log DROP COLUMN pc; ALTER TABLE log DROP COLUMN origin;" +
+                "DROP TABLE trash; ALTER TABLE people DROP COLUMN draft; PRAGMA user_version=1;";
             cmd.ExecuteNonQuery();
         }
 
@@ -116,7 +120,7 @@ public sealed class DatabaseTests : IDisposable
         raw.Open();
         using var cmd = raw.CreateCommand();
         cmd.CommandText = "PRAGMA user_version";
-        Assert.Equal(2L, cmd.ExecuteScalar());
+        Assert.Equal((long)Schema.Version, cmd.ExecuteScalar());
     }
 
     [Fact]
