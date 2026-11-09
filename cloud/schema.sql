@@ -1,0 +1,10 @@
+-- acs-sync D1 schema. The server only ever holds data the PCs encrypted: rid is an HMAC, data is AES-GCM.
+CREATE TABLE IF NOT EXISTS space(id INTEGER PRIMARY KEY CHECK(id = 1), wrapped TEXT NOT NULL, salt TEXT NOT NULL,
+  iterations INTEGER NOT NULL, created TEXT NOT NULL, ver INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS rows(tbl TEXT NOT NULL, rid TEXT NOT NULL, ver INTEGER NOT NULL, deleted INTEGER NOT NULL,
+  data TEXT, pc TEXT, at TEXT NOT NULL, PRIMARY KEY(tbl, rid));
+CREATE INDEX IF NOT EXISTS rows_ver ON rows(ver);
+CREATE TABLE IF NOT EXISTS seq(id INTEGER PRIMARY KEY CHECK(id = 1), v INTEGER NOT NULL);
+INSERT OR IGNORE INTO seq(id, v) VALUES(1, 0);
+CREATE TABLE IF NOT EXISTS lease(name TEXT PRIMARY KEY, holder TEXT NOT NULL, active INTEGER NOT NULL, label TEXT,
+  until INTEGER NOT NULL);
