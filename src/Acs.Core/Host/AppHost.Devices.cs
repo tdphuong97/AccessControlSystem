@@ -98,7 +98,9 @@ public sealed partial class AppHost
             sid = Db.Devices.Insert(new DeviceRecord(0, name, host, user, password, door, capture, reader, null, null, null,
                 "device-0", false, null));
             var created = Db.Devices.Get(sid)!;
-            Db.Devices.Update(created with { FpGroup = "device-" + sid });
+            // Dữ liệu chung: fp_group must be unique across PCs (it names the device in the cloud), "device-<id>" is not.
+            var group = CloudEnabled ? "device-" + Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(4)).ToLowerInvariant() : "device-" + sid;
+            Db.Devices.Update(created with { FpGroup = group });
             // A new device starts empty as far as the app knows: nothing is queued for it, So khớp sends the data.
             if (Db.People.Count() > 0 || Db.Devices.List().Count > 1) SetNeedsReconcile(true);
         }

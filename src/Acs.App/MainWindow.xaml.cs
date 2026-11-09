@@ -30,6 +30,9 @@ public partial class MainWindow : Window
             };
         }
         Loaded += async (_, _) => await Bridge.LoadAsync("index.html");
+        // Dữ liệu chung: the PC whose window is open sends to the devices.
+        IsVisibleChanged += (_, _) => host.SetWindowActive(IsVisible && WindowState != WindowState.Minimized);
+        StateChanged += (_, _) => host.SetWindowActive(IsVisible && WindowState != WindowState.Minimized);
     }
 
     protected override void OnClosing(CancelEventArgs e)

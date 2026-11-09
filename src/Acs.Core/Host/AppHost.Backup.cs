@@ -111,7 +111,7 @@ public sealed partial class AppHost
     /// Checks name + password against a scratch copy (own key store and database), so a wrong password can be
     /// refused before anything live is touched.
     /// </summary>
-    private void VerifyBackup(string path, string password)
+    private int VerifyBackup(string path, string password)
     {
         var tmp = Path.Combine(Path.GetTempPath(), "acs-verify-" + Guid.NewGuid().ToString("N"));
         try
@@ -120,6 +120,8 @@ public sealed partial class AppHost
             var keys = new KeyStore(Path.Combine(tmp, "keys"), _protector);
             var svc = _backupIterations is { } n ? new BackupService(scratch, keys, tmp, _time, n) : new BackupService(scratch, keys, tmp, _time);
             svc.Restore(path, password, Path.Combine(tmp, "verify.db"));
+            using var restored = new Database(Path.Combine(tmp, "verify.db"), new DataProtector(new byte[32]));
+            return restored.People.Count();
         }
         finally { try { Directory.Delete(tmp, true); } catch { /* temp clean-up only */ } }
     }
@@ -134,6 +136,9 @@ public sealed partial class AppHost
     {
         var source = RestoreSource(a);
         var password = OptStr(a, "password") ?? "";
+        var shared = CloudEnabled;
+        if (shared && !(a.TryGetProperty("affectsShared", out var conf) && conf.ValueKind == JsonValueKind.True))
+            throw new HostException("Đang dùng dữ liệu chung: khôi phục sẽ đổi dữ liệu của cả hai máy. Hãy xác nhận lại.");
         VerifyBackup(source, password);
 
         lock (_gate)
@@ -154,6 +159,7 @@ public sealed partial class AppHost
             }
             var old = _g;
             var wasStarted = _started;
+            await StopCloudAsync(release: true);
             await old.Sync.StopAsync();
             old.Db.Dispose();
             try { old.Backup.Restore(source, password, _dbFile); }
@@ -168,16 +174,26 @@ public sealed partial class AppHost
                     throw new HostException(BrokenMessage);
                 }
                 _g = fresh;
-                if (wasStarted) fresh.Sync.Start();
+                if (wasStarted) { fresh.Sync.Start(); await StartCloudIfEnabledAsync(); }
                 throw;
             }
             done = true;
             try { File.WriteAllText(_restoreMarker, "1"); } catch { /* the hint is best-effort; the restore itself succeeded */ }
+            // Dữ liệu chung: the restored data becomes the shared data on the next start (the restored file still says enabled).
+            if (shared) { try { File.WriteAllText(Path.Combine(_dataFolder, RepublishMarkerName), "1"); } catch { } }
             lock (_gate) { _closed = true; _updateTimer?.Dispose(); }
             RestartRequested = true;
             Emit("app.restart", null);
             return null;
         }
         finally { if (!done) lock (_gate) _restoring = false; }
+    }
+
+    /// <summary>People count and date of a backup, for the restore confirmation (the password is checked on a scratch copy).</summary>
+    private object BackupInspect(JsonElement a)
+    {
+        var source = RestoreSource(a);
+        var people = VerifyBackup(source, OptStr(a, "password") ?? "");
+        return new { people, at = LocalStamp(File.GetLastWriteTime(source)) };
     }
 }

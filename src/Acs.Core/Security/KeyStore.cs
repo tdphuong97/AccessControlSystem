@@ -52,6 +52,26 @@ public sealed class KeyStore
         WriteAtomic(BackupKeyPath, _protector.Protect(blob));
     }
 
+    private string CloudKeyPath => Path.Combine(_folder, "cloud.key");
+
+    /// <summary>Dữ liệu chung: connection code, shared key K and this PC's random id, DPAPI-wrapped like the other keys.</summary>
+    public CloudSecret? GetCloud()
+    {
+        if (!File.Exists(CloudKeyPath)) return null;
+        var json = System.Text.Json.JsonDocument.Parse(_protector.Unprotect(File.ReadAllBytes(CloudKeyPath))).RootElement;
+        return new CloudSecret(json.GetProperty("code").GetString()!, Convert.FromBase64String(json.GetProperty("key").GetString()!),
+            json.GetProperty("pcId").GetString()!);
+    }
+
+    public void SetCloud(CloudSecret s)
+    {
+        ArgumentNullException.ThrowIfNull(s);
+        var json = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new { code = s.Code, key = Convert.ToBase64String(s.Key), pcId = s.PcId });
+        WriteAtomic(CloudKeyPath, _protector.Protect(json));
+    }
+
+    public void ForgetCloud() { if (File.Exists(CloudKeyPath)) File.Delete(CloudKeyPath); }
+
     private void WriteAtomic(string path, byte[] bytes)
     {
         Directory.CreateDirectory(_folder);
@@ -60,3 +80,5 @@ public sealed class KeyStore
         File.Move(tmp, path, overwrite: true);
     }
 }
+
+public sealed record CloudSecret(string Code, byte[] Key, string PcId);

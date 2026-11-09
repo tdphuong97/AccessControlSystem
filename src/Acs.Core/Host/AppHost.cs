@@ -85,8 +85,10 @@ public sealed partial class AppHost
     public bool RestartRequested { get; private set; }
 
     private AppHost(string dataFolder, IKeyProtector protector, IHikDeviceFactory factory, TimeProvider time, string version,
-        Updater? updater, int? backupIterations)
+        Updater? updater, int? backupIterations, HttpClient? cloudHttp)
     {
+        _dataFolder = dataFolder;
+        _cloudHttp = cloudHttp;
         _factory = factory; _time = time; _version = version; _backupIterations = backupIterations;
         _keys = new KeyStore(dataFolder, protector);
         _dbFile = Path.Combine(dataFolder, "acs.db");
@@ -122,10 +124,10 @@ public sealed partial class AppHost
     /// <param name="updater">Tests pass one that talks to a local server; the App leaves it null.</param>
     /// <param name="backupIterations">Tests lower the PBKDF2 cost; the App leaves it null.</param>
     public static AppHost Create(string dataFolder, IKeyProtector protector, IHikDeviceFactory factory, TimeProvider time,
-        string currentVersion, Updater? updater = null, int? backupIterations = null)
+        string currentVersion, Updater? updater = null, int? backupIterations = null, HttpClient? cloudHttp = null)
     {
         Directory.CreateDirectory(dataFolder);
-        return new AppHost(dataFolder, protector, factory, time, currentVersion, updater, backupIterations);
+        return new AppHost(dataFolder, protector, factory, time, currentVersion, updater, backupIterations, cloudHttp);
     }
 
     private Database OpenDb() => new(_dbFile, new DataProtector(_keys.GetOrCreateDataKey()));
@@ -157,6 +159,7 @@ public sealed partial class AppHost
         _started = true;
         Sync.Start();
         await Task.Run(() => { DeleteOldInstallers(); GroupPeopleByName(); Enroll.PurgeDrafts(); DailyBackup(); });
+        await StartCloudIfEnabledAsync();
         StartUpdateTimer();
     }
 
@@ -199,6 +202,7 @@ public sealed partial class AppHost
             _closed = true;
             _updateTimer?.Dispose();
         }
+        await StopCloudAsync(release: true);
         _cts.Cancel();
         var g = _g;
         await g.Sync.StopAsync();
@@ -215,7 +219,8 @@ public sealed partial class AppHost
             _inflight++;
         }
         try { return await Dispatch(cmd, args); }
-        catch (Exception ex) when (ex is EnrollException or HikException or BackupException or HostException or UpdateException)
+        catch (Exception ex) when (ex is EnrollException or HikException or BackupException or HostException or UpdateException
+            or Cloud.CloudException or Cloud.CloudOfflineException)
         { throw; }
         catch (OperationCanceledException) when (_cts.IsCancellationRequested) { throw; }   // shutdown
         catch (OperationCanceledException) { throw new HostException(SlowNetworkMessage); }   // timeout
@@ -272,6 +277,14 @@ public sealed partial class AppHost
         "settings.get" => SettingsGet(),
         "settings.set" => SettingsSet(a),
         "log.list" => LogList(a),
+        "cloud.status" => CloudStatusView(),
+        "cloud.connect" => await CloudConnect(a),
+        "cloud.setEnabled" => await CloudSetEnabled(a),
+        "cloud.syncNow" => await CloudSyncNow(),
+        "cloud.check" => await CloudCheck(),
+        "cloud.changePassword" => await CloudChangePassword(a),
+        "cloud.forget" => await CloudForget(),
+        "backup.inspect" => BackupInspect(a),
         _ => throw new InvalidOperationException(UnknownPrefix + cmd),
     };
 
