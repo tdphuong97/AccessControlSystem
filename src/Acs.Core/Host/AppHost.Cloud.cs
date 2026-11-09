@@ -86,9 +86,10 @@ public sealed partial class AppHost
             Db.Settings.Set(CloudEnabledKey, "1");
             Db.Log.Add(null, null, CloudSync.LogAction, true, "Đã bật dữ liệu chung và đưa dữ liệu máy này lên.");
             var rt = StartCloud(secret);
-            await rt.Sync.PublishAllAsync(null, _cts.Token);
+            try { await rt.Sync.PublishAllAsync(null, _cts.Token); }
+            catch (CloudOfflineException) { /* connected: the background loop sends the rest */ }
             EmitCloud();
-            return new { mode = "published", people = Db.People.Count() };
+            return new { mode = "published", people = Db.People.Count(), pending = Db.Outbox.Count() };
         }
         var key = CloudCrypto.Unwrap(space.Key, password);   // wrong password throws before anything changes
         RequireJoinBackup();
@@ -177,10 +178,17 @@ public sealed partial class AppHost
         await Sync.StopAsync();
         var client = new CloudClient(CloudHttp, CloudCode.Parse(secret.Code));
         var sync = new CloudSync(Db, client, secret.Key, secret.PcId, Environment.MachineName, _time);
+        Db.Settings.Set(CloudEnabledKey, "1");   // from here the local list belongs to the shared data, even if the pull breaks off
         int people;
         try { people = await sync.ReplaceLocalFromCloudAsync(null, _cts.Token); }
-        finally { Sync.Start(); }
-        Db.Settings.Set(CloudEnabledKey, "1");
+        catch (CloudOfflineException)
+        {
+            Sync.Start();
+            StartCloud(secret);   // keeps pulling where it stopped
+            EmitCloud();
+            throw new HostException("Đã kết nối dữ liệu chung nhưng mạng đang chập chờn. Phần còn lại sẽ tự tải về; mục Dữ liệu chung sẽ báo khi đã đồng bộ.");
+        }
+        finally { if (_cloud is null) Sync.Start(); }
         SetNeedsReconcile(true);
         StartCloud(secret);
         Emit("devices.changed", DeviceViews());

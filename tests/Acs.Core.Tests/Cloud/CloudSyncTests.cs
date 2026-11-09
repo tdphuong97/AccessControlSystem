@@ -190,6 +190,30 @@ public sealed class CloudSyncTests : IDisposable
     }
 
     [Fact]
+    public async Task push_splits_large_rows_into_small_batches()
+    {
+        for (var i = 0; i < 30; i++)
+        {
+            var no = (300 + i).ToString();
+            _nhien.People.Insert(Person(no));
+            _nhien.Biometrics.SetFace(new FaceRecord(no, [0xFF, 0xD8, 0xFF, .. new byte[100_000], 0xFF, 0xD9], BiometricSource.Device, Now));
+        }
+        await _a.PublishAllAsync(null, default);
+        Assert.Equal(0, _nhien.Outbox.Count());
+        Assert.All(_cloud.PushSizes, size => Assert.True(size < 1_500_000, "push body " + size));
+        Assert.True(_cloud.PushSizes.Count >= 5);
+    }
+
+    [Fact]
+    public async Task publish_rides_out_a_failing_push()
+    {
+        Seed(_nhien);
+        _cloud.FailNextPushes = 2;
+        await _a.PublishAllAsync(null, default);
+        Assert.Equal(0, _nhien.Outbox.Count());
+    }
+
+    [Fact]
     public async Task offline_push_keeps_outbox_and_retries()
     {
         await PublishAndJoin();

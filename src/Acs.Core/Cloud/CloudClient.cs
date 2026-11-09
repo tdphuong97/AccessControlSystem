@@ -17,6 +17,7 @@ public sealed record LeaseState(bool Granted, string? Holder, bool Active, strin
 public sealed class CloudClient(HttpClient http, CloudCode code)
 {
     public static readonly TimeSpan CallTimeout = TimeSpan.FromSeconds(20);
+    public static readonly TimeSpan PushTimeout = TimeSpan.FromSeconds(60);
     private const string Offline = "Không kết nối được dữ liệu chung. Phần mềm vẫn chạy bằng dữ liệu trên máy và sẽ tự thử lại.";
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
@@ -48,7 +49,7 @@ public sealed class CloudClient(HttpClient http, CloudCode code)
     public async Task<IReadOnlyList<PushResult>> PushAsync(IReadOnlyList<RowChange> changes, CancellationToken ct)
     {
         var body = new { changes = changes.Select(c => new { tbl = c.Tbl, rid = c.Rid, @base = c.Base, deleted = c.Deleted, data = c.Data, pc = c.Pc }) };
-        using var r = await SendAsync(HttpMethod.Post, "/push", body, ct);
+        using var r = await SendAsync(HttpMethod.Post, "/push", body, ct, timeout: PushTimeout);
         return (await ReadAsync<PushDto>(r, ct)).Results.Select(x => new PushResult(x.Tbl, x.Rid, x.Ok, x.Ver, x.Current)).ToList();
     }
 
@@ -71,13 +72,13 @@ public sealed class CloudClient(HttpClient http, CloudCode code)
         using var _ = await SendAsync(HttpMethod.Delete, "/lease", new { holder }, ct);
     }
 
-    private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, object? body, CancellationToken ct, bool auth = true)
+    private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, object? body, CancellationToken ct, bool auth = true, TimeSpan? timeout = null)
     {
         using var req = new HttpRequestMessage(method, new Uri(code.BaseUrl, path));
         if (auth) req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", code.Key);
         if (body is not null) req.Content = new StringContent(JsonSerializer.Serialize(body, Json), Encoding.UTF8, "application/json");
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        cts.CancelAfter(CallTimeout);
+        cts.CancelAfter(timeout ?? CallTimeout);
         HttpResponseMessage res;
         try { res = await http.SendAsync(req, cts.Token); }
         catch (OperationCanceledException e) when (!ct.IsCancellationRequested) { throw new CloudOfflineException(Offline, e); }

@@ -17,6 +17,10 @@ public sealed class FakeCloud : HttpMessageHandler
     public bool Offline { get; set; }
     /// <summary>Simulated network delay, so concurrent calls really overlap.</summary>
     public TimeSpan Latency { get; set; }
+    /// <summary>Request body sizes of every /push call.</summary>
+    public List<int> PushSizes { get; } = new();
+    /// <summary>The next N /push calls fail with 504 (a slow or overloaded Worker).</summary>
+    public int FailNextPushes { get; set; }
     public int Calls { get; private set; }
     public Func<long> NowMs { get; set; } = () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     public const string Key = "k";
@@ -31,7 +35,13 @@ public sealed class FakeCloud : HttpMessageHandler
         var path = req.RequestUri!.AbsolutePath;
         if (req.Method == HttpMethod.Get && path == "/health") return J(new JsonObject { ["ok"] = true });
         if (req.Headers.Authorization?.ToString() != "Bearer " + Key) return J(new JsonObject { ["error"] = "unauthorized" }, HttpStatusCode.Unauthorized);
-        var body = req.Content is null ? null : JsonNode.Parse(await req.Content.ReadAsStringAsync(ct))?.AsObject();
+        var text = req.Content is null ? null : await req.Content.ReadAsStringAsync(ct);
+        if (path == "/push")
+        {
+            PushSizes.Add(text?.Length ?? 0);
+            if (FailNextPushes > 0) { FailNextPushes--; return J(new JsonObject { ["error"] = "timeout" }, HttpStatusCode.GatewayTimeout); }
+        }
+        var body = text is null ? null : JsonNode.Parse(text)?.AsObject();
         lock (_gate)
         {
             return (req.Method.Method, path) switch

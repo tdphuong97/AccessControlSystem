@@ -18,7 +18,8 @@ public sealed class CloudSync(Database db, CloudClient client, byte[] key, strin
 {
     public const string SinceKey = "cloud.since";
     public const string LogAction = "Dữ liệu chung";
-    private const int PushBatch = 50, PullLimit = 200;
+    // A face row is ~50 KB once sealed: keep each push small enough for the Worker to answer well within the timeout.
+    private const int PushBatch = 20, PullLimit = 200, MaxBatchChars = 1_000_000, PublishRetries = 5;
 
     private readonly SemaphoreSlim _gate = new(1, 1);   // one sync operation at a time on this PC
     private DateTime? _lastSync;
@@ -41,9 +42,16 @@ public sealed class CloudSync(Database db, CloudClient client, byte[] key, strin
         var pushed = 0;
         while (!ct.IsCancellationRequested)
         {
-            var batch = db.Outbox.Take(PushBatch);
+            var batch = new List<(string Tbl, string Key, long Seq)>();
+            var changes = new List<RowChange>();
+            var size = 0;
+            foreach (var e in db.Outbox.Take(PushBatch))
+            {
+                var c = Change(e.Tbl, e.Key, db.Outbox.KnownVer(e.Tbl, e.Key) ?? 0);
+                if (changes.Count > 0 && size + (c.Data?.Length ?? 0) > MaxBatchChars) break;
+                batch.Add(e); changes.Add(c); size += c.Data?.Length ?? 0;
+            }
             if (batch.Count == 0) break;
-            var changes = batch.Select(e => Change(e.Tbl, e.Key, db.Outbox.KnownVer(e.Tbl, e.Key) ?? 0)).ToList();
             var results = await client.PushAsync(changes, ct);
             var retry = new List<(int Index, RowChange Change)>();
             for (var i = 0; i < results.Count; i++)
@@ -149,9 +157,11 @@ public sealed class CloudSync(Database db, CloudClient client, byte[] key, strin
         db.Outbox.Capture = true;
         db.Outbox.MarkAll();
         var total = Math.Max(1, db.Outbox.Count());
+        var failures = 0;
         while (db.Outbox.Count() > 0 && !ct.IsCancellationRequested)
         {
-            if (await PushCore(ct) == 0) break;
+            try { if (await PushCore(ct) == 0) break; failures = 0; }
+            catch (CloudOfflineException) when (++failures < PublishRetries) { await Task.Delay(TimeSpan.FromSeconds(2), ct); continue; }
             progress?.Report(1 - (double)db.Outbox.Count() / total);
         }
         progress?.Report(1);
