@@ -64,6 +64,7 @@ public sealed class CloudSync(Database db, CloudClient client, byte[] key, strin
                     if (cur.Pc != pcId) LogOverwrite(cur, tbl, k);   // a row this PC wrote itself is no one else's change
                     retry.Add((i, changes[i] with { Base = cur.Ver }));
                 }
+                else retry.Add((i, changes[i] with { Base = 0 }));   // a version from another space: the row is new here
             }
             if (retry.Count > 0)
             {
@@ -102,7 +103,8 @@ public sealed class CloudSync(Database db, CloudClient client, byte[] key, strin
 
     public Task<int> PullAsync(CancellationToken ct) => Locked(() => Guard(() => PullCore(ct)), ct);
 
-    private async Task<int> PullCore(CancellationToken ct)
+    /// <param name="includeOwn">A full replace needs this PC's own rows too (it just deleted them locally).</param>
+    private async Task<int> PullCore(CancellationToken ct, bool includeOwn = false)
     {
         var applied = RetryDeferred();
         var since = long.TryParse(db.Settings.Get(SinceKey), out var s) ? s : 0;
@@ -111,7 +113,7 @@ public sealed class CloudSync(Database db, CloudClient client, byte[] key, strin
             var page = await client.PullAsync(since, PullLimit, ct);
             foreach (var row in page.Rows)
             {
-                if (row.Pc != pcId) applied += ApplyRow(row) ? 1 : 0;
+                if (includeOwn || row.Pc != pcId) applied += ApplyRow(row) ? 1 : 0;
                 since = row.Ver;
             }
             db.Settings.Set(SinceKey, since.ToString(CultureInfo.InvariantCulture));
@@ -145,7 +147,14 @@ public sealed class CloudSync(Database db, CloudClient client, byte[] key, strin
                 $"Thay đổi của {Describe(payload)} được thay bằng thay đổi trên máy này ({Label(row.Tbl)} {Show(k)}).");
             return false;
         }
-        var result = db.Outbox.Applying(() => SyncTables.Get(row.Tbl).Apply(db, k, row.Deleted ? null : payload));
+        ApplyResult result;
+        try { result = db.Outbox.Applying(() => SyncTables.Get(row.Tbl).Apply(db, k, row.Deleted ? null : payload)); }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // A row this version cannot apply (bad data, a newer PC's format): skip it rather than stop every pull.
+            db.Log.Add(EmployeeOf(row.Tbl, k), null, LogAction, false, $"Bỏ qua một dòng dữ liệu chung không áp dụng được ({Label(row.Tbl)} {Show(k)}): {e.Message}");
+            return false;
+        }
         if (result == ApplyResult.Deferred) { db.Outbox.Defer(row.Tbl, row.Rid, row.Ver, row.Deleted, row.Data); return false; }
         db.Outbox.SetKnown(row.Tbl, k, row.Rid, row.Ver);
         db.Outbox.Undefer(row.Tbl, row.Rid);
@@ -199,7 +208,7 @@ public sealed class CloudSync(Database db, CloudClient client, byte[] key, strin
             return 0;
         });
         progress?.Report(0.1);
-        await PullCore(ct);
+        await PullCore(ct, includeOwn: true);
         db.Outbox.Capture = true;
         progress?.Report(1);
         return db.People.Count();

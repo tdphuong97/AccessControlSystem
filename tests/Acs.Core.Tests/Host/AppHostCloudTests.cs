@@ -222,6 +222,97 @@ public sealed class AppHostCloudTests : IAsyncDisposable
         Assert.Equal(Environment.MachineName, Out(await n.HandleAsync("cloud.status", J())).GetProperty("senderName").GetString());
     }
 
+    private sealed class SingleThreadContext : SynchronizationContext
+    {
+        private readonly System.Collections.Concurrent.BlockingCollection<(SendOrPostCallback, object?)> _q = new();
+        public override void Post(SendOrPostCallback d, object? state) => _q.Add((d, state));
+        public override void Send(SendOrPostCallback d, object? state) => throw new NotSupportedException();
+        public void Complete() => _q.CompleteAdding();
+        public void Pump(TimeSpan limit)
+        {
+            var end = DateTime.UtcNow + limit;
+            while (DateTime.UtcNow < end && !_q.IsCompleted)
+                if (_q.TryTake(out var w, 50)) w.Item1(w.Item2);
+        }
+    }
+
+    /// <summary>Runs like the WPF app does: on one thread whose continuations come back to it.</summary>
+    private static void OnUiThread(Func<Task> body, TimeSpan limit)
+    {
+        var prev = SynchronizationContext.Current;
+        var ctx = new SingleThreadContext();
+        SynchronizationContext.SetSynchronizationContext(ctx);
+        try
+        {
+            var t = body();
+            t.ContinueWith(_ => ctx.Complete(), TaskScheduler.Default);
+            ctx.Pump(limit);
+            Assert.True(t.IsCompleted, "deadlock: did not finish on a UI-like thread");
+            t.GetAwaiter().GetResult();
+        }
+        finally { SynchronizationContext.SetSynchronizationContext(prev); }
+    }
+
+    [Fact]
+    public void start_with_shared_data_does_not_hang_on_the_ui_thread()
+    {
+        Task.Run(async () =>
+        {
+            var n = await Ready(Host("nhien"));
+            await n.HandleAsync("devices.save", J("""{"name":"Trệt","host":"10.9.0.84","username":"admin","password":"x","doorNo":1,"isCaptureDefault":true,"isFingerReader":false}"""));
+            await n.HandleAsync("cloud.connect", J($$"""{"code":"{{Code}}","password":"chung1234"}"""));
+            await n.StopAsync();
+        }).GetAwaiter().GetResult();
+        OnUiThread(async () => { var again = Host("nhien"); await again.StartAsync(); await again.StopAsync(); }, TimeSpan.FromSeconds(20));
+    }
+
+    [Fact]
+    public async Task start_while_another_pc_holds_the_lease_sends_nothing()
+    {
+        var n = AppHost.Create(Path.Combine(_root, "nhien"), new PassThrough(), new FakeDeviceFactory(), _time, "0.9.15", null, 1000, _cloud.Client());
+        _hosts.Add(n);
+        await Ready(n);
+        await n.HandleAsync("devices.save", J("""{"name":"Trệt","host":"10.9.0.84","username":"admin","password":"x","doorNo":1,"isCaptureDefault":true,"isFingerReader":false}"""));
+        await n.HandleAsync("cloud.connect", J($$"""{"code":"{{Code}}","password":"chung1234"}"""));
+        await n.StopAsync();
+        _cloud.Lease = ("other-pc", true, null, DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeMilliseconds());
+        var quiet = new FakeDeviceFactory();
+        var again = AppHost.Create(Path.Combine(_root, "nhien"), new PassThrough(), quiet, _time, "0.9.15", null, 1000, _cloud.Client());
+        _hosts.Add(again);
+        await again.StartAsync();
+        await again.CloudLeaseTickAsync();
+        await Task.Delay(300);
+        Assert.Empty(quiet.For(again.Db.Devices.List().Single().Id).Calls);
+        Assert.False(Out(await again.HandleAsync("cloud.status", J())).GetProperty("isSender").GetBoolean());
+    }
+
+    [Fact]
+    public async Task switching_off_sends_pending_changes_first()
+    {
+        var n = await Ready(Host("nhien"));
+        await n.HandleAsync("cloud.connect", J($$"""{"code":"{{Code}}","password":"chung1234"}"""));
+        await AddPerson(n, "101", "Một");
+        await n.HandleAsync("cloud.setEnabled", J("""{"on":false}"""));
+        var h = await Ready(Host("huong"));
+        await h.HandleAsync("cloud.connect", J($$"""{"code":"{{Code}}","password":"chung1234"}"""));
+        Assert.Equal(1, await PeopleCount(h));
+    }
+
+    [Fact]
+    public async Task restore_with_the_switch_off_keeps_shared_data_off()
+    {
+        var n = await Ready(Host("nhien"));
+        await n.HandleAsync("cloud.connect", J($$"""{"code":"{{Code}}","password":"chung1234"}"""));
+        await n.HandleAsync("backup.now", J());   // this backup says "shared data on"
+        var name = Out(await n.HandleAsync("backup.status", J())).GetProperty("files").EnumerateArray()
+            .Select(f => f.GetProperty("name").GetString()!).First(x => x.Contains("thu-cong"));
+        await n.HandleAsync("cloud.setEnabled", J("""{"on":false}"""));
+        await n.HandleAsync("backup.restore", J($$"""{"name":"{{name}}","password":"saoluu123"}"""));
+        var again = await Ready(Host("nhien"), backupPassword: false);
+        Assert.False(Out(await again.HandleAsync("cloud.status", J())).GetProperty("enabled").GetBoolean());
+        Assert.False(again.Db.Outbox.Capture);
+    }
+
     [Fact]
     public async Task new_device_gets_unique_fp_group_when_enabled()
     {

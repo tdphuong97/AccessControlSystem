@@ -228,6 +228,40 @@ public sealed class CloudSyncTests : IDisposable
     }
 
     [Fact]
+    public async Task publishing_pc_switched_off_and_on_keeps_its_rows()
+    {
+        Seed(_nhien);
+        await _a.PublishAllAsync(null, default);
+        Assert.Equal(3, await _a.ReplaceLocalFromCloudAsync(null, default));   // its own rows come back too
+    }
+
+    [Fact]
+    public async Task stale_known_versions_do_not_loop_on_a_fresh_space()
+    {
+        Seed(_nhien);
+        _nhien.Outbox.SetKnown("people", "101", "old-rid", 999);   // left over from an earlier space ("Quên kết nối")
+        var publish = _a.PublishAllAsync(null, default);
+        Assert.Same(publish, await Task.WhenAny(publish, Task.Delay(TimeSpan.FromSeconds(10))));
+        await publish;
+        Assert.Equal(0, _nhien.Outbox.Count());
+        Assert.True(_cloud.PushSizes.Count < 20, "pushes: " + _cloud.PushSizes.Count);
+    }
+
+    [Fact]
+    public async Task a_row_that_fails_to_apply_is_skipped_not_fatal()
+    {
+        await PublishAndJoin();
+        var rid = CloudCrypto.RowId(_k, "people", "777");
+        var bad = CloudCrypto.Seal(_k, "people", rid, Encoding.UTF8.GetBytes("{\"_k\":\"777\"}"));   // no full_name: NOT NULL fails
+        _cloud.Rows[("people", rid)] = new FakeCloud.Row("people", rid, 9001, false, bad, "other", "now");
+        _nhien.People.Update(_nhien.People.Get("101")! with { FullName = "Sau dòng hỏng" });
+        await _a.PushAsync(default);
+        await _b.PullAsync(default);
+        Assert.Equal("Sau dòng hỏng", _huong.People.Get("101")!.FullName);
+        await _b.PullAsync(default);
+    }
+
+    [Fact]
     public async Task offline_push_keeps_outbox_and_retries()
     {
         await PublishAndJoin();

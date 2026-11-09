@@ -116,6 +116,12 @@ public sealed partial class AppHost
         try
         {
             SetNeedsReconcile(true);   // the restored device_state may be older than what the devices hold now
+            // Restored with shared data switched off: only this PC changes, even if the backup was taken while it was on.
+            if (!File.Exists(Path.Combine(_dataFolder, RepublishMarkerName)))
+            {
+                Db.Settings.Set(CloudEnabledKey, "0");
+                Db.Outbox.Capture = false;
+            }
             File.Delete(_restoreMarker);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* retried on the next start */ }
@@ -157,7 +163,7 @@ public sealed partial class AppHost
     {
         if (_started) return;
         _started = true;
-        Sync.Start();
+        // With shared data on, the send queue waits for the lease (StartCloudIfEnabledAsync starts it otherwise).
         await Task.Run(() => { DeleteOldInstallers(); GroupPeopleByName(); Enroll.PurgeDrafts(); DailyBackup(); });
         await StartCloudIfEnabledAsync();
         StartUpdateTimer();

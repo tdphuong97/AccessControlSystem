@@ -24,6 +24,7 @@ public sealed partial class AppHost
     private HttpClient? _cloudHttpOwned;
     private volatile CloudRuntime? _cloud;
     private volatile bool _windowActive;
+    private volatile bool _republishPending;
 
     private sealed record CloudRuntime(CloudCode Code, byte[] Key, string PcId, CloudClient Client, CloudSync Sync, LeaseKeeper Lease,
         CancellationTokenSource Stop, Task Loop);
@@ -81,11 +82,15 @@ public sealed partial class AppHost
             var k = CloudCrypto.NewKey();
             await client.PutSpaceAsync(CloudCrypto.Wrap(k, password, CloudIterations), 0, _cts.Token);
             if (Backup.HasPassword) Backup.Create(JoinBackupReason);
+            // A new space: versions, parked rows and the pull position of any earlier space mean nothing here.
+            Db.Outbox.ClearKnown();
+            Db.Outbox.ClearDeferred();
+            Db.Settings.Set(CloudSync.SinceKey, "0");
             var secret = new CloudSecret(code.ToString(), k, Guid.NewGuid().ToString("N"));
             _keys.SetCloud(secret);
             Db.Settings.Set(CloudEnabledKey, "1");
             Db.Log.Add(null, null, CloudSync.LogAction, true, "Đã bật dữ liệu chung và đưa dữ liệu máy này lên.");
-            var rt = StartCloud(secret);
+            var rt = await StartCloudAsync(secret);
             try { await rt.Sync.PublishAllAsync(null, _cts.Token); }
             catch (CloudOfflineException) { /* connected: the background loop sends the rest */ }
             EmitCloud();
@@ -106,6 +111,7 @@ public sealed partial class AppHost
         var secret = _keys.GetCloud() ?? throw new HostException("Máy này chưa kết nối dữ liệu chung.");
         if (!on)
         {
+            await PushBeforeLeavingAsync();
             await StopCloudAsync(release: true);
             Db.Outbox.Capture = false;
             Db.Outbox.Clear();
@@ -158,8 +164,22 @@ public sealed partial class AppHost
     {
         if (_keys.GetCloud() is not null && Db.Settings.Get(CloudEnabledKey) == "1") await CloudSetEnabled(JsonDocument.Parse("{\"on\":false}").RootElement);
         _keys.ForgetCloud();
+        Db.Outbox.ClearKnown();
+        Db.Outbox.ClearDeferred();
         EmitCloud();
         return CloudStatusView();
+    }
+
+    /// <summary>Switching off or forgetting: send what is still queued; say so in the log if some could not go.</summary>
+    private async Task PushBeforeLeavingAsync()
+    {
+        if (_cloud is { } rt)
+        {
+            try { await rt.Sync.PushAsync(_cts.Token); }
+            catch (Exception e) when (e is CloudException or CloudOfflineException) { }
+        }
+        var left = Db.Outbox.Count();
+        if (left > 0) Db.Log.Add(null, null, CloudSync.LogAction, false, $"{left} thay đổi chưa gửi được lên dữ liệu chung đã bị bỏ khi tắt dữ liệu chung trên máy này.");
     }
 
     // ---------------- runtime ----------------
@@ -183,14 +203,19 @@ public sealed partial class AppHost
         try { people = await sync.ReplaceLocalFromCloudAsync(null, _cts.Token); }
         catch (CloudOfflineException)
         {
-            Sync.Start();
-            StartCloud(secret);   // keeps pulling where it stopped
+            await StartCloudAsync(secret);   // keeps pulling where it stopped; the lease decides who sends
             EmitCloud();
             throw new HostException("Đã kết nối dữ liệu chung nhưng mạng đang chập chờn. Phần còn lại sẽ tự tải về; mục Dữ liệu chung sẽ báo khi đã đồng bộ.");
         }
-        finally { if (_cloud is null) Sync.Start(); }
+        catch
+        {
+            Db.Settings.Set(CloudEnabledKey, "0");
+            Db.Outbox.Capture = false;
+            Sync.Start();
+            throw;
+        }
         SetNeedsReconcile(true);
-        StartCloud(secret);
+        await StartCloudAsync(secret);
         Emit("devices.changed", DeviceViews());
         EmitCloud();
         return people;
@@ -201,7 +226,7 @@ public sealed partial class AppHost
         var marker = Path.Combine(_dataFolder, RepublishMarkerName);
         // A restore while shared data was on: even a backup from before joining becomes the shared data.
         if (File.Exists(marker) && _keys.GetCloud() is not null) Db.Settings.Set(CloudEnabledKey, "1");
-        if (!CloudEnabled) return;
+        if (!CloudEnabled) { Sync.Start(); return; }
         var secret = _keys.GetCloud()!;
         if (File.Exists(marker))
         {
@@ -216,14 +241,14 @@ public sealed partial class AppHost
             }
             catch (Exception e) when (e is CloudException or CloudOfflineException)
             {
-                Db.Log.Add(null, null, CloudSync.LogAction, false, "Chưa đưa được bản khôi phục lên dữ liệu chung, sẽ thử lại khi mở phần mềm: " + e.Message);
-                return;   // no sync until the restore is in the shared data, or a pull would undo it
+                Db.Log.Add(null, null, CloudSync.LogAction, false, "Chưa đưa được bản khôi phục lên dữ liệu chung, sẽ tự thử lại: " + e.Message);
+                _republishPending = true;   // the loop retries it and pulls nothing until it has gone through
             }
         }
-        StartCloud(secret);
+        await StartCloudAsync(secret);
     }
 
-    private CloudRuntime StartCloud(CloudSecret secret)
+    private async Task<CloudRuntime> StartCloudAsync(CloudSecret secret)
     {
         var code = CloudCode.Parse(secret.Code);
         var client = new CloudClient(CloudHttp, code);
@@ -232,7 +257,7 @@ public sealed partial class AppHost
         var lease = new LeaseKeeper(client, secret.Key, secret.PcId, Environment.MachineName, _time);
         Db.Outbox.Capture = true;
         // No sending to the devices until the lease says this PC is the sender (another PC may be sending now).
-        Sync.SetSenderAsync(false).GetAwaiter().GetResult();
+        await Sync.SetSenderAsync(false);
         var stop = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
         CloudRuntime? rt = null;
         var loop = Task.Run(async () => { while (rt is null) await Task.Yield(); await CloudLoopAsync(rt, stop.Token); });
@@ -266,8 +291,21 @@ public sealed partial class AppHost
             try
             {
                 if (tick % 30 == 0) await LeaseTick(rt, ct);
-                if (Db.Outbox.Count() > 0) { await rt.Sync.PushAsync(ct); EmitCloud(); }
-                if (tick % 15 == 0) { await rt.Sync.PullAsync(ct); EmitCloud(); }
+                if (_republishPending)
+                {
+                    if (tick % 15 == 0)
+                    {
+                        await rt.Sync.RepublishAsync(ct);
+                        _republishPending = false;
+                        try { File.Delete(Path.Combine(_dataFolder, RepublishMarkerName)); } catch { }
+                        Db.Log.Add(null, null, CloudSync.LogAction, true, "Đã đưa dữ liệu chung về như bản sao lưu vừa khôi phục.");
+                    }
+                }
+                else
+                {
+                    if (Db.Outbox.Count() > 0) { await rt.Sync.PushAsync(ct); EmitCloud(); }
+                    if (tick % 15 == 0) { await rt.Sync.PullAsync(ct); EmitCloud(); }
+                }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
             catch (Exception e) when (e is CloudException or CloudOfflineException)
