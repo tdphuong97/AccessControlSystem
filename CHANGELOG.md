@@ -1,3 +1,9 @@
+## 0.9.15
+
+- Mới: Dữ liệu chung. Nhiều máy tính dùng chung một danh sách người, khuôn mặt và vân tay qua Cloudflare; mọi thứ được mã hoá trên máy tính trước khi gửi lên (Cloudflare không đọc được). Máy đang mở cửa sổ phần mềm gửi xuống máy chấm công; bản sửa sau được giữ và nhật ký ghi lại; mất Internet vẫn chạy bằng dữ liệu trên máy. Bật trong tab Máy chấm công & cập nhật, mục Dữ liệu chung.
+- Nhật ký ghi tên máy tính đã làm từng việc.
+- Đang dùng Dữ liệu chung thì Khôi phục đưa cả hai máy về như bản sao lưu, có xác nhận số người hai bên.
+
 ## 0.9.14
 
 - Kiểm tra và tải bản mới vẫn chạy khi GitHub trả lỗi (như 504 ngày 09/11): phần mềm tự đi đường dự phòng qua GitHub API. Bộ cài vẫn được kiểm tra dung lượng và mã SHA-256 như trước.

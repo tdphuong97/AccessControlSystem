@@ -18,7 +18,7 @@ Không. Phần mềm chỉ chạy trên máy tính đã cài và không mở c�
 
 <summary>Hai máy tính cùng chạy phần mềm được không?</summary>
 
-Không nên. Mỗi máy tính giữ một bản gốc riêng, không đồng bộ với nhau, nên hai bản sẽ lệch và hai máy chấm công nhận dữ liệu khác nhau. Hãy chọn một máy tính duy nhất để đăng ký nhân viên. Nếu cần chuyển sang máy tính khác, dùng [Sao lưu và khôi phục](../may-cham-cong/sao-luu-khoi-phuc.md).
+Được, khi bật [Dữ liệu chung](../may-cham-cong/du-lieu-chung.md) (bản 0.9.15 trở lên): các máy tính dùng chung một danh sách, máy nào đang mở phần mềm thì máy đó gửi xuống máy chấm công. Chưa bật thì không nên: mỗi máy tính giữ một bản riêng, hai bản sẽ lệch và ghi đè nhau trên máy chấm công. Chỉ chuyển sang máy tính khác thì dùng [Sao lưu và khôi phục](../may-cham-cong/sao-luu-khoi-phuc.md).
 
 </details>
 

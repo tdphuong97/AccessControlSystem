@@ -89,6 +89,10 @@ Bạn phải nhập đúng mật khẩu sao lưu. Khoá mã hoá trên máy cũ 
 
 Phần mềm kiểm tra mật khẩu trước. Nếu sai, báo lỗi và dữ liệu hiện tại không bị đụng tới. Nếu đúng, hộp thoại hiện "Đã khôi phục. App đang tự khởi động lại…" và phần mềm tự mở lại.
 
+{% hint style="warning" %}
+Đang bật [Dữ liệu chung](du-lieu-chung.md) thì khôi phục sẽ đưa dữ liệu của **cả hai máy tính** về như bản sao lưu. Hộp thoại ghi rõ số người hai bên và cần bấm **Khôi phục** lần nữa để xác nhận.
+{% endhint %}
+
 ## Sau khi khôi phục
 
 Bản sao lưu có thể cũ hơn những gì máy chấm công đang giữ. Khi phần mềm mở lại, trên tab **Người dùng** hiện thông báo nhắc chạy So khớp 2 máy. Làm theo [So khớp 2 máy](so-khop-2-may.md) để đối chiếu và gửi lại phần thiếu.

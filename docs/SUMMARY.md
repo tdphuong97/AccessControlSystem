@@ -25,6 +25,7 @@
 * [So khớp 2 máy](may-cham-cong/so-khop-2-may.md)
 * [Thêm và sửa máy chấm công](may-cham-cong/them-sua-may.md)
 * [Sao lưu và khôi phục](may-cham-cong/sao-luu-khoi-phuc.md)
+* [Dữ liệu chung](may-cham-cong/du-lieu-chung.md)
 * [Cập nhật phần mềm](may-cham-cong/cap-nhat-phan-mem.md)
 * [Xem nhật ký](may-cham-cong/xem-nhat-ky.md)
 

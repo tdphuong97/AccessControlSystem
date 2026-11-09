@@ -6,6 +6,13 @@ description: Các phiên bản đã phát hành và thay đổi trong từng b�
 
 {% updates format="full" %}
 {% update date="2026-11-09" %}
+## Phiên bản 0.9.15
+
+* Mới: [Dữ liệu chung](../may-cham-cong/du-lieu-chung.md). Nhiều máy tính dùng chung một danh sách, dữ liệu được mã hoá trước khi lên Cloudflare.
+* [Nhật ký](../may-cham-cong/xem-nhat-ky.md) ghi tên máy tính đã làm từng việc.
+{% endupdate %}
+
+{% update date="2026-11-09" %}
 ## Phiên bản 0.9.14
 
 * **Kiểm tra bản mới** vẫn chạy khi trang GitHub báo lỗi (ví dụ 504): phần mềm tự đi đường dự phòng. Bộ cài vẫn được kiểm tra trước khi cài.

@@ -19,7 +19,8 @@ Phần mềm này không làm được mọi việc. Trang này liệt kê từn
 | Sai mật khẩu máy | Hikvision khoá địa chỉ IP khoảng 30 phút sau vài lần sai | Phần mềm dừng ngay sau lần sai đầu, không tự thử lại. Sửa mật khẩu rồi thử lại |
 | Hỏng máy tính hoặc cài lại Windows | Khoá mã hoá gắn với tài khoản Windows cũ | Cài phần mềm lại, rồi khôi phục từ file sao lưu cùng mật khẩu sao lưu. Xem [Sao lưu và khôi phục](../may-cham-cong/sao-luu-khoi-phuc.md) |
 | Cảnh báo **Windows đã bảo vệ máy tính của bạn** khi cài lần đầu | Bộ cài chưa có chữ ký số | Bấm **Thông tin thêm** > **Vẫn chạy** một lần. Xem [Cài đặt](../bat-dau/cai-dat.md) |
-| Dùng từ điện thoại hoặc máy tính khác | Phần mềm chỉ chạy trên máy đã cài | Không hỗ trợ, cố ý để không mở cổng mạng |
+| Dùng từ điện thoại hoặc trình duyệt | Phần mềm chỉ chạy trên máy tính đã cài | Không hỗ trợ, cố ý để không mở cổng mạng |
+| Nhiều máy tính cùng dùng | Mỗi máy tính có danh sách riêng | Bật [Dữ liệu chung](../may-cham-cong/du-lieu-chung.md) (cần Internet để đồng bộ) |
 | Pháp lý về dữ liệu sinh trắc | Ảnh mặt và vân tay là dữ liệu cá nhân nhạy cảm | Xem [Dữ liệu cá nhân và quyền riêng tư](du-lieu-ca-nhan.md) |
 | Máy đầy bộ nhớ | Mỗi model có giới hạn số người, mặt, vân tay | Phần mềm báo máy đầy (người, khuôn mặt hoặc vân tay). Xoá bớt người không còn dùng trên máy rồi thử lại |
 
