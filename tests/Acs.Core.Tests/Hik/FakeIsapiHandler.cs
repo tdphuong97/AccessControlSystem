@@ -7,7 +7,7 @@ namespace Acs.Core.Tests.Hik;
 /// <summary>In-process fake of a Hikvision ISAPI endpoint. Routes by method + path (query ignored); can require Digest.</summary>
 public sealed class FakeIsapiHandler : HttpMessageHandler
 {
-    public sealed record Seen(HttpMethod Method, string PathAndQuery, string? Authorization, string Body, byte[]? BodyBytes = null);
+    public sealed record Seen(HttpMethod Method, string PathAndQuery, string? Authorization, string Body, byte[]? BodyBytes = null, string? ContentType = null);
     public sealed record Reply(HttpStatusCode Status, string Body, string ContentType = "application/json", byte[]? Raw = null);
 
     public const string Realm = "DS-Fake";
@@ -94,7 +94,8 @@ public sealed class FakeIsapiHandler : HttpMessageHandler
     private async Task<HttpResponseMessage> AnswerAsync(HttpRequestMessage request, CancellationToken ct)
     {
         var bytes = request.Content is null ? Array.Empty<byte>() : await request.Content.ReadAsByteArrayAsync(ct);
-        var seen = new Seen(request.Method, request.RequestUri!.PathAndQuery, request.Headers.Authorization?.ToString(), Encoding.UTF8.GetString(bytes), bytes);
+        var seen = new Seen(request.Method, request.RequestUri!.PathAndQuery, request.Headers.Authorization?.ToString(), Encoding.UTF8.GetString(bytes), bytes,
+            request.Content?.Headers.TryGetValues("Content-Type", out var ctv) == true ? string.Join(", ", ctv) : null);
         lock (_lock) Requests.Add(seen);
         if (RequireDigest && seen.Authorization is not null && DropNextAnswers > 0 && DigestOk(seen))
         {

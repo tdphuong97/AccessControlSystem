@@ -1,3 +1,7 @@
+## 0.9.12
+
+- Sửa lỗi gửi khuôn mặt xuống máy bị từ chối với mã badJsonFormat ("Có dữ liệu gửi bị lỗi"): máy DS-K1T9342MFWX (V4.39) không đọc được cách app đóng gói ảnh. Đã thử gửi thành công trên cả hai máy thật. Sau khi cập nhật, bấm Thử lại ở những người đang báo Lỗi gửi (hoặc chạy So khớp 2 máy rồi Bổ sung).
+
 ## 0.9.11
 
 - Hướng dẫn sử dụng (F1) cập nhật theo bản mới nhất: ảnh giao diện đánh số mới, ảnh Thùng rác và hộp Chẩn đoán, ảnh form thêm người và thẻ máy, Thuật ngữ thêm Thùng rác và Chẩn đoán, tình trạng thử trên máy thật ghi đúng hiện trạng, bỏ các câu "không hoàn tác được" đã cũ.

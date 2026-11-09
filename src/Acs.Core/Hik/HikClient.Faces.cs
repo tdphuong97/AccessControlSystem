@@ -96,14 +96,26 @@ public sealed partial class HikClient
         return end >= 0 ? tail[..(end + 2)].ToArray() : tail.ToArray();
     }
 
+    /// <summary>
+    /// The real SH-K1T9342MFWX (V4.39.180) answers badJsonFormat to .NET's default form-data (name=FaceDataRecord
+    /// unquoted, boundary="..." quoted). It accepts quoted names and a bare boundary, as browsers and Python send.
+    /// </summary>
     private static MultipartFormDataContent FaceMultipart(string employeeNo, byte[] jpeg)
     {
         var meta = JsonSerializer.Serialize(new { faceLibType = "blackFD", FDID = "1", FPID = employeeNo }, HikJson.Options);
-        var form = new MultipartFormDataContent();
-        form.Add(new StringContent(meta, Encoding.UTF8, "application/json"), "FaceDataRecord");
+        var boundary = Guid.NewGuid().ToString();
+        var form = new MultipartFormDataContent(boundary);
+        form.Headers.Remove("Content-Type");
+        form.Headers.TryAddWithoutValidation("Content-Type", "multipart/form-data; boundary=" + boundary);
+
+        var json = new StringContent(meta, Encoding.UTF8, "application/json");
+        json.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data") { Name = "\"FaceDataRecord\"" };
+        form.Add(json);
+
         var img = new ByteArrayContent(jpeg);
         img.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
-        form.Add(img, "img", "face.jpg");
+        img.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data") { Name = "\"img\"", FileName = "\"face.jpg\"" };
+        form.Add(img);
         return form;
     }
 

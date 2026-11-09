@@ -129,6 +129,23 @@ public class HikFacesTests
     }
 
     [Fact]
+    public async Task SetFace_multipart_has_quoted_names_and_a_bare_boundary()
+    {
+        // Real SH-K1T9342MFWX (V4.39.180) answers badJsonFormat to .NET's default form-data; name=FaceDataRecord and
+        // boundary="..."; it accepts the quoted names and bare boundary that browsers and Python requests send.
+        var h = new FakeIsapiHandler { RequireDigest = true }.On(HttpMethod.Put, FdSetUp, Ok);
+        await Make(h).SetFaceAsync("00123", Jpeg, default);
+        var ok = h.Requests.Last();
+        Assert.Matches(@"^multipart/form-data; boundary=[^"";\s]+$", ok.ContentType);
+        var boundary = ok.ContentType!.Split("boundary=")[1];
+        Assert.StartsWith("--" + boundary + "\r\n", ok.Body);
+        Assert.Contains("Content-Disposition: form-data; name=\"FaceDataRecord\"\r\n", ok.Body);
+        Assert.Contains("Content-Disposition: form-data; name=\"img\"; filename=\"face.jpg\"\r\n", ok.Body);
+        Assert.DoesNotContain("filename*", ok.Body);
+        Assert.Contains("\r\n--" + boundary + "--", ok.Body);
+    }
+
+    [Fact]
     public async Task SetFace_falls_back_to_FaceDataRecord()
     {
         var h = new FakeIsapiHandler()
