@@ -128,6 +128,41 @@ public sealed class OutboxTests : IDisposable
     }
 
     [Fact]
+    public void recording_a_key_again_inside_an_upsert_does_not_fail()
+    {
+        // Found end-to-end: an outer INSERT ... ON CONFLICT DO UPDATE overrides a trigger's OR REPLACE, so recording a
+        // key that is already queued failed the device worker's SetState (UNIQUE constraint failed: outbox).
+        using var db = Open();
+        var id = db.Devices.Insert(Dev("device-1"));
+        db.People.Insert(Person("3"));
+        db.Outbox.Capture = true;
+        var state = new DeviceStateRecord("3", id, true, true, false, new HashSet<int>(), new HashSet<int>(), Now);
+        db.Jobs.SetState(state);
+        db.Jobs.SetState(state with { FacePresent = true });
+        db.Jobs.Enqueue(id, "3", JobKind.SetFace, 0, Now);
+        db.Jobs.Enqueue(id, "3", JobKind.SetFace, 0, Now);
+        db.Settings.Set(PeopleStore.HighWaterKey, "1");
+        db.Settings.Set(PeopleStore.HighWaterKey, "2");
+        Assert.Contains($"device_state:3{S}device-1", Keys(db));
+    }
+
+    [Fact]
+    public void a_key_recorded_again_gets_a_new_seq()
+    {
+        using var db = Open();
+        db.Outbox.Capture = true;
+        db.People.Insert(Person("1"));
+        var first = db.Outbox.Take(10).Single();
+        db.People.Update(Person("1") with { FullName = "Khác" });
+        var again = db.Outbox.Take(10).Single();
+        Assert.NotEqual(first.Seq, again.Seq);
+        db.Outbox.RemoveIf(first.Tbl, first.Key, first.Seq);
+        Assert.Equal(1, db.Outbox.Count());
+        db.Outbox.RemoveIf(again.Tbl, again.Key, again.Seq);
+        Assert.Equal(0, db.Outbox.Count());
+    }
+
+    [Fact]
     public void deleting_a_device_records_its_jobs_and_device_states()
     {
         using var db = Open();

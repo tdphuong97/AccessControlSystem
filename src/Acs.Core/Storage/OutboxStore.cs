@@ -18,13 +18,13 @@ public sealed class OutboxStore
         set => _db.Exec("UPDATE sync_flags SET on_=$v WHERE name='capture'", ("$v", value ? 1 : 0));
     }
 
-    /// <summary>Oldest first. Seq changes every time the key is recorded again (triggers use INSERT OR REPLACE).</summary>
+    /// <summary>Oldest first. Seq (the entry's generation) grows every time the key is recorded again.</summary>
     public IReadOnlyList<(string Tbl, string Key, long Seq)> Take(int max) =>
-        _db.Query("SELECT tbl, k, rowid FROM outbox ORDER BY rowid LIMIT $m", r => (r.GetString(0), r.GetString(1), r.GetInt64(2)), ("$m", max));
+        _db.Query("SELECT tbl, k, gen FROM outbox ORDER BY rowid LIMIT $m", r => (r.GetString(0), r.GetString(1), r.GetInt64(2)), ("$m", max));
 
     /// <summary>Removes the entry only if it was not recorded again since <see cref="Take"/> (a newer change stays queued).</summary>
     public void RemoveIf(string tbl, string key, long seq) =>
-        _db.Exec("DELETE FROM outbox WHERE tbl=$t AND k=$k AND rowid=$s", ("$t", tbl), ("$k", key), ("$s", seq));
+        _db.Exec("DELETE FROM outbox WHERE tbl=$t AND k=$k AND gen=$s", ("$t", tbl), ("$k", key), ("$s", seq));
 
     public string? KeyOf(string tbl, string rid) =>
         _db.Scalar("SELECT k FROM sync_rows WHERE tbl=$t AND rid=$r", ("$t", tbl), ("$r", rid)) as string;
