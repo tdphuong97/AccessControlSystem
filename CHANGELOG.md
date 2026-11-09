@@ -1,3 +1,7 @@
+## 0.9.13
+
+- Sửa lỗi gửi vân tay xuống máy bị từ chối với mã methodNotAllowed: máy DS-K1T9342MFWX (V4.39) chỉ nhận lệnh ghi vân tay theo cách khác với cách app đang gửi. Đã thử gửi thành công trên máy thật. Bản này gồm cả sửa lỗi khuôn mặt của 0.9.12. Sau khi cập nhật, bấm Thử lại ngay ở những người đang báo Có lỗi (hoặc chạy So khớp 2 máy rồi Bổ sung).
+
 ## 0.9.12
 
 - Sửa lỗi gửi khuôn mặt xuống máy bị từ chối với mã badJsonFormat ("Có dữ liệu gửi bị lỗi"): máy DS-K1T9342MFWX (V4.39) không đọc được cách app đóng gói ảnh. Đã thử gửi thành công trên cả hai máy thật. Sau khi cập nhật, bấm Thử lại ở những người đang báo Lỗi gửi (hoặc chạy So khớp 2 máy rồi Bổ sung).

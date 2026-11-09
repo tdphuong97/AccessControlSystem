@@ -117,13 +117,19 @@ public sealed partial class HikClient
             },
         };
 
-        try
+        // SetUp is a POST on the real SH-K1T9342MFWX (V4.39.180), which answers PUT with methodNotAllowed. Other
+        // firmware may only take PUT, so a methodNotAllowed POST tries PUT before the older Download route.
+        foreach (var method in new[] { HttpMethod.Post, HttpMethod.Put })
         {
-            var text = await SendAsync(HttpMethod.Put, $"{FpBase}/FingerPrint/SetUp?format=json", JsonBody(body), CaptureTimeout, ct);
-            RequireConfirmed(text);
-            return;
+            try
+            {
+                var text = await SendAsync(method, $"{FpBase}/FingerPrint/SetUp?format=json", JsonBody(body), CaptureTimeout, ct);
+                RequireConfirmed(text);
+                return;
+            }
+            catch (HikNotSupportedException) { break; }
+            catch (HikRejectedException e) when (string.Equals(e.Code, "methodNotAllowed", StringComparison.OrdinalIgnoreCase)) { }
         }
-        catch (HikNotSupportedException) { }
 
         // Older firmware: no SetUp. Download, then wait for the device to say it is done. A timeout is a FAILURE.
         await SendAsync(HttpMethod.Post, $"{FpBase}/FingerPrintDownload?format=json", JsonBody(body), CaptureTimeout, ct);

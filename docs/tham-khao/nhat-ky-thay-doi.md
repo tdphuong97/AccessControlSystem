@@ -6,6 +6,12 @@ description: Các phiên bản đã phát hành và thay đổi trong từng b�
 
 {% updates format="full" %}
 {% update date="2026-11-09" %}
+## Phiên bản 0.9.13
+
+* Sửa lỗi gửi vân tay xuống máy bị từ chối với mã **methodNotAllowed**. Đã thử gửi thành công trên máy thật. Sau khi cập nhật, bấm **Thử lại ngay** ở những người đang báo **Có lỗi**, hoặc chạy [So khớp 2 máy](../may-cham-cong/so-khop-2-may.md) rồi bấm **Bổ sung**.
+{% endupdate %}
+
+{% update date="2026-11-09" %}
 ## Phiên bản 0.9.12
 
 * Sửa lỗi gửi khuôn mặt xuống máy bị từ chối với mã **badJsonFormat** (thông báo "Có dữ liệu gửi bị lỗi"). Đã thử gửi thành công trên cả hai máy thật. Sau khi cập nhật, bấm **Thử lại** ở những người đang báo **Lỗi gửi**, hoặc chạy [So khớp 2 máy](../may-cham-cong/so-khop-2-may.md) rồi bấm **Bổ sung**.

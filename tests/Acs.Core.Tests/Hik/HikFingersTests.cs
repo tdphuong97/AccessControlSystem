@@ -16,6 +16,7 @@ public class HikFingersTests
     private const string Delete = Base + "/FingerPrint/Delete";
     private const string DeleteProc = Base + "/FingerPrint/DeleteProcess";
     private const string NotSupport = "{\"statusCode\":4,\"subStatusCode\":\"notSupport\"}";
+    private const string MethodNotAllowed = "{\"statusCode\":4,\"statusString\":\"Invalid Operation\",\"subStatusCode\":\"methodNotAllowed\",\"errorMsg\":\"HTTP method is not allowed:Method and protocol do not match\"}";
     private static string Status(int s) => "{\"StatusList\":[{\"id\":1,\"cardReaderRecvStatus\":" + s + "}]}";
 
     [Fact]
@@ -64,9 +65,9 @@ public class HikFingersTests
     }
 
     [Fact]
-    public async Task SetFinger_uses_SetUp_then_Download()
+    public async Task SetFinger_posts_SetUp_then_Download()
     {
-        var h = new FakeIsapiHandler().On(HttpMethod.Put, SetUp, Status(1));
+        var h = new FakeIsapiHandler().On(HttpMethod.Post, SetUp, Status(1));
         await Make(h).SetFingerprintAsync("1001", 3, "QUJD", 1, default);
         Assert.Single(h.Requests);
         var b = h.Requests[0].Body;
@@ -79,7 +80,7 @@ public class HikFingersTests
 
         var polls = 0;
         var h2 = new FakeIsapiHandler()
-            .On(HttpMethod.Put, SetUp, NotSupport)
+            .On(HttpMethod.Post, SetUp, NotSupport)
             .On(HttpMethod.Post, Download, "{\"statusCode\":1}")
             .On(HttpMethod.Get, Progress, _ => ++polls < 3
                 ? new(HttpStatusCode.OK, "{\"FingerPrintStatus\":{\"totalStatus\":0}}")
@@ -90,10 +91,42 @@ public class HikFingersTests
     }
 
     [Fact]
+    public async Task SetFinger_SetUp_is_a_POST()
+    {
+        // The real SH-K1T9342MFWX (V4.39.180) answers PUT FingerPrint/SetUp with 400 methodNotAllowed; POST works.
+        var h = new FakeIsapiHandler().On(HttpMethod.Post, SetUp, Status(1));
+        await Make(h).SetFingerprintAsync("1001", 3, "QUJD", 1, default);
+        Assert.Equal(new[] { HttpMethod.Post }, h.Requests.Select(r => r.Method));
+    }
+
+    [Fact]
+    public async Task SetFinger_tries_PUT_when_POST_is_not_allowed()
+    {
+        var h = new FakeIsapiHandler()
+            .On(HttpMethod.Post, SetUp, MethodNotAllowed, HttpStatusCode.BadRequest)
+            .On(HttpMethod.Put, SetUp, Status(1));
+        await Make(h).SetFingerprintAsync("1001", 3, "QUJD", 1, default);
+        Assert.Equal(new[] { HttpMethod.Post, HttpMethod.Put }, h.Requests.Select(r => r.Method));
+        Assert.Contains("\"fingerData\":\"QUJD\"", h.Requests[1].Body);
+    }
+
+    [Fact]
+    public async Task SetFinger_neither_SetUp_method_allowed_falls_back_to_Download()
+    {
+        var h = new FakeIsapiHandler()
+            .On(HttpMethod.Post, SetUp, MethodNotAllowed, HttpStatusCode.BadRequest)
+            .On(HttpMethod.Put, SetUp, MethodNotAllowed, HttpStatusCode.BadRequest)
+            .On(HttpMethod.Post, Download, "{\"statusCode\":1}")
+            .On(HttpMethod.Get, Progress, "{\"FingerPrintStatus\":{\"totalStatus\":1,\"StatusList\":[{\"cardReaderRecvStatus\":1}]}}");
+        await Make(h).SetFingerprintAsync("1001", 3, "QUJD", 1, default);
+        Assert.Contains(h.Requests, r => r.Method == HttpMethod.Post && r.PathAndQuery.StartsWith(Download));
+    }
+
+    [Fact]
     public async Task SetFinger_progress_timeout_is_failure()
     {
         var h = new FakeIsapiHandler()
-            .On(HttpMethod.Put, SetUp, NotSupport)
+            .On(HttpMethod.Post, SetUp, NotSupport)
             .On(HttpMethod.Post, Download, "{\"statusCode\":1}")
             .On(HttpMethod.Get, Progress, "{\"FingerPrintStatus\":{\"totalStatus\":0}}");
         var e = await Assert.ThrowsAsync<HikTransientException>(() => Make(h).SetFingerprintAsync("1001", 1, "QUJD", 1, default));
@@ -103,7 +136,7 @@ public class HikFingersTests
     [Fact]
     public async Task SetFinger_status3_is_fpMismatch()
     {
-        var h = new FakeIsapiHandler().On(HttpMethod.Put, SetUp, Status(3));
+        var h = new FakeIsapiHandler().On(HttpMethod.Post, SetUp, Status(3));
         var e = await Assert.ThrowsAsync<HikRejectedException>(() => Make(h).SetFingerprintAsync("1001", 1, "QUJD", 1, default));
         Assert.Equal("fpMismatch", e.Code);
         Assert.Equal("Vân tay này không hợp với cảm biến của máy. Quét lại ngón này trực tiếp ở máy đó.", e.Message);
@@ -114,7 +147,7 @@ public class HikFingersTests
     [InlineData(4, "Máy đã đầy bộ nhớ vân tay. Xoá bớt vân tay không còn dùng trên máy rồi bấm Thử lại.")]
     public async Task SetFinger_other_statuses_map_to_vietnamese(int status, string message)
     {
-        var h = new FakeIsapiHandler().On(HttpMethod.Put, SetUp, Status(status));
+        var h = new FakeIsapiHandler().On(HttpMethod.Post, SetUp, Status(status));
         var e = await Assert.ThrowsAsync<HikRejectedException>(() => Make(h).SetFingerprintAsync("1001", 1, "QUJD", 1, default));
         Assert.Equal(message, e.Message);
     }
@@ -122,7 +155,7 @@ public class HikFingersTests
     [Fact]
     public async Task SetFinger_unconfirmed_200_is_failure()
     {
-        var h = new FakeIsapiHandler().On(HttpMethod.Put, SetUp, "{}");
+        var h = new FakeIsapiHandler().On(HttpMethod.Post, SetUp, "{}");
         await Assert.ThrowsAsync<HikTransientException>(() => Make(h).SetFingerprintAsync("1001", 1, "QUJD", 1, default));
     }
 
@@ -130,7 +163,7 @@ public class HikFingersTests
     public async Task SetFinger_progress_with_bad_status_list_is_failure()
     {
         var h = new FakeIsapiHandler()
-            .On(HttpMethod.Put, SetUp, NotSupport)
+            .On(HttpMethod.Post, SetUp, NotSupport)
             .On(HttpMethod.Post, Download, "{\"statusCode\":1}")
             .On(HttpMethod.Get, Progress, "{\"FingerPrintStatus\":{\"totalStatus\":1,\"StatusList\":[{\"cardReaderRecvStatus\":4}]}}");
         var e = await Assert.ThrowsAsync<HikRejectedException>(() => Make(h).SetFingerprintAsync("1001", 1, "QUJD", 1, default));
@@ -143,7 +176,7 @@ public class HikFingersTests
     {
         using var cts = new CancellationTokenSource();
         var h = new FakeIsapiHandler()
-            .On(HttpMethod.Put, SetUp, NotSupport)
+            .On(HttpMethod.Post, SetUp, NotSupport)
             .On(HttpMethod.Post, Download, "{\"statusCode\":1}")
             .On(HttpMethod.Get, Progress, _ => { cts.Cancel(); return new(HttpStatusCode.OK, "{\"totalStatus\":0}"); });
         var c = Make(h); c.PollTimeout = TimeSpan.FromSeconds(30);
