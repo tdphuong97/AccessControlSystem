@@ -52,7 +52,7 @@ async function push(db, body, now) {
     const { tbl, rid } = c;
     const base = Number(c.base) || 0;
     const deleted = c.deleted ? 1 : 0;
-    const data = deleted ? null : (c.data ?? null);
+    const data = c.data ?? null;   // tombstones keep their sealed payload (natural key, who, when)
     const current = () => db.prepare('SELECT * FROM rows WHERE tbl = ? AND rid = ?').bind(tbl, rid).first();
     const cur = await current();
     let ok = false;

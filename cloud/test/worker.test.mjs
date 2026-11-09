@@ -15,7 +15,7 @@ async function call(env, method, path, body, key = 'k', now) {
   const text = await res.text();
   return { status: res.status, json: text ? JSON.parse(text) : null };
 }
-const ch = (rid, base, data = 'x', deleted = false) => ({ tbl: 'people', rid, base, deleted, data: deleted ? null : data, pc: 'pc1' });
+const ch = (rid, base, data = 'x', deleted = false) => ({ tbl: 'people', rid, base, deleted, data, pc: 'pc1' });
 
 test('health needs no key', async () => {
   const r = await call(make(), 'GET', '/health', undefined, null);
@@ -67,14 +67,14 @@ test('push with base 0 on an existing row is refused', async () => {
   assert.equal(r.json.results[0].current.data, 'v1');
 });
 
-test('push tombstone (deleted:true, data:null) is pulled as deleted', async () => {
+test('push tombstone (deleted:true) is pulled as deleted with its sealed payload', async () => {
   const env = make();
   const a = await call(env, 'POST', '/push', { changes: [ch('r1', 0, 'v1')] });
-  await call(env, 'POST', '/push', { changes: [ch('r1', a.json.results[0].ver, null, true)] });
+  await call(env, 'POST', '/push', { changes: [ch('r1', a.json.results[0].ver, 'tomb', true)] });
   const p = await call(env, 'GET', '/pull?since=0');
   assert.equal(p.json.rows.length, 1);
   assert.equal(p.json.rows[0].deleted, true);
-  assert.equal(p.json.rows[0].data, null);
+  assert.equal(p.json.rows[0].data, 'tomb');
 });
 
 test('pull pages: since/next/more, ordered by ver, limit capped at 500', async () => {
