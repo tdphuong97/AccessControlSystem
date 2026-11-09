@@ -27,13 +27,20 @@ public sealed class UpdateException(string message, Exception? inner = null) : E
 /// <summary>
 /// New versions are GitHub releases. Each carries latest.json naming the installer for each system with
 /// its size and SHA-256; the "latest/download" address always points at the newest release's copy.
+/// When github.com fails (2026-11-09: 504 for releases/latest/* while api.github.com worked), the feed and the
+/// installer are fetched through the release API instead. The installer's size and SHA-256 are checked either way.
 /// </summary>
-public sealed class Updater(HttpClient http, string feedUrl, TimeProvider? time = null)
+public sealed class Updater(HttpClient http, string feedUrl, TimeProvider? time = null, string? releaseApi = null)
 {
     /// <summary>The GitHub repository the releases are published to.</summary>
     public const string Repo = "tdphuong97/AccessControlSystem";
     public const string FeedEnvVar = "ACS_UPDATE_FEED";
     public static readonly string DefaultFeed = $"https://github.com/{Repo}/releases/latest/download/latest.json";
+    public static readonly string DefaultReleaseApi = $"https://api.github.com/repos/{Repo}/releases/latest";
+
+    // Only the GitHub feed has an API to fall back on; a test feed (ACS_UPDATE_FEED) never calls GitHub.
+    private readonly string? _api = releaseApi ?? (feedUrl == DefaultFeed ? DefaultReleaseApi : null);
+    private Dictionary<string, string>? _assets;   // asset file name -> API address, filled by the fallback
 
     /// <summary>The feed to use: the ACS_UPDATE_FEED environment variable if set, otherwise the GitHub release.</summary>
     public static string ResolveFeed()
@@ -57,9 +64,7 @@ public sealed class Updater(HttpClient http, string feedUrl, TimeProvider? time 
         JsonElement root;
         try
         {
-            using var res = await http.GetAsync(WithCacheBuster(feedUrl, time), ct);
-            if (!res.IsSuccessStatusCode) throw new UpdateException($"Không kiểm tra được bản mới (máy chủ trả lời {(int)res.StatusCode}).");
-            root = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct)).RootElement.Clone();
+            root = JsonDocument.Parse(await ReadFeedAsync(ct)).RootElement.Clone();
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException)
         {
@@ -72,6 +77,81 @@ public sealed class Updater(HttpClient http, string feedUrl, TimeProvider? time 
         if (root.TryGetProperty(platform, out var p) && Text(p, "url") is { } url && Text(p, "sha256") is { } sha)
             package = new UpdatePackage { Url = url, Sha256 = sha, Size = p.TryGetProperty("size", out var size) ? size.GetInt64() : 0 };
         return new UpdateInfo { Version = version, Notes = Text(root, "notes"), Page = Text(root, "page"), Package = package };
+    }
+
+    private async Task<string> ReadFeedAsync(CancellationToken ct)
+    {
+        UpdateException failure;
+        try
+        {
+            using var res = await http.GetAsync(WithCacheBuster(feedUrl, time), ct);
+            if (res.IsSuccessStatusCode) return await res.Content.ReadAsStringAsync(ct);
+            failure = new UpdateException($"Không kiểm tra được bản mới (máy chủ trả lời {(int)res.StatusCode}).");
+        }
+        catch (HttpRequestException ex) when (_api is not null)
+        {
+            failure = new UpdateException("Không kiểm tra được bản mới. Hãy thử lại khi có mạng.", ex);
+        }
+        if (_api is null) throw failure;
+        try
+        {
+            if ((await AssetsAsync(ct)).TryGetValue("latest.json", out var asset))
+            {
+                using var res = await GetAssetAsync(asset, HttpCompletionOption.ResponseContentRead, ct);
+                if (res.IsSuccessStatusCode) return await res.Content.ReadAsStringAsync(ct);
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException) { }
+        throw failure;
+    }
+
+    /// <summary>The newest release's files, by name, as the release API lists them.</summary>
+    private async Task<Dictionary<string, string>> AssetsAsync(CancellationToken ct)
+    {
+        if (_assets is not null) return _assets;
+        using var req = new HttpRequestMessage(HttpMethod.Get, _api);
+        req.Headers.Accept.ParseAdd("application/vnd.github+json");
+        using var res = await http.SendAsync(req, ct);
+        var found = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (!res.IsSuccessStatusCode) return found;
+        using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
+        if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("assets", out var list)
+            && list.ValueKind == JsonValueKind.Array)
+            foreach (var a in list.EnumerateArray())
+                if (Text(a, "name") is { } name && Text(a, "url") is { } url) found[name] = url;
+        return _assets = found;
+    }
+
+    /// <summary>Asks the API for the file itself (it redirects to the download), not for its description.</summary>
+    private Task<HttpResponseMessage> GetAssetAsync(string url, HttpCompletionOption option, CancellationToken ct)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.Headers.Accept.ParseAdd("application/octet-stream");
+        return http.SendAsync(req, option, ct);
+    }
+
+    /// <summary>The installer response: its own link first, then the same file through the release API.</summary>
+    private async Task<HttpResponseMessage> OpenInstallerAsync(string url, CancellationToken ct)
+    {
+        HttpResponseMessage? res = null;
+        try
+        {
+            res = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+            if (res.IsSuccessStatusCode || _api is null) return res;
+        }
+        catch (HttpRequestException) when (_api is not null) { }
+        var name = Uri.TryCreate(url, UriKind.Absolute, out var u) ? Path.GetFileName(u.AbsolutePath) : "";
+        try
+        {
+            if (name.Length > 0 && (await AssetsAsync(ct)).TryGetValue(name, out var asset))
+            {
+                var alt = await GetAssetAsync(asset, HttpCompletionOption.ResponseHeadersRead, ct);
+                if (alt.IsSuccessStatusCode) { res?.Dispose(); return alt; }
+                alt.Dispose();
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException) { }
+        return res ?? throw new HttpRequestException("Không tải được bản mới.");
     }
 
     static string? Text(JsonElement e, string name) =>
@@ -95,7 +175,7 @@ public sealed class Updater(HttpClient http, string feedUrl, TimeProvider? time 
         var part = path + ".part";
         try
         {
-            using (var res = await http.GetAsync(package.Url, HttpCompletionOption.ResponseHeadersRead, ct))
+            using (var res = await OpenInstallerAsync(package.Url, ct))
             {
                 if (!res.IsSuccessStatusCode) throw new UpdateException($"Không tải được bản mới (máy chủ trả lời {(int)res.StatusCode}).");
                 var total = package.Size > 0 ? package.Size : res.Content.Headers.ContentLength ?? 0;

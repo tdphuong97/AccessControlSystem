@@ -6,6 +6,12 @@ description: Các phiên bản đã phát hành và thay đổi trong từng b�
 
 {% updates format="full" %}
 {% update date="2026-11-09" %}
+## Phiên bản 0.9.14
+
+* **Kiểm tra bản mới** vẫn chạy khi trang GitHub báo lỗi (ví dụ 504): phần mềm tự đi đường dự phòng. Bộ cài vẫn được kiểm tra trước khi cài.
+{% endupdate %}
+
+{% update date="2026-11-09" %}
 ## Phiên bản 0.9.13
 
 * Sửa lỗi gửi vân tay xuống máy bị từ chối với mã **methodNotAllowed**. Đã thử gửi thành công trên máy thật. Sau khi cập nhật, bấm **Thử lại ngay** ở những người đang báo **Có lỗi**, hoặc chạy [So khớp 2 máy](../may-cham-cong/so-khop-2-may.md) rồi bấm **Bổ sung**.

@@ -1,3 +1,8 @@
+## 0.9.14
+
+- Kiểm tra và tải bản mới vẫn chạy khi GitHub trả lỗi (như 504 ngày 09/11): phần mềm tự đi đường dự phòng qua GitHub API. Bộ cài vẫn được kiểm tra dung lượng và mã SHA-256 như trước.
+- Gồm các sửa lỗi gửi khuôn mặt (0.9.12) và vân tay (0.9.13) xuống máy.
+
 ## 0.9.13
 
 - Sửa lỗi gửi vân tay xuống máy bị từ chối với mã methodNotAllowed: máy DS-K1T9342MFWX (V4.39) chỉ nhận lệnh ghi vân tay theo cách khác với cách app đang gửi. Đã thử gửi thành công trên máy thật. Bản này gồm cả sửa lỗi khuôn mặt của 0.9.12. Sau khi cập nhật, bấm Thử lại ngay ở những người đang báo Có lỗi (hoặc chạy So khớp 2 máy rồi Bổ sung).
