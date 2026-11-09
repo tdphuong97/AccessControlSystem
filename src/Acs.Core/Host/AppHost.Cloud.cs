@@ -56,6 +56,13 @@ public sealed partial class AppHost
             Db.Outbox.Count(), s?.Online ?? true, s?.Error, c?.Lease.HolderName, Sync.IsSender, Db.People.Count());
     }
 
+    /// <summary>Before connecting: does the shared data exist yet (create a password) or not (enter it)?</summary>
+    private async Task<object?> CloudProbe(JsonElement a)
+    {
+        var client = new CloudClient(CloudHttp, CloudCode.Parse(Str(a, "code")));
+        return new { exists = await client.GetSpaceAsync(_cts.Token) is not null, people = Db.People.Count() };
+    }
+
     private async Task<object?> CloudConnect(JsonElement a)
     {
         var code = CloudCode.Parse(Str(a, "code"));

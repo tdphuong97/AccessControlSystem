@@ -29,6 +29,7 @@
       '<div id="s-form"></div><div class="devgrid" id="s-dev"></div></section>' +
       '<section aria-labelledby="h-imp" class="sec"><h2 id="h-imp" class="h2-lg">Lấy dữ liệu từ máy</h2><div id="s-imp"></div></section>' +
       '<section aria-labelledby="h-rec" class="sec"><h2 id="h-rec" class="h2-lg">So khớp 2 máy</h2><div id="s-rec"></div></section>' +
+      '<section aria-labelledby="h-cloud" class="sec"><h2 id="h-cloud" class="h2-lg">Dữ liệu chung</h2><div id="s-cloud"></div></section>' +
       '<section aria-labelledby="h-bak" class="sec"><h2 id="h-bak" class="h2-lg">Sao lưu</h2><div id="s-bak"></div></section>' +
       '<section aria-labelledby="h-oth" class="sec"><h2 id="h-oth" class="h2-lg">Khác</h2><div id="s-oth"></div></section></div>';
     const $ = (id) => host.querySelector('#' + id);
@@ -251,10 +252,12 @@
     on(host, 'click', '[data-act="folder-clear"]', (el) => { el.disabled = true; saveFolder(null); });
     // Restore dialog. `local` = one of backup.status.files, or null to pick a file in another folder (new PC, USB).
     function openRestore(local) {
+      const shared = !!(s.cloud && s.cloud.enabled);
+      const scope = shared ? ' <strong>Đang dùng dữ liệu chung: cả hai máy tính sẽ trở về như bản sao lưu này.</strong>' : ' Chỉ máy này thay đổi.';
       const whatText = (c) => (c
         ? 'Toàn bộ dữ liệu hiện tại (người, khuôn mặt, vân tay, thiết lập máy) sẽ được thay bằng bản sao lưu <strong class="mono">' + esc(c.name) + '</strong>' +
-          (c.at ? ' lúc ' + esc(R.fmtDateTime(c.at)) : '') + '. Những thay đổi sau thời điểm đó sẽ mất. App sẽ tự khởi động lại.'
-        : 'Nhập thư mục có file sao lưu (.acsbak), bấm "Xem", chọn một file rồi nhập mật khẩu sao lưu. Toàn bộ dữ liệu hiện tại sẽ được thay bằng bản đó. App sẽ tự khởi động lại.');
+          (c.at ? ' lúc ' + esc(R.fmtDateTime(c.at)) : '') + '. Những thay đổi sau thời điểm đó sẽ mất. App sẽ tự khởi động lại.' + scope
+        : 'Nhập thư mục có file sao lưu (.acsbak), bấm "Xem", chọn một file rồi nhập mật khẩu sao lưu. Toàn bộ dữ liệu hiện tại sẽ được thay bằng bản đó. App sẽ tự khởi động lại.' + scope);
       ACS.ui.dialog('<div class="dlg-body"><h2 class="dlg-title">Khôi phục từ bản sao lưu?</h2>' +
         '<p class="dlg-text" data-what>' + whatText(local) + '</p>' +
         '<details class="det" data-other' + (local ? '' : ' open') + ' style="margin-top:8px"><summary>Chọn từ thư mục khác</summary>' +
@@ -269,6 +272,7 @@
           // chosen: {name, at} for a local file, {name, at, path} for a file in another folder
           let chosen = local ? { name: local.name, at: local.at } : null;
           let found = [];
+          let confirmed = false;   // shared data: the first click shows both people counts, the second restores
           d.addEventListener('cancel', (ev) => { if (running) ev.preventDefault(); });
           d.addEventListener('click', (ev) => { if (running && ev.target === d) ev.stopImmediatePropagation(); }, true);
           const err = d.querySelector('[data-err]'), yes = d.querySelector('[data-yes]'), no = d.querySelector('[data-no]'), pw = d.querySelector('#rs-pw');
@@ -311,9 +315,19 @@
           const go = async () => {
             if (!chosen) { err.innerHTML = errBox('Hãy chọn một file sao lưu: nhập thư mục, bấm "Xem" rồi chọn file.'); return; }
             if (!pw.value) { err.innerHTML = errBox('Hãy nhập mật khẩu sao lưu.'); return; }
+            const req = chosen.path ? { path: chosen.path, password: pw.value } : { name: chosen.name, password: pw.value };
+            if (shared && !confirmed) {
+              try {
+                const info = await ACS.bridge.call('backup.inspect', req);
+                what.innerHTML = 'Dữ liệu chung hiện có <strong>' + s.cloud.peopleCount + ' người</strong>, bản sao lưu có <strong>' + info.people + ' người</strong> (' + esc(R.fmtDateTime(info.at)) + '). ' +
+                  '<strong>Cả hai máy tính sẽ trở về như bản sao lưu này.</strong> Bấm "Khôi phục" lần nữa để xác nhận.';
+                confirmed = true; yes.textContent = 'Khôi phục cho cả hai máy';
+              } catch (e) { err.innerHTML = errBox(ACS.ui.errMessage(e)); }
+              return;
+            }
             running = true; yes.disabled = no.disabled = pw.disabled = look.disabled = folder.disabled = true; yes.textContent = 'Đang khôi phục…'; err.innerHTML = '';
             try {
-              await ACS.bridge.call('backup.restore', chosen.path ? { path: chosen.path, password: pw.value } : { name: chosen.name, password: pw.value });
+              await ACS.bridge.call('backup.restore', shared ? Object.assign({ affectsShared: true }, req) : req);
               err.innerHTML = '<div class="notice-ok" role="status">' + icon('checkCircle', 18) + '<div>Đã khôi phục. App đang tự khởi động lại…</div></div>';
             } catch (e) {
               running = false; yes.disabled = no.disabled = pw.disabled = look.disabled = folder.disabled = false; yes.textContent = 'Khôi phục'; err.innerHTML = errBox(ACS.ui.errMessage(e));
@@ -349,7 +363,8 @@
       catch (e) { if (alive()) $('s-dev').innerHTML = errBox(ACS.ui.errMessage(e)); }
     })();
     const offState = ACS.onState(() => { if (alive() && s.upd === 'idle') drawUpd(); });
-    return () => { offProg(); offDev(); offState(); iv.destroy(); };
+    const cv = ACS.cloudView($('s-cloud'), ctx, { onStatus: (st) => { s.cloud = st; } });
+    return () => { offProg(); offDev(); offState(); iv.destroy(); cv.destroy(); };
   }
 
   ACS.screens = ACS.screens || {};

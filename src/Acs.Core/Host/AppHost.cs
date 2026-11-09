@@ -278,6 +278,7 @@ public sealed partial class AppHost
         "settings.set" => SettingsSet(a),
         "log.list" => LogList(a),
         "cloud.status" => CloudStatusView(),
+        "cloud.probe" => await CloudProbe(a),
         "cloud.connect" => await CloudConnect(a),
         "cloud.setEnabled" => await CloudSetEnabled(a),
         "cloud.syncNow" => await CloudSyncNow(),

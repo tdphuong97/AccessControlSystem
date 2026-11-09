@@ -50,7 +50,7 @@ public sealed record FacePreviewView(string ImageDataUrl, bool Busy);
 
 public sealed record ImportStatusView(bool Running, int? DeviceId, string? DeviceName, int Done, int Total, string? CurrentName);
 
-public sealed record LogRow(DateTime At, string? DeviceName, string? EmployeeNo, string Action, bool Ok, string? Message);
+public sealed record LogRow(DateTime At, string? DeviceName, string? EmployeeNo, string Action, bool Ok, string? Message, string? Pc = null);
 
 /// <summary>A message for the user that is already Vietnamese and passes through <see cref="AppHost.HandleAsync"/> unchanged.</summary>
 public sealed class HostException(string message) : Exception(message);

@@ -348,7 +348,7 @@ public sealed partial class AppHost
         var names = Db.Devices.List().ToDictionary(d => d.Id, d => d.Name);
         var limit = Math.Clamp(OptInt(a, "limit") ?? 200, 1, 1000);
         return Db.Log.List(OptStr(a, "employeeNo"), OptInt(a, "deviceId"), limit)
-            .Select(l => new LogRow(l.At, l.DeviceId is { } d ? names.GetValueOrDefault(d) : null, l.EmployeeNo, LogAction(l.Action), l.Ok, l.Message))
+            .Select(l => new LogRow(l.At, l.DeviceId is { } d ? names.GetValueOrDefault(d) : null, l.EmployeeNo, LogAction(l.Action), l.Ok, l.Message, l.Pc))
             .ToList();
     }
 }

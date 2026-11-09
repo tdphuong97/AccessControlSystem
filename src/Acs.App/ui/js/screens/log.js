@@ -24,7 +24,7 @@
       if (!s.rows) return;
       const rows = R.filterLog(s.rows, { onlyErrors: s.onlyErrors, q: s.q });
       $('lg-list').innerHTML = rows.length ? rows.map((r) =>
-        '<div class="lrow' + (r.ok ? '' : ' lrow-err') + '"><div class="lrow-t mono small">' + esc(R.fmtDateTime(r.at)) + '</div>' +
+        '<div class="lrow' + (r.ok ? '' : ' lrow-err') + '"><div class="lrow-t mono small">' + esc(R.fmtDateTime(r.at)) + (r.pc ? '<br><span class="muted">' + esc(r.pc) + '</span>' : '') + '</div>' +
         '<div class="lrow-s">' + (r.ok ? '<span class="st st-ok">' + icon('checkCircle', 18) + 'Xong</span>' : '<span class="st st-err">' + icon('alertCircle', 18) + 'Lỗi</span>') + '</div>' +
         '<div class="lrow-m"><div class="fw6">' + esc(r.action) + '</div><div class="small muted">' + esc(r.deviceName || 'Không gắn với máy nào') +
         (r.employeeNo ? ' · Mã NV <span class="mono">' + esc(r.employeeNo) + '</span>' : '') + '</div>' +

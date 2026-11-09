@@ -69,6 +69,15 @@ public sealed class AppHostCloudTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task probe_reports_whether_shared_data_exists()
+    {
+        var n = await Ready(Host("nhien"));
+        Assert.False(Out(await n.HandleAsync("cloud.probe", J($$"""{"code":"{{Code}}"}"""))).GetProperty("exists").GetBoolean());
+        await n.HandleAsync("cloud.connect", J($$"""{"code":"{{Code}}","password":"chung1234"}"""));
+        Assert.True(Out(await n.HandleAsync("cloud.probe", J($$"""{"code":"{{Code}}"}"""))).GetProperty("exists").GetBoolean());
+    }
+
+    [Fact]
     public async Task short_password_is_refused_on_first_connect()
     {
         var n = await Ready(Host("nhien"));

@@ -281,6 +281,15 @@
       return summary;
     },
     'backup.status': () => ({ hasPassword: bak.hasPassword, lastAt: bak.lastAt, files: bak.files, extraFolder: extra }),
+    'backup.inspect': () => ({ people: 157, at: '2026-11-08T10:43:49' }),
+    'cloud.status': () => Object.assign({}, cloudSt, { peopleCount: people.length }),
+    'cloud.probe': () => ({ exists: cloudExists, people: people.length }),
+    'cloud.connect': () => { cloudSt = { enabled: true, connected: true, online: true, lastSyncAt: new Date().toISOString().slice(0, 19), pending: 0, error: null, senderName: 'NHIEN-PC', isSender: true }; cloudExists = true; return { mode: 'published', people: people.length }; },
+    'cloud.setEnabled': (a) => { cloudSt.enabled = !!a.on; return cloudSt; },
+    'cloud.syncNow': () => { cloudSt.lastSyncAt = new Date().toISOString().slice(0, 19); return cloudSt; },
+    'cloud.check': () => ({ health: true, auth: 'ok', lastSyncAt: cloudSt.lastSyncAt, pending: 0 }),
+    'cloud.changePassword': () => ({ ok: true }),
+    'cloud.forget': () => { cloudSt = { enabled: false, connected: false, online: true, pending: 0 }; return cloudSt; },
     'backup.setPassword': (a) => {
       if (!a.password || a.password.length < 8) throw new Error('Mật khẩu sao lưu cần ít nhất 8 ký tự.');
       bak.hasPassword = true; return null;
@@ -333,6 +342,11 @@
     },
   };
 
+  // Dữ liệu chung (mock): ?cloud=on|off|offline in the page URL picks the starting state.
+  const cloudMode = (typeof location !== 'undefined' && /[?&]cloud=(\w+)/.exec(location.search) || [])[1] || 'none';
+  let cloudExists = cloudMode !== 'none';
+  let cloudSt = cloudMode === 'none' ? { enabled: false, connected: false, online: true, pending: 0 }
+    : { enabled: cloudMode !== 'off', connected: true, online: cloudMode !== 'offline', lastSyncAt: '2026-11-09T13:40:05', pending: cloudMode === 'offline' ? 3 : 0, error: null, senderName: 'HUONG-PC', isSender: cloudMode === 'on' };
   ACS.mock = {
     async call(cmd, args) {
       await wait(30);
