@@ -149,6 +149,18 @@ public sealed class CloudSyncTests : IDisposable
     }
 
     [Fact]
+    public async Task concurrent_pushes_on_one_pc_do_not_log_an_overwrite()
+    {
+        Seed(_nhien);
+        _nhien.Outbox.Capture = true;
+        _nhien.Outbox.MarkAll();
+        _cloud.Latency = TimeSpan.FromMilliseconds(30);
+        await Task.WhenAll(_a.PushAsync(default), _a.PushAsync(default), _a.PublishAllAsync(null, default));
+        Assert.Equal(0, _nhien.Outbox.Count());
+        Assert.DoesNotContain(_nhien.Log.List(null, null, 50), e => e.Action == "Dữ liệu chung");
+    }
+
+    [Fact]
     public async Task change_made_during_a_push_stays_queued()
     {
         await PublishAndJoin();

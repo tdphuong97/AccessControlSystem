@@ -20,6 +20,7 @@ public sealed class CloudSync(Database db, CloudClient client, byte[] key, strin
     public const string LogAction = "Dữ liệu chung";
     private const int PushBatch = 50, PullLimit = 200;
 
+    private readonly SemaphoreSlim _gate = new(1, 1);   // one sync operation at a time on this PC
     private DateTime? _lastSync;
     private bool _online = true;
     private string? _error;
@@ -33,7 +34,9 @@ public sealed class CloudSync(Database db, CloudClient client, byte[] key, strin
 
     // ---------------- push ----------------
 
-    public Task<int> PushAsync(CancellationToken ct) => Guard(async () =>
+    public Task<int> PushAsync(CancellationToken ct) => Locked(() => Guard(() => PushCore(ct)), ct);
+
+    private async Task<int> PushCore(CancellationToken ct)
     {
         var pushed = 0;
         while (!ct.IsCancellationRequested)
@@ -50,7 +53,7 @@ public sealed class CloudSync(Database db, CloudClient client, byte[] key, strin
                 if (r.Ok) { db.Outbox.SetKnown(tbl, k, r.Rid, r.Ver); db.Outbox.RemoveIf(tbl, k, seq); pushed++; continue; }
                 if (r.Current is { } cur)
                 {
-                    LogOverwrite(cur, tbl, k);
+                    if (cur.Pc != pcId) LogOverwrite(cur, tbl, k);   // a row this PC wrote itself is no one else's change
                     retry.Add((i, changes[i] with { Base = cur.Ver }));
                 }
             }
@@ -67,7 +70,7 @@ public sealed class CloudSync(Database db, CloudClient client, byte[] key, strin
             }
         }
         return pushed;
-    });
+    }
 
     private RowChange Change(string tbl, string k, long baseVer)
     {
@@ -89,7 +92,9 @@ public sealed class CloudSync(Database db, CloudClient client, byte[] key, strin
 
     // ---------------- pull ----------------
 
-    public Task<int> PullAsync(CancellationToken ct) => Guard(async () =>
+    public Task<int> PullAsync(CancellationToken ct) => Locked(() => Guard(() => PullCore(ct)), ct);
+
+    private async Task<int> PullCore(CancellationToken ct)
     {
         var applied = RetryDeferred();
         var since = long.TryParse(db.Settings.Get(SinceKey), out var s) ? s : 0;
@@ -105,7 +110,7 @@ public sealed class CloudSync(Database db, CloudClient client, byte[] key, strin
             if (!page.More) break;
         }
         return applied + RetryDeferred();   // a parked row whose device arrived in this pull
-    });
+    }
 
     private bool ApplyRow(CloudRow row)
     {
@@ -139,21 +144,22 @@ public sealed class CloudSync(Database db, CloudClient client, byte[] key, strin
     // ---------------- whole-data operations ----------------
 
     /// <summary>First PC: queue every shared row and push until the outbox is empty.</summary>
-    public async Task PublishAllAsync(IProgress<double>? progress, CancellationToken ct)
+    public Task PublishAllAsync(IProgress<double>? progress, CancellationToken ct) => Locked(() => Guard(async () =>
     {
         db.Outbox.Capture = true;
         db.Outbox.MarkAll();
         var total = Math.Max(1, db.Outbox.Count());
         while (db.Outbox.Count() > 0 && !ct.IsCancellationRequested)
         {
-            if (await PushAsync(ct) == 0) break;
+            if (await PushCore(ct) == 0) break;
             progress?.Report(1 - (double)db.Outbox.Count() / total);
         }
         progress?.Report(1);
-    }
+        return 0;
+    }), ct);
 
     /// <summary>Joining PC (and switching back on): local shared rows are replaced by the cloud's. Returns the people count.</summary>
-    public async Task<int> ReplaceLocalFromCloudAsync(IProgress<double>? progress, CancellationToken ct)
+    public Task<int> ReplaceLocalFromCloudAsync(IProgress<double>? progress, CancellationToken ct) => Locked(() => Guard(async () =>
     {
         db.Outbox.Applying(() =>
         {
@@ -166,14 +172,14 @@ public sealed class CloudSync(Database db, CloudClient client, byte[] key, strin
             return 0;
         });
         progress?.Report(0.1);
-        await PullAsync(ct);
+        await PullCore(ct);
         db.Outbox.Capture = true;
         progress?.Report(1);
         return db.People.Count();
-    }
+    }), ct);
 
     /// <summary>After a restore: the cloud becomes exactly this PC's data (rows the backup lacks become tombstones).</summary>
-    public Task RepublishAsync(CancellationToken ct) => Guard(async () =>
+    public Task RepublishAsync(CancellationToken ct) => Locked(() => Guard(async () =>
     {
         var server = new Dictionary<(string, string), CloudRow>();
         long since = 0;
@@ -202,12 +208,19 @@ public sealed class CloudSync(Database db, CloudClient client, byte[] key, strin
             db.Exec("INSERT OR REPLACE INTO outbox(tbl, k) VALUES($t,$k)", ("$t", r.Tbl), ("$k", k));   // no local row: pushes a tombstone
         }
         while (db.Outbox.Count() > 0 && !ct.IsCancellationRequested)
-            if (await PushAsync(ct) == 0) break;
+            if (await PushCore(ct) == 0) break;
         db.Settings.Set(SinceKey, Math.Max(since, server.Count == 0 ? 0 : server.Values.Max(r => r.Ver)).ToString(CultureInfo.InvariantCulture));
         return 0;
-    });
+    }), ct);
 
     // ---------------- helpers ----------------
+
+    private async Task<T> Locked<T>(Func<Task<T>> body, CancellationToken ct)
+    {
+        await _gate.WaitAsync(ct);
+        try { return await body(); }
+        finally { _gate.Release(); }
+    }
 
     private async Task<T> Guard<T>(Func<Task<T>> body)
     {

@@ -15,6 +15,8 @@ public sealed class FakeCloud : HttpMessageHandler
     public long Seq { get; private set; }
     public (string Holder, bool Active, string? Label, long Until)? Lease { get; set; }
     public bool Offline { get; set; }
+    /// <summary>Simulated network delay, so concurrent calls really overlap.</summary>
+    public TimeSpan Latency { get; set; }
     public int Calls { get; private set; }
     public Func<long> NowMs { get; set; } = () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     public const string Key = "k";
@@ -24,6 +26,7 @@ public sealed class FakeCloud : HttpMessageHandler
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage req, CancellationToken ct)
     {
         Calls++;
+        if (Latency > TimeSpan.Zero) await Task.Delay(Latency, ct);
         if (Offline) throw new HttpRequestException("offline");
         var path = req.RequestUri!.AbsolutePath;
         if (req.Method == HttpMethod.Get && path == "/health") return J(new JsonObject { ["ok"] = true });
