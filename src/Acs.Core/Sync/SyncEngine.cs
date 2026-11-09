@@ -12,6 +12,12 @@ public sealed class SyncEngine(Database db, IHikDeviceFactory factory, TimeProvi
     private readonly Dictionary<int, (DeviceWorker Worker, Task Run)> _workers = new();
     private CancellationTokenSource? _cts;
 
+    public const string OtherSenderMessage = "Máy tính khác đang gửi xuống máy chấm công.";
+    private volatile bool _notSender;
+
+    /// <summary>False while another PC holds the Dữ liệu chung sender lease (this PC's workers are stopped).</summary>
+    public bool IsSender => !_notSender;
+
     public event Action<int>? DeviceChanged;
     public event Action<string>? PersonChanged;
 
@@ -43,6 +49,19 @@ public sealed class SyncEngine(Database db, IHikDeviceFactory factory, TimeProvi
         cts.Dispose();
     }
 
+    /// <summary>
+    /// Dữ liệu chung: only the sender lease holder runs the send queue. False stops the workers (devices show
+    /// <see cref="OtherSenderMessage"/>); true starts them again, which puts jobs left "running" back to pending.
+    /// </summary>
+    public async Task SetSenderAsync(bool sender)
+    {
+        if (sender == !_notSender && (sender == (_cts is not null))) return;
+        _notSender = !sender;
+        if (sender) Start();
+        else await StopAsync();
+        foreach (var d in db.Devices.List()) RaiseDevice(d.Id);
+    }
+
     /// <summary>Wakes one device's worker (or all). Workers for devices added since Start are created here.</summary>
     public void Wake(int? deviceId = null)
     {
@@ -64,6 +83,7 @@ public sealed class SyncEngine(Database db, IHikDeviceFactory factory, TimeProvi
         {
             var (pending, failed) = db.Jobs.Counts(d.Id);
             workers.TryGetValue(d.Id, out var w);
+            if (_notSender) return new DeviceStatus(d.Id, false, d.AuthPaused, d.LastSeen, pending, failed, OtherSenderMessage);
             var message = d.AuthPaused ? JobRules.AuthMessage : w?.Message;
             return new DeviceStatus(d.Id, w?.Online == true && !d.AuthPaused, d.AuthPaused, d.LastSeen, pending, failed, message);
         }).ToList();
