@@ -5,7 +5,7 @@ compatibility_date = "2026-09-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "acs-sync"
-database_id = "SET-AT-DEPLOY"
+database_id = "33e6cd5d-bca7-4022-8f1b-7ced33ba31bc"
 
 # Secret (never in this file): wrangler secret put CONNECT_KEY
 # See README.md for the full deploy steps.
