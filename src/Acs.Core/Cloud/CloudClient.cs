@@ -11,7 +11,7 @@ public sealed record RowChange(string Tbl, string Rid, long Base, bool Deleted, 
 public sealed record CloudRow(string Tbl, string Rid, long Ver, bool Deleted, string? Data, string? Pc, string At);
 public sealed record PushResult(string Tbl, string Rid, bool Ok, long Ver, CloudRow? Current);
 public sealed record PullPage(IReadOnlyList<CloudRow> Rows, long Next, bool More);
-public sealed record LeaseState(bool Granted, string? Holder, bool Active, string? Label, DateTime Until);
+public sealed record LeaseState(bool Granted, string? Holder, bool Active, string? Label, DateTime Until, bool Took = false);
 
 /// <summary>The acs-sync Worker's HTTP API (see cloud/src/worker.js). Every call has its own 20 s limit.</summary>
 public sealed class CloudClient(HttpClient http, CloudCode code)
@@ -63,7 +63,7 @@ public sealed class CloudClient(HttpClient http, CloudCode code)
     {
         using var r = await SendAsync(HttpMethod.Post, "/lease", new { holder, active, label }, ct);
         var l = await ReadAsync<LeaseDto>(r, ct);
-        return new LeaseState(l.Granted, l.Holder, l.Active, l.Label, DateTimeOffset.FromUnixTimeMilliseconds(l.Until).UtcDateTime);
+        return new LeaseState(l.Granted, l.Holder, l.Active, l.Label, DateTimeOffset.FromUnixTimeMilliseconds(l.Until).UtcDateTime, l.Took);
     }
 
     public async Task ReleaseLeaseAsync(string holder, CancellationToken ct)
@@ -99,5 +99,5 @@ public sealed class CloudClient(HttpClient http, CloudCode code)
     private sealed record PushItem(string Tbl, string Rid, bool Ok, long Ver, CloudRow? Current);
     private sealed record PushDto(List<PushItem> Results);
     private sealed record PullDto(List<CloudRow> Rows, long Next, bool More);
-    private sealed record LeaseDto(bool Granted, string? Holder, bool Active, string? Label, long Until);
+    private sealed record LeaseDto(bool Granted, string? Holder, bool Active, string? Label, long Until, bool Took);
 }

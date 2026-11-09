@@ -102,6 +102,9 @@ test('lease: first holder granted; other inactive holder refused; active takes o
   assert.equal(r.json.granted, false); assert.equal(r.json.holder, 'A'); assert.equal(r.json.label, 'la');
   r = await call(env, 'POST', '/lease', { holder: 'B', active: true, label: 'lb' }, 'k', t0 + 2000);
   assert.equal(r.json.granted, true); assert.equal(r.json.holder, 'B');
+  assert.equal(r.json.took, true, 'taken from a holder whose lease had not expired');
+  r = await call(env, 'POST', '/lease', { holder: 'B', active: true, label: 'lb' }, 'k', t0 + 2500);
+  assert.equal(r.json.took, false, 'renewing is not taking');
   r = await call(env, 'POST', '/lease', { holder: 'A', active: true, label: 'la' }, 'k', t0 + 3000);
   assert.equal(r.json.granted, false, 'an active holder is not taken over');
   r = await call(env, 'POST', '/lease', { holder: 'A', active: false, label: 'la' }, 'k', t0 + 2000 + 91_000);

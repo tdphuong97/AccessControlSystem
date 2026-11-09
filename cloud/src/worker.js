@@ -88,14 +88,16 @@ async function lease(db, body, now) {
   const active = body.active ? 1 : 0;
   const cur = await db.prepare("SELECT holder, active, label, until FROM lease WHERE name = 'sender'").first();
   const free = !cur || cur.until <= now || cur.holder === holder || (active && !cur.active);
+  // took: the lease was still another PC's; that PC sends until its next renewal, so the new holder waits.
+  const took = !!cur && cur.until > now && cur.holder !== holder;
   if (free) {
     const until = now + LEASE_TTL_MS;
     await db.prepare("INSERT INTO lease(name, holder, active, label, until) VALUES('sender', ?, ?, ?, ?) " +
       'ON CONFLICT(name) DO UPDATE SET holder = excluded.holder, active = excluded.active, label = excluded.label, until = excluded.until')
       .bind(holder, active, body.label ?? null, until).run();
-    return json({ granted: true, holder, active: !!active, label: body.label ?? null, until });
+    return json({ granted: true, holder, active: !!active, label: body.label ?? null, until, took });
   }
-  return json({ granted: false, holder: cur.holder, active: !!cur.active, label: cur.label ?? null, until: cur.until });
+  return json({ granted: false, holder: cur.holder, active: !!cur.active, label: cur.label ?? null, until: cur.until, took: false });
 }
 
 async function release(db, body) {

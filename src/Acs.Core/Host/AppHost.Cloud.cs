@@ -43,7 +43,12 @@ public sealed partial class AppHost
     public void SetWindowActive(bool active)
     {
         _windowActive = active;
-        if (active && _cloud is { } c) _ = Task.Run(async () => { try { await CloudLeaseTickAsync(); await c.Sync.PullAsync(c.Stop.Token); EmitCloud(); } catch { } });
+        if (_cloud is { } c)
+            _ = Task.Run(async () =>
+            {
+                try { await CloudLeaseTickAsync(); if (active) { await c.Sync.PullAsync(c.Stop.Token); EmitCloud(); } }
+                catch { /* the loop retries */ }
+            });
     }
 
     // ---------------- commands ----------------
@@ -218,6 +223,8 @@ public sealed partial class AppHost
         sync.Applied += OnCloudApplied;
         var lease = new LeaseKeeper(client, secret.Key, secret.PcId, Environment.MachineName, _time);
         Db.Outbox.Capture = true;
+        // No sending to the devices until the lease says this PC is the sender (another PC may be sending now).
+        Sync.SetSenderAsync(false).GetAwaiter().GetResult();
         var stop = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
         CloudRuntime? rt = null;
         var loop = Task.Run(async () => { while (rt is null) await Task.Yield(); await CloudLoopAsync(rt, stop.Token); });

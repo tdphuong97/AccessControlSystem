@@ -214,6 +214,9 @@ public sealed class AppHostCloudTests : IAsyncDisposable
         h.SetWindowActive(true);
         await h.CloudLeaseTickAsync();
         await n.CloudLeaseTickAsync();
+        Assert.False(Out(await h.HandleAsync("cloud.status", J())).GetProperty("isSender").GetBoolean());   // waits for n to stop
+        _time.Advance(LeaseKeeper.TakeoverWait);
+        await h.CloudLeaseTickAsync();
         Assert.True(Out(await h.HandleAsync("cloud.status", J())).GetProperty("isSender").GetBoolean());
         Assert.False(Out(await n.HandleAsync("cloud.status", J())).GetProperty("isSender").GetBoolean());
         Assert.Equal(Environment.MachineName, Out(await n.HandleAsync("cloud.status", J())).GetProperty("senderName").GetString());

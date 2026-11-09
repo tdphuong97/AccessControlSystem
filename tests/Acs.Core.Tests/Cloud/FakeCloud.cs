@@ -96,8 +96,9 @@ public sealed class FakeCloud : HttpMessageHandler
         var now = NowMs();
         if (Lease is not { } l || l.Until <= now || l.Holder == holder || (active && !l.Active))
         {
+            var took = Lease is { } p && p.Until > now && p.Holder != holder;
             Lease = (holder, active, label, now + 90_000);
-            return J(new JsonObject { ["granted"] = true, ["holder"] = holder, ["active"] = active, ["label"] = label, ["until"] = now + 90_000 });
+            return J(new JsonObject { ["granted"] = true, ["holder"] = holder, ["active"] = active, ["label"] = label, ["until"] = now + 90_000, ["took"] = took });
         }
         return J(new JsonObject { ["granted"] = false, ["holder"] = l.Holder, ["active"] = l.Active, ["label"] = l.Label, ["until"] = l.Until });
     }

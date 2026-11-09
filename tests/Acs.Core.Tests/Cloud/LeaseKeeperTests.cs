@@ -33,9 +33,23 @@ public sealed class LeaseKeeperTests
         Assert.True(await a.TickAsync(false, default));
         Assert.False(await b.TickAsync(false, default));
         Assert.Equal("NHIEN-PC", b.HolderName);
-        Assert.True(await b.TickAsync(true, default));
+        Assert.False(await b.TickAsync(true, default));   // took it over: waits for A to stop first
         Assert.False(await a.TickAsync(false, default));
         Assert.Equal("HUONG-PC", a.HolderName);
+    }
+
+    [Fact]
+    public async Task takeover_waits_for_the_old_holder_to_stop()
+    {
+        var a = Keeper("pcA", "NHIEN-PC");
+        var b = Keeper("pcB", "HUONG-PC");
+        Assert.True(await a.TickAsync(false, default));
+        Assert.False(await b.TickAsync(true, default));    // granted, but A may still be sending
+        _time.Advance(TimeSpan.FromSeconds(30));
+        Assert.False(await a.TickAsync(false, default));   // A learns it lost the lease and stops
+        Assert.False(await b.TickAsync(true, default));
+        _time.Advance(TimeSpan.FromSeconds(16));
+        Assert.True(await b.TickAsync(true, default));     // 45 s after taking over
     }
 
     [Fact]
