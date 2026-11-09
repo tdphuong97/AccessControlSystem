@@ -19,7 +19,7 @@ public sealed class CloudSync(Database db, CloudClient client, byte[] key, strin
     public const string SinceKey = "cloud.since";
     public const string LogAction = "Dữ liệu chung";
     // A face row is ~50 KB once sealed: keep each push small enough for the Worker to answer well within the timeout.
-    private const int PushBatch = 20, PullLimit = 200, MaxBatchChars = 1_000_000, PublishRetries = 5;
+    private const int PushBatch = 20, PullLimit = 200, MaxBatchChars = 1_000_000, PublishRetries = 8;
 
     private readonly SemaphoreSlim _gate = new(1, 1);   // one sync operation at a time on this PC
     private DateTime? _lastSync;
@@ -173,7 +173,12 @@ public sealed class CloudSync(Database db, CloudClient client, byte[] key, strin
         while (db.Outbox.Count() > 0 && !ct.IsCancellationRequested)
         {
             try { if (await PushCore(ct) == 0) break; failures = 0; }
-            catch (CloudOfflineException) when (++failures < PublishRetries) { await Task.Delay(TimeSpan.FromSeconds(2), ct); continue; }
+            catch (CloudOfflineException e) when (++failures < PublishRetries)
+            {
+                db.Log.Add(null, null, LogAction, false, $"Đưa dữ liệu lên bị gián đoạn, đang thử lại ({failures}): {e.InnerException?.Message ?? e.Message}");
+                await Task.Delay(TimeSpan.FromSeconds(Math.Min(20, 1 << failures)), ct);   // 2, 4, 8, 16, 20 … s
+                continue;
+            }
             progress?.Report(1 - (double)db.Outbox.Count() / total);
         }
         progress?.Report(1);
